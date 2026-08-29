@@ -1,0 +1,70 @@
+/* ============================================================
+   pixel-tokens.css — 美术风格基石:色板 / 字体 / 像素素材
+   风格:星露谷式像素 UI × 滇池清新(滇池海埂主题)
+   引入顺序:pixel-tokens.css → pixel-base.css → pixel-ui.css
+   ============================================================ */
+
+/* 缝合像素字体(Fusion Pixel,OFL 开源,含完整简体中文,约 600KB)
+   走本地 npm 包,不依赖网络。裸包名由 Vite 解析。 */
+@import '@fontsource/fusion-pixel-12px-proportional-sc';
+
+:root {
+    /* ---- 色板:浮木大坝 × 滇池清新 ---- */
+    --ink:       #4a3628;   /* 深褐描边(所有轮廓、正文) */
+    --ink-soft:  #7a6250;   /* 次要文字 */
+
+    --wood-l:    #e0b077;   /* 浮木·亮 */
+    --wood:      #cf9862;   /* 浮木 */
+    --wood-d:    #9c6b43;   /* 浮木·暗 */
+
+    --sand:      #f7ecca;   /* 沙滩奶油(面板纸面) */
+    --sand-2:    #eddcab;   /* 沙滩·暗(凹陷、格子底) */
+    --sand-3:    #dfc98e;   /* 沙滩·更暗(内阴影) */
+    --foam:      #fffdf4;   /* 浪花白(高光、亮部文字) */
+
+    --sky:       #cfeef2;   /* 天空青 */
+    --sky-2:     #b5e4ec;   /* 天空青·深 */
+    --sea:       #62c4cc;   /* 海水青 */
+    --sea-deep:  #2e8ca3;   /* 深海 */
+    --sea-ink:   #1d5f76;   /* 海·最深(夜海、深色文字底) */
+
+    --gold:      #f5b83d;   /* 饵块金(主按钮、强调) */
+    --gold-l:    #ffe08a;   /* 饵块金·亮 */
+    --gold-d:    #c98a1e;   /* 饵块金·暗 */
+
+    --coral:     #ef7757;   /* 珊瑚橙(生命、警示、取消) */
+    --coral-d:   #c14e33;
+
+    --leaf:      #77b255;   /* 海藻绿(成功、完成) */
+    --leaf-d:    #4e8236;
+
+    /* ---- 字体 ---- */
+    --font-pixel: 'Fusion Pixel 12px Proportional SC', 'DotGothic16',
+                  'Zpix', monospace;
+
+    /* ---- 像素刻度(全站间距/边框都用 4px 的倍数) ---- */
+    --px: 4px;
+
+    /* ---- 硬阴影(像素风不用模糊) ---- */
+    --shadow-hard: 4px 4px 0 rgba(74, 54, 40, 0.25);
+
+    /* ============================================================
+       像素素材(内联 SVG,无需图片文件)
+       ============================================================ */
+
+    /* 浮木像素框:28x28 网格,配合 border-image-slice: 6 + repeat round 使用。
+       45° 斜接倒角(上/左受光、下/右背光)+ 转角铆钉 + 每 16px 一道木板接缝 */
+    --frame-wood: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2228%22 height=%2228%22 viewBox=%220 0 28 28%22 shape-rendering=%22crispEdges%22%3E%3Cpath fill=%22%234a3628%22 d=%22M0 2h2v1h-2zM0 3h1v22h-1zM0 25h2v1h-2zM1 1h2v1h-2zM1 26h2v1h-2zM2 0h24v1h-24zM2 27h24v1h-24zM3 3h1v1h-1zM3 24h1v1h-1zM5 5h18v1h-18zM5 6h1v16h-1zM5 22h18v1h-18zM22 6h1v16h-1zM24 3h1v1h-1zM24 24h1v1h-1zM25 1h2v1h-2zM25 26h2v1h-2zM26 2h2v1h-2zM26 25h2v1h-2zM27 3h1v22h-1z%22/%3E%3Cpath fill=%22%23e0b077%22 d=%22M1 3h2v10h-2zM1 13h1v1h-1zM1 14h2v11h-2zM2 2h11v1h-11zM3 1h22v1h-22zM14 2h12v1h-12z%22/%3E%3Cpath fill=%22%239c6b43%22 d=%22M2 13h2v1h-2zM2 25h24v1h-24zM3 4h2v1h-2zM3 23h2v1h-2zM3 26h22v1h-22zM4 3h1v1h-1zM4 24h1v1h-1zM13 2h1v2h-1zM13 24h1v1h-1zM23 3h1v1h-1zM23 4h4v1h-4zM23 23h4v1h-4zM23 24h1v1h-1zM24 13h3v1h-3zM25 3h2v1h-2zM25 5h2v8h-2zM25 14h2v9h-2zM25 24h2v1h-2z%22/%3E%3Cpath fill=%22%23cf9862%22 d=%22M3 5h2v8h-2zM3 14h2v9h-2zM4 13h1v1h-1zM5 3h8v1h-8zM5 4h18v1h-18zM5 23h18v1h-18zM5 24h8v1h-8zM14 3h9v1h-9zM14 24h9v1h-9zM23 5h2v8h-2zM23 13h1v1h-1zM23 14h2v9h-2z%22/%3E%3C/svg%3E");
+
+    /* 饵块金框(成就、高亮) */
+    --frame-gold: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2228%22 height=%2228%22 viewBox=%220 0 28 28%22 shape-rendering=%22crispEdges%22%3E%3Cpath fill=%22%234a3628%22 d=%22M0 2h2v1h-2zM0 3h1v22h-1zM0 25h2v1h-2zM1 1h2v1h-2zM1 26h2v1h-2zM2 0h24v1h-24zM2 27h24v1h-24zM3 3h1v1h-1zM3 24h1v1h-1zM5 5h18v1h-18zM5 6h1v16h-1zM5 22h18v1h-18zM22 6h1v16h-1zM24 3h1v1h-1zM24 24h1v1h-1zM25 1h2v1h-2zM25 26h2v1h-2zM26 2h2v1h-2zM26 25h2v1h-2zM27 3h1v22h-1z%22/%3E%3Cpath fill=%22%23ffe08a%22 d=%22M1 3h2v10h-2zM1 13h1v1h-1zM1 14h2v11h-2zM2 2h11v1h-11zM3 1h22v1h-22zM14 2h12v1h-12z%22/%3E%3Cpath fill=%22%23c98a1e%22 d=%22M2 13h2v1h-2zM2 25h24v1h-24zM3 4h2v1h-2zM3 23h2v1h-2zM3 26h22v1h-22zM4 3h1v1h-1zM4 24h1v1h-1zM13 2h1v2h-1zM13 24h1v1h-1zM23 3h1v1h-1zM23 4h4v1h-4zM23 23h4v1h-4zM23 24h1v1h-1zM24 13h3v1h-3zM25 3h2v1h-2zM25 5h2v8h-2zM25 14h2v9h-2zM25 24h2v1h-2z%22/%3E%3Cpath fill=%22%23f5b83d%22 d=%22M3 5h2v8h-2zM3 14h2v9h-2zM4 13h1v1h-1zM5 3h8v1h-8zM5 4h18v1h-18zM5 23h18v1h-18zM5 24h8v1h-8zM14 3h9v1h-9zM14 24h9v1h-9zM23 5h2v8h-2zM23 13h1v1h-1zM23 14h2v9h-2z%22/%3E%3C/svg%3E");
+
+    /* 海水青框(对话框、信息) */
+    --frame-sea: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2228%22 height=%2228%22 viewBox=%220 0 28 28%22 shape-rendering=%22crispEdges%22%3E%3Cpath fill=%22%234a3628%22 d=%22M0 2h2v1h-2zM0 3h1v22h-1zM0 25h2v1h-2zM1 1h2v1h-2zM1 26h2v1h-2zM2 0h24v1h-24zM2 27h24v1h-24zM3 3h1v1h-1zM3 24h1v1h-1zM5 5h18v1h-18zM5 6h1v16h-1zM5 22h18v1h-18zM22 6h1v16h-1zM24 3h1v1h-1zM24 24h1v1h-1zM25 1h2v1h-2zM25 26h2v1h-2zM26 2h2v1h-2zM26 25h2v1h-2zM27 3h1v22h-1z%22/%3E%3Cpath fill=%22%23a5e3e0%22 d=%22M1 3h2v10h-2zM1 13h1v1h-1zM1 14h2v11h-2zM2 2h11v1h-11zM3 1h22v1h-22zM14 2h12v1h-12z%22/%3E%3Cpath fill=%22%232e8ca3%22 d=%22M2 13h2v1h-2zM2 25h24v1h-24zM3 4h2v1h-2zM3 23h2v1h-2zM3 26h22v1h-22zM4 3h1v1h-1zM4 24h1v1h-1zM13 2h1v2h-1zM13 24h1v1h-1zM23 3h1v1h-1zM23 4h4v1h-4zM23 23h4v1h-4zM23 24h1v1h-1zM24 13h3v1h-3zM25 3h2v1h-2zM25 5h2v8h-2zM25 14h2v9h-2zM25 24h2v1h-2z%22/%3E%3Cpath fill=%22%2362c4cc%22 d=%22M3 5h2v8h-2zM3 14h2v9h-2zM4 13h1v1h-1zM5 3h8v1h-8zM5 4h18v1h-18zM5 23h18v1h-18zM5 24h8v1h-8zM14 3h9v1h-9zM14 24h9v1h-9zM23 5h2v8h-2zM23 13h1v1h-1zM23 14h2v9h-2z%22/%3E%3C/svg%3E");
+
+    /* 像素浪花(16x8 平铺,浅海) */
+    --wave: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2216%22 height=%228%22 viewBox=%220 0 16 8%22 shape-rendering=%22crispEdges%22%3E%3Crect x=%220%22 y=%223%22 width=%221%22 height=%221%22 fill=%22%23fffdf4%22/%3E%3Crect x=%220%22 y=%224%22 width=%221%22 height=%224%22 fill=%22%2362c4cc%22/%3E%3Crect x=%221%22 y=%222%22 width=%221%22 height=%221%22 fill=%22%23fffdf4%22/%3E%3Crect x=%221%22 y=%223%22 width=%221%22 height=%225%22 fill=%22%2362c4cc%22/%3E%3Crect x=%222%22 y=%221%22 width=%221%22 height=%221%22 fill=%22%23fffdf4%22/%3E%3Crect x=%222%22 y=%222%22 width=%221%22 height=%226%22 fill=%22%2362c4cc%22/%3E%3Crect x=%223%22 y=%221%22 width=%221%22 height=%221%22 fill=%22%23fffdf4%22/%3E%3Crect x=%223%22 y=%222%22 width=%221%22 height=%226%22 fill=%22%2362c4cc%22/%3E%3Crect x=%224%22 y=%221%22 width=%221%22 height=%221%22 fill=%22%23fffdf4%22/%3E%3Crect x=%224%22 y=%222%22 width=%221%22 height=%226%22 fill=%22%2362c4cc%22/%3E%3Crect x=%225%22 y=%222%22 width=%221%22 height=%221%22 fill=%22%23fffdf4%22/%3E%3Crect x=%225%22 y=%223%22 width=%221%22 height=%225%22 fill=%22%2362c4cc%22/%3E%3Crect x=%226%22 y=%223%22 width=%221%22 height=%221%22 fill=%22%23fffdf4%22/%3E%3Crect x=%226%22 y=%224%22 width=%221%22 height=%224%22 fill=%22%2362c4cc%22/%3E%3Crect x=%227%22 y=%224%22 width=%221%22 height=%221%22 fill=%22%23fffdf4%22/%3E%3Crect x=%227%22 y=%225%22 width=%221%22 height=%223%22 fill=%22%2362c4cc%22/%3E%3Crect x=%228%22 y=%223%22 width=%221%22 height=%221%22 fill=%22%23fffdf4%22/%3E%3Crect x=%228%22 y=%224%22 width=%221%22 height=%224%22 fill=%22%2362c4cc%22/%3E%3Crect x=%229%22 y=%222%22 width=%221%22 height=%221%22 fill=%22%23fffdf4%22/%3E%3Crect x=%229%22 y=%223%22 width=%221%22 height=%225%22 fill=%22%2362c4cc%22/%3E%3Crect x=%2210%22 y=%223%22 width=%221%22 height=%221%22 fill=%22%23fffdf4%22/%3E%3Crect x=%2210%22 y=%224%22 width=%221%22 height=%224%22 fill=%22%2362c4cc%22/%3E%3Crect x=%2211%22 y=%224%22 width=%221%22 height=%221%22 fill=%22%23fffdf4%22/%3E%3Crect x=%2211%22 y=%225%22 width=%221%22 height=%223%22 fill=%22%2362c4cc%22/%3E%3Crect x=%2212%22 y=%225%22 width=%221%22 height=%221%22 fill=%22%23fffdf4%22/%3E%3Crect x=%2212%22 y=%226%22 width=%221%22 height=%222%22 fill=%22%2362c4cc%22/%3E%3Crect x=%2213%22 y=%225%22 width=%221%22 height=%221%22 fill=%22%23fffdf4%22/%3E%3Crect x=%2213%22 y=%226%22 width=%221%22 height=%222%22 fill=%22%2362c4cc%22/%3E%3Crect x=%2214%22 y=%224%22 width=%221%22 height=%221%22 fill=%22%23fffdf4%22/%3E%3Crect x=%2214%22 y=%225%22 width=%221%22 height=%223%22 fill=%22%2362c4cc%22/%3E%3Crect x=%2215%22 y=%224%22 width=%221%22 height=%221%22 fill=%22%23fffdf4%22/%3E%3Crect x=%2215%22 y=%225%22 width=%221%22 height=%223%22 fill=%22%2362c4cc%22/%3E%3C/svg%3E");
+
+    /* 像素浪花(深海,叠加用) */
+    --wave-deep: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2216%22 height=%228%22 viewBox=%220 0 16 8%22 shape-rendering=%22crispEdges%22%3E%3Crect x=%220%22 y=%223%22 width=%221%22 height=%221%22 fill=%22%2362c4cc%22/%3E%3Crect x=%220%22 y=%224%22 width=%221%22 height=%224%22 fill=%22%232e8ca3%22/%3E%3Crect x=%221%22 y=%222%22 width=%221%22 height=%221%22 fill=%22%2362c4cc%22/%3E%3Crect x=%221%22 y=%223%22 width=%221%22 height=%225%22 fill=%22%232e8ca3%22/%3E%3Crect x=%222%22 y=%221%22 width=%221%22 height=%221%22 fill=%22%2362c4cc%22/%3E%3Crect x=%222%22 y=%222%22 width=%221%22 height=%226%22 fill=%22%232e8ca3%22/%3E%3Crect x=%223%22 y=%221%22 width=%221%22 height=%221%22 fill=%22%2362c4cc%22/%3E%3Crect x=%223%22 y=%222%22 width=%221%22 height=%226%22 fill=%22%232e8ca3%22/%3E%3Crect x=%224%22 y=%221%22 width=%221%22 height=%221%22 fill=%22%2362c4cc%22/%3E%3Crect x=%224%22 y=%222%22 width=%221%22 height=%226%22 fill=%22%232e8ca3%22/%3E%3Crect x=%225%22 y=%222%22 width=%221%22 height=%221%22 fill=%22%2362c4cc%22/%3E%3Crect x=%225%22 y=%223%22 width=%221%22 height=%225%22 fill=%22%232e8ca3%22/%3E%3Crect x=%226%22 y=%223%22 width=%221%22 height=%221%22 fill=%22%2362c4cc%22/%3E%3Crect x=%226%22 y=%224%22 width=%221%22 height=%224%22 fill=%22%232e8ca3%22/%3E%3Crect x=%227%22 y=%224%22 width=%221%22 height=%221%22 fill=%22%2362c4cc%22/%3E%3Crect x=%227%22 y=%225%22 width=%221%22 height=%223%22 fill=%22%232e8ca3%22/%3E%3Crect x=%228%22 y=%223%22 width=%221%22 height=%221%22 fill=%22%2362c4cc%22/%3E%3Crect x=%228%22 y=%224%22 width=%221%22 height=%224%22 fill=%22%232e8ca3%22/%3E%3Crect x=%229%22 y=%222%22 width=%221%22 height=%221%22 fill=%22%2362c4cc%22/%3E%3Crect x=%229%22 y=%223%22 width=%221%22 height=%225%22 fill=%22%232e8ca3%22/%3E%3Crect x=%2210%22 y=%223%22 width=%221%22 height=%221%22 fill=%22%2362c4cc%22/%3E%3Crect x=%2210%22 y=%224%22 width=%221%22 height=%224%22 fill=%22%232e8ca3%22/%3E%3Crect x=%2211%22 y=%224%22 width=%221%22 height=%221%22 fill=%22%2362c4cc%22/%3E%3Crect x=%2211%22 y=%225%22 width=%221%22 height=%223%22 fill=%22%232e8ca3%22/%3E%3Crect x=%2212%22 y=%225%22 width=%221%22 height=%221%22 fill=%22%2362c4cc%22/%3E%3Crect x=%2212%22 y=%226%22 width=%221%22 height=%222%22 fill=%22%232e8ca3%22/%3E%3Crect x=%2213%22 y=%225%22 width=%221%22 height=%221%22 fill=%22%2362c4cc%22/%3E%3Crect x=%2213%22 y=%226%22 width=%221%22 height=%222%22 fill=%22%232e8ca3%22/%3E%3Crect x=%2214%22 y=%224%22 width=%221%22 height=%221%22 fill=%22%2362c4cc%22/%3E%3Crect x=%2214%22 y=%225%22 width=%221%22 height=%223%22 fill=%22%232e8ca3%22/%3E%3Crect x=%2215%22 y=%224%22 width=%221%22 height=%221%22 fill=%22%2362c4cc%22/%3E%3Crect x=%2215%22 y=%225%22 width=%221%22 height=%223%22 fill=%22%232e8ca3%22/%3E%3C/svg%3E");
+}

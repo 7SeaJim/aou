@@ -1,0 +1,553 @@
+/* ============================================================
+   pixel-ui.css — 组件库:面板 / 按钮 / HUD / 背包格 / 对话框 …
+   依赖 pixel-tokens.css + pixel-base.css,在其后引入
+
+   注意 1:像素按钮的描边和厚度由 box-shadow 绘制,不占布局空间,
+          排列时请留 ≥8px 的间距(建议容器用 flex + gap)。
+   注意 2:.px-shadow 不要用在 border-image 面板(.px-panel/.px-dialog/.px-toast)上——
+          box-shadow 沿 border-box 矩形绘制,会在透明的阶梯角处露出方块。
+   ============================================================ */
+
+/* ============ 面板:浮木像素框 ============ */
+.px-panel {
+    position: relative;
+    background: var(--sand);
+    background-clip: padding-box;      /* 让阶梯角的缺口透出页面背景 */
+    border: 18px solid transparent;
+    border-image: var(--frame-wood) 6 round;
+    padding: 16px 20px;
+    image-rendering: pixelated;
+}
+
+/* 海水青框(对话、信息类) */
+.px-panel--sea {
+    border-image-source: var(--frame-sea);
+    background-color: #eaf8f9;   /* 浅青纸面,与沙色/白色纸面区分 */
+}
+
+/* 饵块金框(成就、奖励、高亮) */
+.px-panel--gold {
+    border-image-source: var(--frame-gold);
+    background-color: var(--foam);
+}
+
+/* 深色面板(游戏 HUD 悬浮层) */
+.px-panel--night {
+    background-color: var(--sea-ink);
+    color: var(--foam);
+}
+
+/* 面板顶部的木牌标题(骑在上边框上) */
+.px-panel__title {
+    /* flex + fit-content:既能被 auto 外边距居中(display:table 也行),
+       又能让里面的 .px-icon 靠 align-items 对齐 */
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: fit-content;
+    margin: -40px auto 12px;
+    padding: 4px 18px;
+    background: var(--wood);
+    color: var(--foam);
+    font-size: 18px;
+    text-shadow: 2px 2px 0 var(--ink);
+    box-shadow:
+        -4px 0 0 var(--ink), 4px 0 0 var(--ink),
+        0 -4px 0 var(--ink), 0 4px 0 var(--ink),
+        inset 0 4px 0 var(--wood-l), inset 0 -4px 0 var(--wood-d);
+}
+
+/* ============ 按钮:厚底可按压 ============ */
+.px-btn {
+    position: relative;
+    /* flex 而不是 inline-block:按钮里放 .px-icon 时靠 align-items 居中。
+       inline-block 下图标是行内盒,要靠 vertical-align 猜位置,
+       字号一变就会压到下边框的暗色厚底上。 */
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    font-family: var(--font-pixel);
+    font-size: 16px;
+    line-height: 1;
+    padding: 12px 22px;
+    color: var(--ink);
+    background: var(--gold);
+    border: none;
+    cursor: pointer;
+    /* 十字 box-shadow 画描边(四角自然出缺口),再垫一层厚底 */
+    box-shadow:
+        -4px 0 0 var(--ink), 4px 0 0 var(--ink),
+        0 -4px 0 var(--ink), 0 4px 0 var(--ink),
+        0 8px 0 var(--ink),
+        inset 0 4px 0 var(--gold-l),
+        inset 0 -4px 0 var(--gold-d);
+    transition: filter 0.1s steps(2);
+}
+.px-btn:hover  { filter: brightness(1.08); }
+.px-btn:active {
+    transform: translateY(4px);
+    box-shadow:
+        -4px 0 0 var(--ink), 4px 0 0 var(--ink),
+        0 -4px 0 var(--ink), 0 4px 0 var(--ink),
+        inset 0 4px 0 var(--gold-l),
+        inset 0 -4px 0 var(--gold-d);
+}
+.px-btn:disabled {
+    background: #b8b0a0;
+    color: #7d7668;
+    cursor: not-allowed;
+    filter: none;
+    box-shadow:
+        -4px 0 0 var(--ink), 4px 0 0 var(--ink),
+        0 -4px 0 var(--ink), 0 4px 0 var(--ink),
+        0 8px 0 var(--ink),
+        inset 0 4px 0 #ccc5b6, inset 0 -4px 0 #999181;
+}
+
+/* 变体:海水青(次要动作) */
+.px-btn--sea {
+    background: var(--sea);
+    color: var(--foam);
+    text-shadow: 1px 1px 0 var(--sea-ink);
+    box-shadow:
+        -4px 0 0 var(--ink), 4px 0 0 var(--ink),
+        0 -4px 0 var(--ink), 0 4px 0 var(--ink),
+        0 8px 0 var(--ink),
+        inset 0 4px 0 #a5e3e0, inset 0 -4px 0 var(--sea-deep);
+}
+.px-btn--sea:active {
+    transform: translateY(4px);
+    box-shadow:
+        -4px 0 0 var(--ink), 4px 0 0 var(--ink),
+        0 -4px 0 var(--ink), 0 4px 0 var(--ink),
+        inset 0 4px 0 #a5e3e0, inset 0 -4px 0 var(--sea-deep);
+}
+
+/* 变体:珊瑚橙(退出、危险) */
+.px-btn--coral {
+    background: var(--coral);
+    color: var(--foam);
+    text-shadow: 1px 1px 0 var(--coral-d);
+    box-shadow:
+        -4px 0 0 var(--ink), 4px 0 0 var(--ink),
+        0 -4px 0 var(--ink), 0 4px 0 var(--ink),
+        0 8px 0 var(--ink),
+        inset 0 4px 0 #ffa88e, inset 0 -4px 0 var(--coral-d);
+}
+.px-btn--coral:active {
+    transform: translateY(4px);
+    box-shadow:
+        -4px 0 0 var(--ink), 4px 0 0 var(--ink),
+        0 -4px 0 var(--ink), 0 4px 0 var(--ink),
+        inset 0 4px 0 #ffa88e, inset 0 -4px 0 var(--coral-d);
+}
+
+/* 变体:浮木(普通/返回) */
+.px-btn--wood {
+    background: var(--wood);
+    color: var(--foam);
+    text-shadow: 1px 1px 0 var(--wood-d);
+    box-shadow:
+        -4px 0 0 var(--ink), 4px 0 0 var(--ink),
+        0 -4px 0 var(--ink), 0 4px 0 var(--ink),
+        0 8px 0 var(--ink),
+        inset 0 4px 0 var(--wood-l), inset 0 -4px 0 var(--wood-d);
+}
+.px-btn--wood:active {
+    transform: translateY(4px);
+    box-shadow:
+        -4px 0 0 var(--ink), 4px 0 0 var(--ink),
+        0 -4px 0 var(--ink), 0 4px 0 var(--ink),
+        inset 0 4px 0 var(--wood-l), inset 0 -4px 0 var(--wood-d);
+}
+
+/* 尺寸 */
+.px-btn--lg { font-size: 20px; padding: 16px 32px; }
+.px-btn--sm { font-size: 13px; padding: 8px 14px; }
+
+/* ============ HUD 资源条(欧币 / 体力 / 天气) ============ */
+.px-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 14px;
+    font-size: 15px;
+    background: var(--sand);
+    box-shadow:
+        -3px 0 0 var(--ink), 3px 0 0 var(--ink),
+        0 -3px 0 var(--ink), 0 3px 0 var(--ink),
+        inset 0 -3px 0 var(--sand-3);
+}
+.px-chip strong {
+    font-weight: 400;
+    color: var(--gold-d);
+}
+/* 深色变体:压在游戏画面上 */
+.px-chip--dark {
+    background-color: var(--sea-ink);
+    color: var(--foam);
+}
+.px-chip--dark strong { color: var(--gold); }
+
+/* ============ 进度条(经验 / 生命 / 订单进度) ============ */
+.px-bar {
+    position: relative;
+    height: 26px;
+    background: var(--sand-2);
+    border: 3px solid var(--ink);
+    box-shadow: inset 3px 3px 0 var(--sand-3);
+}
+.px-bar__fill {
+    height: 100%;
+    background-color: var(--gold);
+    /* 竖向像素分段纹理 */
+    background-image: repeating-linear-gradient(
+        90deg,
+        rgba(255, 255, 255, 0.25) 0 4px,
+        transparent 4px 12px
+    );
+    box-shadow: inset 0 -6px 0 rgba(74, 54, 40, 0.2);
+    transition: width 0.5s steps(8);
+}
+.px-bar--hp  .px-bar__fill { background-color: var(--coral); }
+.px-bar--sea .px-bar__fill { background-color: var(--sea); }
+.px-bar--exp .px-bar__fill { background-color: var(--leaf); }
+/* 条内文字(如 12/30) */
+.px-bar__label {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    color: var(--ink);
+    text-shadow: 1px 1px 0 rgba(255, 253, 244, 0.6);
+    pointer-events: none;
+}
+
+/* ============ 背包格子 ============ */
+.px-slot {
+    position: relative;
+    /* 64 = 3px 描边 ×2 + 48px 图标 + 5px 呼吸;--xl 图标正好不顶到边框 */
+    width: 64px;
+    height: 64px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    font-size: 26px;
+    background: var(--sand-2);
+    border: 3px solid var(--ink);
+    /* 凹陷:左上暗、右下亮 */
+    box-shadow:
+        inset 3px 3px 0 var(--sand-3),
+        inset -2px -2px 0 var(--sand);
+    cursor: pointer;
+}
+.px-slot:hover {
+    background: var(--gold-l);
+}
+.px-slot--selected {
+    border-color: var(--gold-d);
+    box-shadow:
+        0 0 0 3px var(--gold),
+        inset 3px 3px 0 var(--sand-3),
+        inset -2px -2px 0 var(--sand);
+}
+.px-slot--locked {
+    background: #b8b0a0;
+    box-shadow: inset 3px 3px 0 #999181, inset -2px -2px 0 #ccc5b6;
+    cursor: not-allowed;
+    filter: grayscale(1);
+}
+/* 数量角标 */
+.px-slot__count {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    min-width: 18px;
+    padding: 0 3px;
+    font-size: 13px;
+    line-height: 16px;
+    text-align: center;
+    color: var(--foam);
+    /* 角标压在图标上,给个深底才读得出来 */
+    background: var(--ink);
+    box-shadow: -2px -2px 0 var(--sand-2);
+}
+
+/* ============ 对话框(海鸥聊天) ============ */
+.px-dialog {
+    position: relative;
+    background: var(--sand);
+    background-clip: padding-box;
+    border: 18px solid transparent;
+    border-image: var(--frame-wood) 6 round;
+    padding: 18px 20px 14px;
+    image-rendering: pixelated;
+}
+.px-dialog__name {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin: -38px 0 12px;
+    padding: 3px 14px;
+    font-size: 14px;
+    background: var(--sea-deep);
+    color: var(--foam);
+    text-shadow: 1px 1px 0 var(--sea-ink);
+    box-shadow:
+        -3px 0 0 var(--ink), 3px 0 0 var(--ink),
+        0 -3px 0 var(--ink), 0 3px 0 var(--ink);
+}
+.px-dialog__text { min-height: 3em; }
+/* 继续箭头 */
+.px-dialog__next {
+    position: absolute;
+    right: 14px;
+    bottom: 6px;
+    color: var(--sea-deep);
+    animation: px-bounce 0.8s steps(2) infinite;
+}
+@keyframes px-bounce {
+    0%, 100% { transform: translateY(0); }
+    50%      { transform: translateY(4px); }
+}
+/* 选项按钮组 */
+.px-dialog__options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    margin-top: 14px;
+}
+
+/* ============ 成就 / 奖励吐司 ============ */
+.px-toast {
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+    background-color: var(--foam);
+    background-clip: padding-box;
+    border: 18px solid transparent;
+    border-image: var(--frame-gold) 6 round;
+    padding: 12px 24px;
+    font-size: 18px;
+    text-align: center;
+    image-rendering: pixelated;
+}
+.px-toast.pop {
+    animation: px-pop 0.4s steps(4);
+}
+@keyframes px-pop {
+    0%   { transform: scale(0.6); }
+    60%  { transform: scale(1.1); }
+    100% { transform: scale(1); }
+}
+
+/* ============ 小标签(状态 / 品质) ============ */
+.px-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 10px;
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--foam);
+    background: var(--sea-deep);
+    text-shadow: 1px 1px 0 rgba(74, 54, 40, 0.5);
+    box-shadow:
+        -3px 0 0 var(--ink), 3px 0 0 var(--ink),
+        0 -3px 0 var(--ink), 0 3px 0 var(--ink);
+}
+.px-tag--leaf  { background: var(--leaf); }
+.px-tag--gold  { background: var(--gold); color: var(--ink); text-shadow: none; }
+.px-tag--coral { background: var(--coral); }
+
+/* ============ 像素浪花分隔条(签名元素) ============ */
+.px-waves {
+    height: 32px;
+    background-image: var(--wave);
+    background-repeat: repeat-x;
+    background-position: 0 bottom;
+    background-size: 64px 32px;
+    image-rendering: pixelated;
+    animation: px-waves-flow 1.8s steps(16) infinite;
+}
+/* 双层浪:浅浪叠在深浪上,错速流动 */
+.px-waves--double {
+    background-image: var(--wave), var(--wave-deep);
+    background-position: 0 bottom, 24px bottom;
+    background-size: 64px 32px, 80px 36px;
+    animation: px-waves-flow-2 2.4s steps(20) infinite;
+}
+@keyframes px-waves-flow {
+    to { background-position: 64px bottom; }
+}
+@keyframes px-waves-flow-2 {
+    to { background-position: 64px bottom, -56px bottom; }
+}
+
+/* ============ 游戏舞台(880×620 画面外的木质机身) ============ */
+.px-stage {
+    /* 916 = 14px 内衬 ×2 + 4px 描边 ×2 + 880px 画面。
+       宽度必须让 .px-screen 正好等于 canvas 的 880×620:
+       差一点点(比如画面被挤成 844)整块画面就要按 0.959 倍缩放,
+       pixelated 下像素立刻一大一小,和图标那边是同一个坑。 */
+    width: min(916px, 100%);
+    margin-inline: auto;
+    padding: 14px;
+    background-color: var(--wood);
+    /* 木纹:斜向细条 */
+    background-image: repeating-linear-gradient(
+        180deg,
+        rgba(255, 255, 255, 0.07) 0 4px,
+        rgba(74, 54, 40, 0.07) 4px 8px
+    );
+    box-shadow:
+        -4px 0 0 var(--ink), 4px 0 0 var(--ink),
+        0 -4px 0 var(--ink), 0 4px 0 var(--ink),
+        0 12px 0 var(--wood-d),
+        0 16px 0 var(--ink),
+        inset 0 4px 0 var(--wood-l);
+}
+/* 舞台内的屏幕:canvas / 界面都放这里 */
+.px-screen {
+    position: relative;
+    aspect-ratio: 880 / 620;
+    overflow: hidden;
+    background: var(--sky);
+    border: 4px solid var(--ink);
+    box-shadow: inset 0 0 0 4px var(--sea-ink);
+}
+.px-screen > canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+}
+
+/* ============ 遮罩(暂停 / 弹窗底层) ============ */
+.px-mask {
+    position: absolute;
+    inset: 0;
+    z-index: 30;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 20px;
+    /* 像素点阵遮罩,比半透明黑更有颗粒感 */
+    background-color: rgba(29, 95, 118, 0.72);
+    background-image:
+        repeating-linear-gradient(0deg,
+            rgba(0, 0, 0, 0.25) 0 2px, transparent 2px 4px);
+}
+.px-mask.is-open { display: flex; }
+.px-mask h2 {
+    color: var(--foam);
+    text-shadow:
+        3px 0 0 var(--ink), -3px 0 0 var(--ink),
+        0 3px 0 var(--ink), 0 -3px 0 var(--ink);
+}
+
+/* ============ 界面切换标签页 ============ */
+/* 标签坐在面板边框的上沿,**不要**用负 margin 去盖边框。
+   .px-panel 的边框是 18px 带铆钉的木纹框,不是一条细线 ——
+   盖进去会把框吃掉一段,到最后一个标签结束的地方框又冒出来,
+   接缝处出现一道竖直断口。 */
+.px-tabs {
+    display: flex;
+    align-items: flex-end;      /* 选中的那个更高,矮的贴着底对齐 */
+    gap: 6px;
+    padding-left: 18px;
+    position: relative;
+    z-index: 1;
+}
+.px-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-family: var(--font-pixel);
+    font-size: 15px;
+    padding: 8px 18px 10px;
+    color: var(--ink);
+    background: var(--wood);
+    border: none;
+    cursor: pointer;
+    box-shadow:
+        -3px 0 0 var(--ink), 3px 0 0 var(--ink),
+        0 -3px 0 var(--ink),
+        inset 0 3px 0 var(--wood-l);
+}
+.px-tab:hover { background: var(--wood-l); }
+/* 选中:长高一截 + 换成面板的纸面色,视觉上归属下面那块板 */
+.px-tab[aria-selected="true"] {
+    background: var(--sand);
+    padding-top: 14px;
+    padding-bottom: 12px;
+    box-shadow:
+        -3px 0 0 var(--ink), 3px 0 0 var(--ink),
+        0 -3px 0 var(--ink),
+        inset 0 3px 0 var(--foam);
+}
+
+/* ============ 等宽自适应网格 ============ */
+/* 卡片列表用它,别用 flex-wrap + 固定宽度 —— 那样最后一行会孤零零留一张,
+   而且每张卡的宽度不随容器变。--min 是单张卡的最小宽度。 */
+.px-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(var(--min, 200px), 1fr));
+    gap: 14px;
+    align-items: start;
+}
+
+/* ============ 海鸥四子棋 ============ */
+/* 棋子是大坝底下捡的黑白石头,所以是圆的、有点毛边,不是塑料棋子。 */
+.c4board {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 4px;
+    padding: 8px;
+    background: var(--sea-deep);
+    box-shadow:
+        -3px 0 0 var(--ink), 3px 0 0 var(--ink),
+        0 -3px 0 var(--ink), 0 3px 0 var(--ink),
+        inset 0 3px 0 var(--sea-ink);
+    width: fit-content;
+    margin-inline: auto;
+}
+.c4cell {
+    width: 34px;
+    height: 34px;
+    padding: 0;
+    border: none;
+    background: var(--sea-ink);
+    box-shadow: inset 2px 2px 0 rgba(0, 0, 0, 0.28);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.c4cell:hover:not(:disabled) { background: var(--sea); }
+.c4cell:disabled { cursor: default; }
+.c4cell--win { background: var(--gold-d); }
+
+.c4stone {
+    width: 26px;
+    height: 26px;
+    display: block;
+    /* 用 box-shadow 堆出一颗圆石头:四角切掉,再压一层高光 */
+    background: var(--ink);
+    box-shadow:
+        -3px 0 0 -1px var(--ink), 3px 0 0 -1px var(--ink),
+        0 -3px 0 -1px var(--ink), 0 3px 0 -1px var(--ink);
+    border-radius: 40%;
+}
+.c4stone--b { background: #3b3630; box-shadow: inset 3px 3px 0 #57504704, inset -4px -4px 0 #1e1a16; }
+.c4stone--w { background: #e8e2d4; box-shadow: inset 3px 3px 0 #fffdf4, inset -4px -4px 0 #b3aa98; }
+
+@media (max-width: 520px) {
+    .c4cell { width: 26px; height: 26px; }
+    .c4stone { width: 20px; height: 20px; }
+}

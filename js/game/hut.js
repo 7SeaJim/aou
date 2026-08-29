@@ -1,0 +1,261 @@
+/**
+ * 哇鸥的小屋:海埂大坝旁边堤岸上的一个草棚,紧挨着湖。
+ *
+ * 这是全游戏唯一的**近景**。别处都是远远看着它,只有这里能看清它的脸 ——
+ * 所以草棚里除了必要的结构什么都不放,视线全给哇鸥。
+ *
+ * 从远到近:湖 → 棚外的堤岸 → 立柱和横梁 → 草顶(压在最上,像镜头凑到棚口)
+ *          → 地上的草垫 → 哇鸥
+ */
+
+import { PixelScreen, sprite, drawStanding } from './pixmap.js';
+import { SCENERY } from './pixels.js';
+import { VW, VH } from './scene.js';
+
+/** 三个时段各自的光。中午亮、晚上暖、深夜冷。 */
+const LIGHT = {
+    noon: {
+        sky: ['#8fd0e8', '#a9dcee', '#c4e8f2'], lake: ['#4fb0bf', '#3697ad', '#2b8299'],
+        thatch: '#d9b46a', thatchDark: '#9d7c3c', post: '#a8763f', postDark: '#6f4a24',
+        straw: '#e0c078', strawDark: '#a8873f', air: null,
+    },
+    evening: {
+        sky: ['#8a5f74', '#c07a63', '#e8a35e'], lake: ['#6a5570', '#54455f', '#3d3348'],
+        thatch: '#b28a4e', thatchDark: '#75542a', post: '#84552f', postDark: '#4e2f18',
+        straw: '#bb9354', strawDark: '#7d5e2c', air: 'rgba(232,163,94,0.10)',
+    },
+    night: {
+        sky: ['#1a2440', '#22304f', '#2b3a5c'], lake: ['#182338', '#131c2d', '#0e1523'],
+        thatch: '#5e4d34', thatchDark: '#3a2f1f', post: '#4a3320', postDark: '#2c1d11',
+        straw: '#5f4f30', strawDark: '#3c3020', air: 'rgba(60,90,150,0.14)',
+    },
+};
+
+const OPEN_TOP = 84;        // 棚口上沿(草顶垂下来的位置)
+const GROUND = 236;         // 地面线
+const GULL_X = 246;         // 哇鸥待的地方
+
+export class Hut {
+    /**
+     * @param {HTMLCanvasElement} canvas
+     * @param {()=>object} getState
+     * @param {()=>string} getSlot 当前时段:'noon' | 'evening' | 'night' | null
+     */
+    constructor(canvas, getState, getSlot) {
+        this.screen = new PixelScreen(canvas, VW, VH);
+        this.getState = getState;
+        this.getSlot = getSlot;
+        this.t = 0;
+        this.rafId = null;
+        this.baked = null;
+        this.bakedFor = null;
+        this._loop = this._loop.bind(this);
+    }
+
+    start() {
+        if (this.rafId) return;
+        this.last = 0;
+        this.rafId = requestAnimationFrame(this._loop);
+    }
+
+    stop() {
+        if (this.rafId) cancelAnimationFrame(this.rafId);
+        this.rafId = null;
+    }
+
+    /** 棚子本身不动,时段一变才重烤 */
+    _bake(slot) {
+        if (this.bakedFor === slot) return;
+        this.bakedFor = slot;
+        this.baked = this.baked ?? this.screen.layer();
+        const c = this.baked.ctx;
+        const L = LIGHT[slot] ?? LIGHT.noon;
+        c.clearRect(0, 0, VW, VH);
+        paintOutside(c, L);
+        paintShelter(c, L);
+        paintBedding(c, L);
+    }
+
+    _loop(ts) {
+        this.rafId = requestAnimationFrame(this._loop);
+        const dt = this.last ? Math.min(ts - this.last, 50) : 16.7;
+        this.last = ts;
+        this.t += dt;
+
+        const slot = this.getSlot() ?? 'noon';
+        this._bake(slot);
+
+        const { ctx } = this.screen;
+        ctx.drawImage(this.baked.cv, 0, 0);
+        drawWaou(ctx, slot, this.t);
+        const L = LIGHT[slot] ?? LIGHT.noon;
+        if (L.air) { ctx.fillStyle = L.air; ctx.fillRect(0, 0, VW, VH); }
+        this.screen.present();
+    }
+}
+
+/* ---------- 棚外 ---------- */
+
+function paintOutside(c, L) {
+    // 天
+    const h = OPEN_TOP + 30;
+    for (let i = 0; i < L.sky.length; i++) {
+        c.fillStyle = L.sky[i];
+        c.fillRect(0, Math.round(i * h / L.sky.length), VW, Math.ceil(h / L.sky.length) + 1);
+    }
+    // 湖:草棚就搭在水边,棚口望出去是滇池
+    const lakeTop = h;
+    for (let i = 0; i < L.lake.length; i++) {
+        c.fillStyle = L.lake[i];
+        const y0 = lakeTop + Math.round(i * (GROUND - lakeTop) / L.lake.length);
+        const y1 = lakeTop + Math.round((i + 1) * (GROUND - lakeTop) / L.lake.length);
+        c.fillRect(0, y0, VW, y1 - y0);
+    }
+    // 水面几道横光
+    c.fillStyle = L.sky[2];
+    for (let i = 0; i < 16; i++) {
+        const y = lakeTop + 6 + (i * 11) % (GROUND - lakeTop - 10);
+        const x = (i * 67) % VW;
+        c.fillRect(x, y, 6 + (i % 3) * 3, 1);
+    }
+    // 堤岸:棚子脚下这条,把水和地分开
+    c.fillStyle = L.postDark;
+    c.fillRect(0, GROUND - 8, VW, 8);
+    c.fillStyle = L.post;
+    c.fillRect(0, GROUND - 8, VW, 3);
+}
+
+/* ---------- 棚子本身 ---------- */
+
+function paintShelter(c, L) {
+    // 草顶:从画面上沿垂下来。一撮一撮画,下沿留成不齐的 ——
+    // 齐的话就成了木板,草的意思全没了。
+    c.fillStyle = L.thatchDark;
+    c.fillRect(0, 0, VW, OPEN_TOP - 14);
+    for (let x = 0; x < VW; x++) {
+        const len = OPEN_TOP - 14 + Math.round(
+            10 + Math.sin(x * 0.31) * 5 + Math.sin(x * 0.11) * 6 + (x % 7 === 0 ? 4 : 0));
+        c.fillStyle = (x % 5 < 2) ? L.thatch : L.thatchDark;
+        c.fillRect(x, 0, 1, len);
+    }
+    // 草秆的纹路
+    c.fillStyle = L.thatch;
+    for (let i = 0; i < 90; i++) {
+        const x = (i * 29) % VW;
+        const y = (i * 13) % (OPEN_TOP - 22);
+        c.fillRect(x, y, 1, 4 + (i % 3) * 3);
+    }
+
+    // 立柱:两根,撑着横梁
+    for (const px of [28, VW - 40]) {
+        c.fillStyle = L.postDark;
+        c.fillRect(px - 1, OPEN_TOP - 22, 13, GROUND - OPEN_TOP + 22);
+        c.fillStyle = L.post;
+        c.fillRect(px, OPEN_TOP - 22, 9, GROUND - OPEN_TOP + 22);
+        c.fillStyle = L.thatch;
+        c.fillRect(px, OPEN_TOP - 22, 3, GROUND - OPEN_TOP + 22);
+        for (let y = OPEN_TOP; y < GROUND; y += 22) {   // 竹节
+            c.fillStyle = L.postDark;
+            c.fillRect(px, y, 9, 2);
+        }
+    }
+    // 横梁
+    c.fillStyle = L.postDark;
+    c.fillRect(0, OPEN_TOP - 24, VW, 10);
+    c.fillStyle = L.post;
+    c.fillRect(0, OPEN_TOP - 22, VW, 5);
+}
+
+/** 地上垫的草 */
+function paintBedding(c, L) {
+    c.fillStyle = L.strawDark;
+    c.fillRect(0, GROUND, VW, VH - GROUND);
+    // 一根根草,横着铺
+    for (let i = 0; i < 900; i++) {
+        const x = (i * 53) % VW;
+        const y = GROUND + 2 + (i * 31) % (VH - GROUND - 4);
+        c.fillStyle = (i % 3 === 0) ? L.straw : L.strawDark;
+        const w = 4 + (i % 4) * 3;
+        c.fillRect(x, y, w, 1);
+    }
+    // 哇鸥窝的那一圈,草被压下去了
+    c.fillStyle = L.strawDark;
+    for (let x = -62; x <= 62; x++) {
+        const d = Math.round(8 * Math.sqrt(Math.max(0, 1 - (x / 62) ** 2)));
+        c.fillRect(GULL_X + x, GROUND + 14 - d, 1, d * 2);
+    }
+}
+
+/* ---------- 哇鸥 ---------- */
+
+/**
+ * 它多数时候是窝着的一团;每隔一阵伸出两条细腿站起来,在棚里走两步再窝回去。
+ * 腿是画上去的,不做成精灵图 —— 走路时腿的角度一直在变,做成帧图要画一大堆。
+ */
+function drawWaou(ctx, slot, t) {
+    if (slot === 'night') {
+        const cv = sprite('hut_sleep', SCENERY.hut_sleep);
+        const breathe = Math.sin(t * 0.0012) > 0 ? 0 : 1;
+        drawStanding(ctx, cv, GULL_X, GROUND + 22 + breathe);
+        drawZzz(ctx, GULL_X + 72, GROUND - 62, t);
+        return;
+    }
+
+    const CYCLE = 9000;
+    const p = t % CYCLE;
+    const cv = sprite('hut_waou', SCENERY.hut_waou);
+
+    if (p < 5200) {                                  // 窝着,轻轻起伏
+        const breathe = Math.sin(t * 0.0022) > 0 ? 0 : 1;
+        drawStanding(ctx, cv, GULL_X, GROUND + 22 + breathe);
+        return;
+    }
+
+    // 站起来走两步。走的这段里 x 来回挪,腿交替迈
+    const w = (p - 5200) / (CYCLE - 5200);           // 0..1
+    const swing = Math.sin(w * Math.PI * 2);
+    const x = Math.round(GULL_X + swing * 62);
+    const lift = w < 0.08 ? Math.round(w / 0.08 * 26)
+               : w > 0.92 ? Math.round((1 - w) / 0.08 * 26) : 26;
+    const step = Math.sin(w * Math.PI * 10);
+
+    drawLegs(ctx, x, GROUND + 22, lift, step);
+    drawStanding(ctx, cv, x, GROUND + 22 - lift);
+}
+
+/** 两条细长腿。抬起来多少由 lift 定,迈步靠 step 让两条腿反相。 */
+function drawLegs(ctx, x, baseY, lift, step) {
+    if (lift <= 0) return;
+    for (const [side, phase] of [[-1, 0], [1, Math.PI]]) {
+        const kx = x + side * 16;
+        const off = Math.round(Math.sin(step * 3 + phase) * 4);
+        ctx.fillStyle = '#e8384f';
+        ctx.fillRect(kx, baseY - lift, 4, lift);            // 腿
+        ctx.fillRect(kx - 3 + off, baseY - 3, 10, 4);       // 脚
+        ctx.fillStyle = '#c14e33';
+        ctx.fillRect(kx, baseY - 5, 4, 4);
+    }
+}
+
+/** 睡着的时候飘出来的 Z */
+function drawZzz(ctx, x, y, t) {
+    const Z = [
+        '.KKK.',
+        '...K.',
+        '..K..',
+        '.K...',
+        '.KKK.',
+    ];
+    for (let i = 0; i < 3; i++) {
+        const p = (t * 0.00035 + i * 0.33) % 1;
+        const s = 1 + i;
+        const zx = Math.round(x + p * 26 + i * 4);
+        const zy = Math.round(y - p * 40 - i * 6);
+        ctx.fillStyle = i === 0 ? '#fffdf4' : '#cdd8ea';
+        for (let r = 0; r < 5; r++) {
+            for (let cc = 0; cc < 5; cc++) {
+                if (Z[r][cc] === 'K') ctx.fillRect(zx + cc * s, zy + r * s, s, s);
+            }
+        }
+    }
+}

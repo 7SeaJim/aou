@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>哇鸥 · 去大坝整点饵块</title>
+    <link rel="stylesheet" href="css/pixel-tokens.css">
+    <link rel="stylesheet" href="css/pixel-base.css">
+    <link rel="stylesheet" href="css/pixel-icons.css">
+    <link rel="stylesheet" href="css/pixel-ui.css">
+    <style>
+        body { display: block; padding: 24px 16px 60px; }
+        .wrap { width: min(916px, 100%); margin-inline: auto; }
+        .title { text-align: center; margin-bottom: 20px; }
+        .title h1 { font-size: 32px; }
+        #hud {
+            display: flex; gap: 12px; flex-wrap: wrap;
+            align-items: center; margin-bottom: 22px;
+        }
+        #panel { min-height: 320px; }
+        /* 飞行覆盖层铺满舞台 */
+        #flyOverlay { position: absolute; inset: 0; z-index: 20; display: none; }
+        #flyOverlay.is-open { display: block; }
+        #flyCanvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+        .fly-hud {
+            position: absolute; top: 12px; left: 12px; right: 12px; z-index: 25;
+            display: flex; justify-content: space-between; gap: 12px; pointer-events: none;
+        }
+        .fly-ctrl {
+            position: absolute; bottom: 14px; right: 14px; z-index: 25;
+            display: flex; gap: 12px;
+        }
+        /* 待机界面 */
+        .title-screen {
+            position: fixed; inset: 0; z-index: 100;
+            display: flex; align-items: center; justify-content: center;
+            padding: 16px;
+            background: var(--sea-ink);
+        }
+        .title-screen.is-gone { display: none; }
+        .title-screen__plate {
+            position: absolute; inset: 0;
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: space-between;
+            /* 标题放天上、按钮放城市下面那条带上 ——
+               都挤在正中的话会正好压住万达双塔,那是整张图的地标。 */
+            padding: 7% 0 22%;
+            pointer-events: none;
+        }
+        .title-screen__plate h1 { font-size: 34px; text-align: center; }
+        .title-screen__plate .px-btn { pointer-events: auto; }
+        #toast {
+            position: fixed; left: 50%; bottom: 40px; transform: translateX(-50%);
+            z-index: 80; display: none;
+        }
+        #toast.is-open { display: inline-block; }
+    </style>
+</head>
+<body>
+
+<!-- 待机界面。盖住整页,点「开始游戏」才进去 -->
+<div id="title" class="title-screen">
+    <div class="px-stage">
+        <div class="px-screen">
+            <canvas id="titleCanvas" width="880" height="620"></canvas>
+            <div class="title-screen__plate">
+                <h1>哇鸥 · 去大坝整点饵块</h1>
+                <button class="px-btn px-btn--lg" id="startBtn">开始游戏</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="wrap">
+
+    <div class="title">
+        <h1>哇鸥 · 去大坝整点饵块</h1>
+    </div>
+
+    <div id="hud"></div>
+
+    <!-- 游戏舞台:背景 canvas + 飞行覆盖层 -->
+    <div class="px-stage" style="margin-bottom:28px">
+        <div class="px-screen">
+            <canvas id="bgCanvas" width="880" height="620"></canvas>
+
+            <div id="flyOverlay">
+                <canvas id="flyCanvas" width="880" height="620"></canvas>
+                <div class="fly-hud">
+                    <span class="px-chip px-chip--dark">
+                        <i class="px-icon px-icon--erkuai"></i> <strong id="flyScore">0</strong>
+                        <span id="flyCombo" style="color:var(--gold)"></span>
+                    </span>
+                    <span class="px-chip px-chip--dark">
+                        <i class="px-icon px-icon--heart"></i> <span id="flyLives">3</span>
+                    </span>
+                </div>
+                <div class="fly-ctrl">
+                    <button class="px-btn px-btn--sm" id="flyPause">⏸ 暂停</button>
+                    <button class="px-btn px-btn--sm px-btn--coral" id="flyQuit">收工</button>
+                </div>
+                <div class="px-mask" id="pauseMask">
+                    <h2>暂停</h2>
+                    <button class="px-btn" id="flyResume">▶ 继续</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="tabs" class="px-tabs"></div>
+    <div id="panel" class="px-panel"></div>
+
+</div>
+
+<div id="toast" class="px-toast"></div>
+
+<script type="module" src="/js/main.js"></script>
+</body>
+</html>

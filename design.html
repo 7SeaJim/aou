@@ -1,0 +1,1017 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- 策划稿的网页版。内容和 DESIGN.md 是同一份东西的两个视图:
+     DESIGN.md 便于 diff 和搜索,这页便于读和给人看。改了一边记得同步另一边。
+     页面里的哇鸥是从 js/game/pixels.js 的素材直接画到 canvas 的,
+     和游戏里那只同一个数据源 —— 所以形象一改,这页跟着变。
+     `npm run dev` 后访问 /design.html。 -->
+<title>哇鸥 · 滇池</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=ZCOOL+XiaoWei&family=Noto+Sans+SC:wght@300;400;500;700&family=JetBrains+Mono:wght@400;600&display=swap">
+
+<style>
+:root {
+  /* 取自游戏自己的 pixel-tokens.css —— 这页和游戏是同一套色板 */
+  --paper:    #fbf6e9;
+  --paper-2:  #f4ead2;
+  --paper-3:  #ede0c0;
+  --ink:      #3b2c22;
+  --ink-2:    #7d6853;
+  --ink-3:    #a3917c;
+  --line:     #ded0b0;
+  --line-2:   #cbb996;
+  --sea:      #2e8ca3;
+  --sea-2:    #62c4cc;
+  --gold:     #d69a1e;
+  --gold-hi:  #f5b83d;
+  --waou:     #e8384f;   /* 哇鸥红:全页唯一的高饱和色,只给角色 */
+  --leaf:     #5c8f3c;
+
+  --shadow: 0 1px 0 var(--line-2);
+
+  --f-display: 'ZCOOL XiaoWei', 'Songti SC', serif;
+  --f-body: 'Noto Sans SC', -apple-system, 'PingFang SC', sans-serif;
+  --f-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper:    #161d22;
+    --paper-2:  #1d262c;
+    --paper-3:  #253038;
+    --ink:      #ede2ca;
+    --ink-2:    #a89a86;
+    --ink-3:    #7d7161;
+    --line:     #2e3b44;
+    --line-2:   #3d4d58;
+    --sea:      #62c4cc;
+    --sea-2:    #a5e3e0;
+    --gold:     #f5b83d;
+    --gold-hi:  #ffe08a;
+    --waou:     #ff5c70;
+    --leaf:     #8dc46a;
+    --shadow: 0 1px 0 var(--line);
+  }
+}
+:root[data-theme="dark"] {
+  --paper:    #161d22;
+  --paper-2:  #1d262c;
+  --paper-3:  #253038;
+  --ink:      #ede2ca;
+  --ink-2:    #a89a86;
+  --ink-3:    #7d7161;
+  --line:     #2e3b44;
+  --line-2:   #3d4d58;
+  --sea:      #62c4cc;
+  --sea-2:    #a5e3e0;
+  --gold:     #f5b83d;
+  --gold-hi:  #ffe08a;
+  --waou:     #ff5c70;
+  --leaf:     #8dc46a;
+  --shadow: 0 1px 0 var(--line);
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--f-body);
+  font-weight: 300;
+  font-size: 16px;
+  line-height: 1.85;
+  margin: 0;
+  -webkit-font-smoothing: antialiased;
+}
+
+.wrap { width: min(760px, calc(100% - 44px)); margin-inline: auto; }
+
+/* ---------- 头部 ---------- */
+
+.hero {
+  position: relative;
+  border-bottom: 1px solid var(--line);
+  background: var(--paper-2);
+  overflow: hidden;
+}
+.hero canvas {
+  /* 高度由脚本按「2 CSS px = 1 个像素点」算,和游戏画面同一个放大倍数。
+     写死 height 再配 width:100% 会把像素拉成长方形。 */
+  display: block;
+  width: 100%;
+  image-rendering: pixelated;
+}
+.hero__plate {
+  position: relative;
+  padding: 30px 0 34px;
+}
+.eyebrow {
+  font-family: var(--f-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin: 0 0 14px;
+}
+h1 {
+  font-family: var(--f-display);
+  font-size: clamp(46px, 9vw, 74px);
+  line-height: 1;
+  letter-spacing: 0.04em;
+  margin: 0;
+  text-wrap: balance;
+}
+h1 .dim { color: var(--ink-3); }
+.lede {
+  margin: 18px 0 0;
+  font-size: 18px;
+  line-height: 1.8;
+  max-width: 34em;
+  color: var(--ink-2);
+}
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+  margin-top: 22px;
+  font-family: var(--f-mono);
+  font-size: 11.5px;
+  color: var(--ink-2);
+}
+.meta span {
+  border: 1px solid var(--line-2);
+  padding: 3px 9px;
+  border-radius: 2px;
+}
+.meta span.now { border-color: var(--waou); color: var(--waou); }
+
+/* ---------- 章节 ---------- */
+
+section { padding: 54px 0 0; }
+section:last-of-type { padding-bottom: 90px; }
+
+h2 {
+  font-family: var(--f-display);
+  font-size: 27px;
+  line-height: 1.4;
+  letter-spacing: 0.03em;
+  margin: 0 0 6px;
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  text-wrap: balance;
+}
+h2::before {
+  content: "";
+  flex: none;
+  width: 9px; height: 9px;
+  background: var(--waou);
+  transform: translateY(-3px);
+}
+h2 .en {
+  font-family: var(--f-mono);
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0.14em;
+  color: var(--ink-3);
+  text-transform: uppercase;
+}
+.sub {
+  color: var(--ink-2);
+  font-size: 15px;
+  margin: 0 0 26px 21px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--line);
+}
+
+h3 {
+  font-family: var(--f-body);
+  font-weight: 500;
+  font-size: 16px;
+  letter-spacing: 0.02em;
+  margin: 34px 0 10px;
+  color: var(--ink);
+}
+
+p { margin: 0 0 16px; max-width: 40em; }
+strong { font-weight: 500; color: var(--ink); }
+em { font-style: normal; color: var(--waou); font-weight: 500; }
+
+code {
+  font-family: var(--f-mono);
+  font-size: 0.85em;
+  background: var(--paper-3);
+  padding: 1px 5px;
+  border-radius: 2px;
+  color: var(--ink-2);
+}
+
+/* ---------- 引文 / 事实框 ---------- */
+
+.fact {
+  border-left: 3px solid var(--sea);
+  background: var(--paper-2);
+  padding: 20px 22px;
+  margin: 26px 0;
+  font-size: 15px;
+}
+.fact p:last-child { margin-bottom: 0; }
+.fact .tag {
+  font-family: var(--f-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--sea);
+  display: block;
+  margin-bottom: 8px;
+}
+
+/* ---------- 形象稿 ---------- */
+
+.sheet {
+  border: 1px solid var(--line);
+  background: var(--paper-2);
+  margin: 26px 0;
+}
+.sheet__top {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 26px;
+  padding: 26px;
+  align-items: center;
+  border-bottom: 1px solid var(--line);
+}
+.frames { display: flex; gap: 14px; align-items: flex-end; }
+.frame { text-align: center; }
+.frame canvas { display: block; image-rendering: pixelated; }
+.frame b {
+  display: block;
+  font-family: var(--f-mono);
+  font-size: 10px;
+  font-weight: 400;
+  letter-spacing: 0.1em;
+  color: var(--ink-3);
+  margin-top: 7px;
+}
+.live { text-align: center; }
+.live canvas { display: block; image-rendering: pixelated; }
+.live b {
+  display: block;
+  font-family: var(--f-mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  color: var(--ink-3);
+  margin-top: 7px;
+  font-weight: 400;
+}
+
+.swatches {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(148px, 1fr));
+  gap: 0;
+}
+.sw {
+  padding: 14px 16px;
+  border-right: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  gap: 11px;
+  align-items: flex-start;
+}
+.sw i {
+  width: 26px; height: 26px;
+  flex: none;
+  border: 1px solid var(--line-2);
+}
+.sw div { min-width: 0; }
+.sw b { display: block; font-weight: 500; font-size: 13.5px; line-height: 1.5; }
+.sw span {
+  font-family: var(--f-mono);
+  font-size: 10.5px;
+  color: var(--ink-3);
+  letter-spacing: 0.04em;
+}
+
+.marks {
+  padding: 20px 26px 24px;
+  font-size: 14.5px;
+}
+.marks ol { margin: 8px 0 0; padding-left: 20px; }
+.marks li { margin-bottom: 5px; }
+.marks li::marker { color: var(--waou); font-family: var(--f-mono); font-size: 12px; }
+
+/* ---------- 表 ---------- */
+
+.scroll { overflow-x: auto; margin: 22px 0; }
+table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 14.5px;
+  min-width: 460px;
+}
+th, td {
+  text-align: left;
+  padding: 9px 14px 9px 0;
+  border-bottom: 1px solid var(--line);
+  vertical-align: top;
+}
+th {
+  font-family: var(--f-mono);
+  font-weight: 600;
+  font-size: 10.5px;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  border-bottom-color: var(--line-2);
+  white-space: nowrap;
+}
+td.k { font-family: var(--f-mono); font-size: 12.5px; color: var(--sea); white-space: nowrap; }
+td.n { font-weight: 500; white-space: nowrap; }
+td small { color: var(--ink-3); font-size: 12.5px; }
+tr.hi td { background: color-mix(in srgb, var(--waou) 8%, transparent); }
+tr.hi td.n { color: var(--waou); }
+
+/* ---------- 明信片 ---------- */
+
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 10px;
+  margin: 22px 0;
+}
+.card {
+  border: 1px solid var(--line);
+  background: var(--paper-2);
+  padding: 12px 14px 13px;
+}
+.card b { display: block; font-weight: 500; font-size: 14.5px; }
+.card span {
+  font-family: var(--f-mono);
+  font-size: 10.5px;
+  color: var(--ink-3);
+  letter-spacing: 0.06em;
+}
+
+/* ---------- 循环图 ---------- */
+
+.loop { margin: 26px 0; }
+.loop svg { display: block; width: 100%; height: auto; }
+.loop .box  { fill: var(--paper-2); stroke: var(--line-2); }
+.loop .arrow { stroke: var(--line-2); stroke-width: 1.5; fill: none; }
+.loop .head { fill: var(--line-2); }
+.loop text  { font-family: var(--f-body); font-size: 13.5px; fill: var(--ink); text-anchor: middle; }
+.loop text.note { fill: var(--ink-2); font-size: 12.5px; }
+
+/* ---------- 路线 ---------- */
+
+.road { margin: 24px 0 0; }
+.step {
+  display: grid;
+  grid-template-columns: 62px 1fr;
+  gap: 18px;
+  padding: 16px 0;
+  border-top: 1px solid var(--line);
+  align-items: start;
+}
+.step:last-child { border-bottom: 1px solid var(--line); }
+.step__id {
+  font-family: var(--f-mono);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: var(--ink-3);
+  padding-top: 3px;
+}
+.step__id .dot {
+  display: inline-block;
+  width: 7px; height: 7px;
+  margin-right: 6px;
+  background: var(--line-2);
+  vertical-align: 1px;
+}
+.step.done .step__id { color: var(--leaf); }
+.step.done .dot { background: var(--leaf); }
+.step.next .step__id { color: var(--waou); }
+.step.next .dot { background: var(--waou); }
+.step b { font-weight: 500; display: block; margin-bottom: 3px; }
+.step p { margin: 0; font-size: 14.5px; color: var(--ink-2); max-width: none; }
+
+/* ---------- 待定 ---------- */
+
+.open { counter-reset: q; margin: 22px 0 0; padding: 0; list-style: none; }
+.open li {
+  position: relative;
+  padding: 14px 0 14px 34px;
+  border-top: 1px solid var(--line);
+  font-size: 15px;
+}
+.open li:last-child { border-bottom: 1px solid var(--line); }
+.open li::before {
+  counter-increment: q;
+  content: "?" counter(q);
+  position: absolute;
+  left: 0; top: 15px;
+  font-family: var(--f-mono);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--waou);
+  letter-spacing: 0.04em;
+}
+.open li span { display: block; color: var(--ink-2); font-size: 14px; margin-top: 2px; }
+
+footer {
+  border-top: 1px solid var(--line);
+  padding: 26px 0 60px;
+  font-family: var(--f-mono);
+  font-size: 11.5px;
+  color: var(--ink-3);
+  letter-spacing: 0.05em;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; }
+}
+@media (max-width: 620px) {
+  .sheet__top { grid-template-columns: 1fr; gap: 20px; padding: 20px; justify-items: center; }
+  .frames { gap: 10px; flex-wrap: wrap; justify-content: center; }
+}
+</style>
+<style>
+  html { color-scheme: light dark; }
+  img { max-width: 100%; }
+</style>
+</head>
+<body>
+<header class="hero">
+  <canvas id="sky" width="1520" height="464" aria-label="滇池天空,哇鸥在飞"></canvas>
+  <div class="wrap hero__plate">
+    <p class="eyebrow">形象稿 + 策划稿 · v0.6</p>
+    <h1>哇鸥<span class="dim"> · 滇池</span></h1>
+    <p class="lede">
+      在昆明滇池边,陪一只没跟着鸥群飞回西伯利亚的红嘴鸥,慢慢把一个小吃摊做起来。
+    </p>
+    <div class="meta">
+      <span class="now">P0 – P3 全部完成</span>
+      <span>存档 v6</span>
+      <span>下一步:看 todo</span>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <section>
+    <h2>为什么是红嘴鸥 <span class="en">The hook</span></h2>
+    <p class="sub">这一条不是编出来的设定,是昆明每年真会发生的事。</p>
+
+    <div class="fact">
+      <span class="tag">昆明 · 每年 11 月 – 次年 3 月</span>
+      <p>红嘴鸥从西伯利亚飞几千公里到昆明越冬,聚在翠湖和滇池海埂大坝。1985 年它们第一次成群进城,昆明人喂海鸥从此成了一年一度的城市仪式。</p>
+    </div>
+
+    <p>
+      红嘴鸥的招牌<strong>就是红嘴和红脚</strong> —— 和形象稿一模一样。
+      所以哇鸥不需要额外解释自己是谁:它就是每年冬天昆明人排队去喂的那种鸟。
+    </p>
+
+    <p>这条设定顺手解决了三件事:</p>
+
+    <div class="scroll">
+      <table>
+        <thead><tr><th>问题</th><th>设定给的答案</th></tr></thead>
+        <tbody>
+          <tr><td class="n">主角为什么在这儿</td><td>鸥群春天飞走了,它没走</td></tr>
+          <tr><td class="n">为什么会有客人</td><td>游客本来就是来喂海鸥的,顺便买点吃的</td></tr>
+          <tr><td class="n">季节循环从哪来</td><td>冬天鸥群在(热闹)、夏天鸥群走(冷清)—— 天然的养成节奏</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>哇鸥是谁</h3>
+    <p>
+      名字来自叫声「哇——」。留下来没走的那一只红嘴鸥,暂时居住在昆明。
+      贪吃、话密、怕冷、对递到面前的食物毫无抵抗力。
+      它在海埂大坝支了个小吃摊,卖给来喂海鸥的游客 —— <em>被喂了这么多年,总得回请一次。</em>
+    </p>
+  </section>
+
+  <section>
+    <h2>形象规格 <span class="en">Character sheet</span></h2>
+    <p class="sub">已定稿,已入仓库。下面这些图是从游戏的素材源直接画出来的,不是截图。</p>
+
+    <div class="sheet">
+      <div class="sheet__top">
+        <div class="frames" id="frames"></div>
+        <div class="live">
+          <canvas id="live" width="320" height="320"></canvas>
+          <b>12 FPS</b>
+        </div>
+      </div>
+
+      <div class="swatches" id="swatches"></div>
+
+      <div class="marks">
+        <strong>三个识别点,任何新动作、任何尺寸都不能改:</strong>
+        <ol>
+          <li><strong>身体是圆的</strong>(或椭圆)—— 不做写实的鸟脖子,圆是这个角色的底</li>
+          <li><strong>豆豆眼</strong> —— 一颗实心圆点 + 一点高光</li>
+          <li>三根睫毛,外侧那根往外撇一格;红嘴红脚用哇鸥红</li>
+        </ol>
+        <p style="margin:10px 0 0;font-size:13.5px;color:var(--ink-2)">
+          v0.3 改过一次:眼睛原本是「白」字形。放到待机界面的大特写上太凶、不萌,
+          整个角色的气质就偏了 —— 换成豆豆眼,<em>所有尺寸一起换</em>。</p>
+      </div>
+    </div>
+
+    <div class="scroll">
+      <table>
+        <thead><tr><th>项</th><th>值</th></tr></thead>
+        <tbody>
+          <tr><td class="n">飞行图</td><td>32×32,四帧(上→平→下→平),身体不动只换翅膀</td></tr>
+          <tr><td class="n">图标 / 站姿</td><td>16×16,<code>px-icon--waou</code></td></tr>
+          <tr><td class="n">源文件</td><td><code>tools/scenery.py</code> 的 <code>WAOU</code> / <code>tools/icons.py</code> 的 <code>waou</code></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>后续要补的动作</h3>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>优先级</th><th>动作</th><th>用在哪</th></tr></thead>
+        <tbody>
+          <tr><td class="k">1</td><td class="n">idle 待机</td><td>摊位界面常驻。放置玩法里这是主视觉,优先级最高</td></tr>
+          <tr><td class="k">2</td><td class="n">eat 吃东西</td><td>收成、投喂</td></tr>
+          <tr><td class="k">3</td><td class="n">happy 开心</td><td>升级、完成订单</td></tr>
+          <tr><td class="k">4</td><td class="n">sleep 打盹</td><td>离线回来时的第一眼画面</td></tr>
+          <tr><td class="k">5</td><td class="n">cold 发抖</td><td>冬天、雨天</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2>场景:滇池 <span class="en">Setting</span></h2>
+    <p class="sub">主场景从「一个泛泛的海边码头」换成滇池 · 海埂大坝。</p>
+
+    <div class="scroll">
+      <table>
+        <thead><tr><th>层</th><th>内容</th></tr></thead>
+        <tbody>
+          <tr><td class="n">前景</td><td>大坝步道、哇鸥的小吃摊、栏杆缆桩、成堆的鸥粮袋</td></tr>
+          <tr><td class="n">中景</td><td>滇池水面、渔船、成群的红嘴鸥 —— <small>冬季密,夏季稀</small></td></tr>
+          <tr><td class="n">远景</td><td><strong>西山睡美人</strong> —— 侧卧女子的轮廓,滇池最好认的天际线</td></tr>
+          <tr><td class="n">天气</td><td>晴 / 雨 / 雾三档保留。雨季 6–10 月雷阵雨说来就来;雾改成滇池早晨的水汽</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="fact">
+      <span class="tag">已完成</span>
+      <p><code>paintIsland()</code> 换成了 <code>paintXishan()</code> —— 睡美人存成一条「(x, 高出水面多少)」的折线,中间线性插值,想让鼻子再挺一点就改一个数。灯塔删了(滇池没有灯塔),换成大坝路灯;<code>SCENERY.stand</code> 重画成中式小吃摊。飞行视角把山按 0.55 缩一档,不缩的话山脊会顶进食材的生成区。</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>食材与料理 <span class="en">Content</span></h2>
+    <p class="sub">已全部替换。旧的薯条 / 汉堡 / 贝壳 / 海藻是通用西式套路,和昆明没关系。</p>
+
+    <h3>食材</h3>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>key</th><th>名字</th><th>获取</th><th>备注</th></tr></thead>
+        <tbody>
+          <tr><td class="k">erkuai</td><td class="n">饵块</td><td>觅食</td><td>昆明早点的地基</td></tr>
+          <tr><td class="k">potato</td><td class="n">洋芋</td><td>觅食</td><td>云南话就叫洋芋,不叫土豆</td></tr>
+          <tr><td class="k">rice</td><td class="n">米</td><td>觅食</td><td>米线、凉虾都从这来</td></tr>
+          <tr><td class="k">douhua</td><td class="n">豆花</td><td>觅食</td><td></td></tr>
+          <tr><td class="k">flower</td><td class="n">鲜花</td><td>觅食</td><td>玫瑰,斗南来的</td></tr>
+          <tr><td class="k">mushroom</td><td class="n">菌子</td><td>稀有</td><td>雨季限定</td></tr>
+          <tr><td class="k">rusan</td><td class="n">乳扇</td><td>稀有</td><td>严格说是大理的,但昆明满街在卖</td></tr>
+          <tr><td class="k">chili</td><td class="n">辣椒</td><td>常见</td><td></td></tr>
+          <tr><td class="k">sugar</td><td class="n">红糖</td><td>常见</td><td></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>料理</h3>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>料理</th><th>材料</th><th>解锁</th><th>备注</th></tr></thead>
+        <tbody>
+          <tr><td class="n">烧饵块</td><td>饵块 ×2 + 辣椒</td><td class="k">Lv1</td><td>开局第一道,昆明人的早饭</td></tr>
+          <tr><td class="n">洋芋粑粑</td><td>洋芋 ×3</td><td class="k">Lv1</td><td></td></tr>
+          <tr><td class="n">米凉虾</td><td>米 ×2 + 红糖</td><td class="k">Lv2</td><td>夏天卖得好,冬天卖不动 —— 季节机制的第一个挂点</td></tr>
+          <tr><td class="n">豆花米线</td><td>米 ×2 + 豆花 ×2</td><td class="k">Lv2</td><td></td></tr>
+          <tr><td class="n">小锅米线</td><td>米 ×3 + 辣椒 ×2</td><td class="k">Lv3</td><td></td></tr>
+          <tr><td class="n">鲜花饼</td><td>鲜花 ×3 + 饵块</td><td class="k">Lv3</td><td></td></tr>
+          <tr><td class="n">烤乳扇</td><td>乳扇 ×2 + 鲜花</td><td class="k">Lv4</td><td></td></tr>
+          <tr class="hi"><td class="n">见手青</td><td>菌子 ×3</td><td class="k">Lv4</td><td>高风险高回报:小概率进入一段「看到小人」的特殊对话,当天收益翻倍或归零</td></tr>
+          <tr><td class="n">汽锅鸡</td><td>菌子 ×2 + ⋯</td><td class="k">Lv5</td><td>压轴</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p><small>折耳根做成分歧道具:客人有的加钱要,有的看到就走。</small></p>
+
+    <h3>明信片 · 昆明地标</h3>
+    <p>已换成 10 张昆明地标,收集顺序从近到远。每张配了一句哇鸥的短评,界面上直接显示 —— <em>短评比图本身值钱。</em></p>
+    <div class="cards">
+      <div class="card"><b>海埂大坝</b><span>起点 · 喂海鸥的地方</span></div>
+      <div class="card"><b>西山龙门</b><span>抬头就看得见的那座山</span></div>
+      <div class="card"><b>翠湖</b><span>城里的另一个鸥群据点</span></div>
+      <div class="card"><b>金马碧鸡坊</b><span>最好认的地标</span></div>
+      <div class="card"><b>昆明老街</b><span>文明街那一片</span></div>
+      <div class="card"><b>云大会泽院</b><span>银杏</span></div>
+      <div class="card"><b>斗南花市</b><span>鲜花饼的鲜花从这来</span></div>
+      <div class="card"><b>篆新农贸市场</b><span>食材图鉴的老家</span></div>
+      <div class="card"><b>南屏街</b><span></span></div>
+      <div class="card"><b>石林</b><span>远足 · 后期解锁</span></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>玩法转向放置养成 <span class="en">The pivot</span></h2>
+    <p class="sub">现在是一局一局的飞行小游戏 + 手动做菜,关掉页面等于什么都不发生。</p>
+
+    <p>
+      进度 100% 由主动操作驱动,这对一个讲陪伴感的小游戏是错的 ——
+      玩家想的是<strong>「今天哇鸥怎么样了」</strong>,而不是「我要打满 5 局」。
+    </p>
+
+    <div class="loop">
+      <svg viewBox="0 0 700 176" role="img" aria-label="放置循环:摊位出货、离线也在出、回来收、投进升级、出得更快">
+        <defs>
+          <marker id="ar" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0 0 L10 5 L0 10 z" class="head"/>
+          </marker>
+        </defs>
+        <g>
+          <g class="arrow" marker-end="url(#ar)">
+            <path d="M112 40 H 186"/>
+            <path d="M262 40 H 336"/>
+            <path d="M412 40 H 486"/>
+            <path d="M562 40 H 618"/>
+            <path d="M646 62 V 118 H 76 V 62"/>
+          </g>
+          <g>
+            <rect x="8"   y="22" width="104" height="36" class="box"/>
+            <rect x="186" y="22" width="76"  height="36" class="box"/>
+            <rect x="336" y="22" width="76"  height="36" class="box"/>
+            <rect x="486" y="22" width="76"  height="36" class="box"/>
+            <rect x="618" y="22" width="74"  height="36" class="box"/>
+          </g>
+          <text x="60"  y="45">摊位自动出货</text>
+          <text x="224" y="45">离线也在出</text>
+          <text x="374" y="45">回来收一波</text>
+          <text x="524" y="45">投进升级</text>
+          <text x="655" y="45">出得更快</text>
+          <text x="350" y="152" class="note">飞行小游戏降级为「加速器」:想要菌子、乳扇这类稀有食材才去飞一趟</text>
+        </g>
+      </svg>
+    </div>
+
+    <h3>要新增的系统(除伙计鸥和季节外均已落地)</h3>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>系统</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td class="n">离线结算</td><td>按离线时长补产出。设上限(建议 8 小时),避免挂机一周回来一次性通关</td></tr>
+          <tr><td class="n">摊位产能</td><td>每种料理有「每分钟产出」,受灶台、招牌、天气、季节影响</td></tr>
+          <tr><td class="n">升级树</td><td>灶(产速)、招牌(客单价)、货架(离线上限)、保温箱(离线衰减)</td></tr>
+          <tr class="hi"><td class="n">伙计鸥</td><td>其他红嘴鸥来打工,每只带一条被动加成 + 一段对话。<strong>养成线的主体 · P3</strong></td></tr>
+          <tr><td class="n">季节</td><td>冬天鸥群在:客流 ×1.5,可招募伙计;夏天客流低,但雨季菌子多</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="fact">
+      <span class="tag">P2 做完之后的记录</span>
+      <p><strong>摊位吃背包里的食材。</strong>出一份扣一份,扣不动就停着。不这么做的话觅食和挂机是两件不相干的事,飞行玩法立刻失去意义 —— 这条是整个循环的关节。</p>
+      <p><strong>挖出一个真 bug:<code>tickStalls</code> 把任意时间差都当成在线。</strong>笔记本合盖三小时、标签页被冻结再唤醒,页面还开着但下一次 tick 会一口气看到几小时,按在线全额结算,离线上限和折扣全绕过去 —— <em>挂着标签页睡一觉比老老实实关掉页面赚得多</em>,方向完全反了。现在超过一分钟就转交离线结算。</p>
+      <p>另外两条防挂机的细节:材料断供时把计时压回一个周期以内(不压的话补上材料会一次性补发几百份);多个格子抢同一批食材按格子顺序先到先得。</p>
+    </div>
+
+    <h3>数值骨架 · 实际落地的</h3>
+    <div class="scroll">
+      <table>
+        <tbody>
+          <tr><td class="n">出餐间隔</td><td><code>24 秒 ÷ 炉子系数</code> <small>炉子 1→10 级:×1.00→×3.52</small></td></tr>
+          <tr><td class="n">每份收入</td><td><code>菜价 × 招牌系数 × 天气系数</code> <small>招牌 1→10 级:×1.00→×2.62;天气 晴 1.0 / 雨 0.8 / 雾 0.9</small></td></tr>
+          <tr><td class="n">离线上限</td><td>货架 1→8 级:2→9 小时</td></tr>
+          <tr><td class="n">离线折扣</td><td>保温箱 1→8 级:40%→75%</td></tr>
+          <tr class="hi"><td class="n">升级成本</td><td><code>base × 1.5^(等级-1)</code> <small>原稿写的 1.15 太平,十级下来总成本还不够挂机一小时的收入,升级就没有选择感了</small></td></tr>
+          <tr><td class="n">格子</td><td>Lv1 一格,Lv3 两格,Lv6 三格</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>落到现有代码上要动什么</h3>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>文件</th><th>改动</th></tr></thead>
+        <tbody>
+          <tr><td class="k">js/state.js</td><td>加 <code>lastSeen</code>、<code>stalls</code>、<code>upgrades</code>、<code>crew</code>;<strong>SAVE_VERSION +1 并补一条迁移</strong></td></tr>
+          <tr><td class="k">js/game/rules.js</td><td>加 <code>settleOffline(state, now)</code>,和现有 <code>settleFlight</code> 一样返回事件数组</td></tr>
+          <tr><td class="k">js/storage/savecode.js</td><td>字段变多,注意存档码长度 —— 现在约 350 字符</td></tr>
+          <tr><td class="k">js/ui.js</td><td>主界面从「码头」改成「摊位」:待收、产能、升级按钮</td></tr>
+          <tr><td class="k">js/game/flight.js</td><td>保留。触发条件从「每日 5 次」改成消耗体力 / 有目标地找稀有食材</td></tr>
+          <tr><td class="k">js/data.js</td><td>食材、料理、明信片、对话全部重写</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="fact">
+      <span class="tag">已知的坑</span>
+      <p>离线结算用的是客户端时钟,改系统时间就能刷。单机无所谓 —— 这和现在 <code>refreshDaily()</code> 的处境一样,<code>rules.js</code> 里已经写着同样的注释。将来若要做排行榜,时间必须由服务端判定。</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>路线 <span class="en">Roadmap</span></h2>
+    <p class="sub">分五期。顺序是有依赖的:P2 会改存档结构,所以不碰存档的 P1 先走。</p>
+
+    <div class="road">
+      <div class="step done">
+        <div class="step__id"><span class="dot"></span>P0</div>
+        <div><b>基建 · 已完成</b><p>像素画管线、UI 组件库、哇鸥形象</p></div>
+      </div>
+      <div class="step done">
+        <div class="step__id"><span class="dot"></span>P1</div>
+        <div><b>换皮 · 已完成</b><p>西山睡美人天际线、大坝陈设、9 种云南食材、9 道料理、10 张昆明地标、对话重写。存档迁到 v2</p></div>
+      </div>
+      <div class="step done">
+        <div class="step__id"><span class="dot"></span>P2</div>
+        <div><b>放置内核 · 已完成</b><p>摊位吃食材自动出餐、离线结算、四条升级线。存档迁到 v3</p></div>
+      </div>
+      <div class="step next">
+        <div class="step__id"><span class="dot"></span>P3</div>
+        <div><b>养成 · 已完成</b><p>表演玩法、待机界面、小屋(占卜 / 四子棋 / 请喝)、伙计鸥、季节循环、食材图鉴。存档迁到 v6</p></div>
+      </div>
+      <div class="step next">
+        <div class="step__id"><span class="dot"></span>P4</div>
+        <div><b>长线</b><p>装扮、随机事件、成就重做</p></div>
+      </div>
+    </div>
+
+    <div class="fact">
+      <span class="tag">P1 做完之后的更正</span>
+      <p><strong>当初写的「P1 不碰存档结构」是错的。</strong>食材换名字就是在改存档:<code>backpack</code> 的键从 <code>fries/burger/…</code> 变成 <code>erkuai/potato/…</code>,老档的背包会整个对不上。实际走了一次 <code>SAVE_VERSION 1 → 2</code> 的迁移,把旧食材按最近的对应关系换过来(炸薯条→洋芋、汉堡和面包→饵块,两个旧键并进一个新键所以要累加),明信片和订单清空重来。</p>
+      <p>顺带挖出一个真 bug:<code>migrations[0]</code> 用的是<strong>当前</strong>的 <code>FOOD_KEYS</code> 常量,而它现在指向新键 —— v0 老档的背包会在第一步就被清零,第二步再也捞不回来。<em>迁移函数只能依赖写死的、当时的字段表。</em>已修。</p>
+    </div>
+
+    <h3>暂不做</h3>
+    <p>
+      联机与排行榜(存档码玩家可读可改,榜单数据不可信)、付费。
+      明信片是像素画的再创作,不用实景照片。
+    </p>
+  </section>
+
+  <section>
+    <h2>小屋 <span class="en">The hut</span></h2>
+    <p class="sub">堤岸边的草棚,全游戏唯一的近景。别处都是远远看着哇鸥,只有这里能看清它的脸。</p>
+
+    <p>按真实时钟开门:<strong>晌午 11–14</strong> 和 <strong>晚上 18–22</strong> 它在家,
+       22 点到早 6 点它睡着,别的时间出去了。
+       <em>「太晚了只能看它睡觉」这条是刻意的</em> —— 有个见不到的时间段,见到的时候才算数。</p>
+
+    <div class="scroll">
+      <table>
+        <thead><tr><th>互动</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td class="n">占卜</td><td>天气 + 贝壳花纹 → 八分之一。<strong>八种是硬上限</strong>:再多就成了随机文案,少了又转不出新鲜感。一天一次,让它成为一个仪式而不是一个按钮</td></tr>
+          <tr><td class="n">海鸥四子棋</td><td>黑白石头是从大坝底下捡的。AI 会赢、会堵、会避开送分,但<strong>不做搜索树</strong> —— 它是只海鸥,不是引擎</td></tr>
+          <tr><td class="n">请它喝一杯</td><td>普洱茶 / 咖啡,每天上线随机给一杯。两样都是云南的(保山咖啡),不是随便挑的饮料</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="fact">
+      <span class="tag">做的时候的三个判断</span>
+      <p><strong>占卜暂时只有文案,没有数值加成。</strong>挂个「今日产出 ×1.3」很容易,但那会让占卜变成每日必点的最优解,坏了「仪式」的性质。真要挂效果,得连着「不好的卦要不要有负面」一起想。</p>
+      <p><strong>哇鸥在屋里尽量圆。</strong>第一版把眼睛按「大图就该多细节」画小了,出来是个蛋。比例得照 32px 那版等比放大 —— <em>眼睛占身宽约四分之一</em>,这是萌的关键。</p>
+      <p><strong>腿是画上去的,不是帧图。</strong>走路时腿的角度一直在变,做成精灵图要画一大堆,而且改一次走路速度就得重画。</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>养成 <span class="en">Progression</span></h2>
+    <p class="sub">季节、伙计鸥、食材图鉴 —— P3 的最后三块。</p>
+
+    <p><strong>季节按真实月份走。</strong>红嘴鸥 11 月到次年 3 月在昆明越冬是真事,不该变成一个游戏内的抽象计时器。代价是夏天冷清好几个月 —— <em>这是故意的</em>:冬天鸥群回来时才有那个落差,一年到头一样热闹就没有季节了。夏天也不是纯惩罚,雨季稀有食材翻倍,所以夏天屯货、冬天开摊。</p>
+
+    <div class="scroll">
+      <table>
+        <thead><tr><th>季节</th><th>客流</th><th>稀有食材</th><th>招伙计</th></tr></thead>
+        <tbody>
+          <tr class="hi"><td class="n">冬 11–3 月</td><td>×1.4</td><td>×1.0</td><td>可以</td></tr>
+          <tr><td class="n">春 4–5 月</td><td>×1.0</td><td>×1.0</td><td>—</td></tr>
+          <tr><td class="n">夏 6–8 月</td><td>×0.8</td><td><strong>×2.0</strong> 雨季菌子疯长</td><td>—</td></tr>
+          <tr><td class="n">秋 9–10 月</td><td>×1.1</td><td>×1.2</td><td>—</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>伙计鸥</h3>
+    <p>六只,<strong>一只管一件事、不叠加同类效果</strong> —— 玩家一眼看得出该先招谁。两道门槛都是从设定里长出来的,不是硬塞的数值墙:好感度(得先和哇鸥处熟了,它才肯把亲戚介绍给你)、<em>只有冬天招得到</em>(鸥群不在昆明的时候没人可招)。</p>
+
+    <div class="scroll">
+      <table>
+        <thead><tr><th>伙计</th><th>管什么</th><th>好感门槛</th></tr></thead>
+        <tbody>
+          <tr><td class="n">灰灰</td><td>出餐快 20%</td><td class="k">6</td></tr>
+          <tr><td class="n">阿胖</td><td>每份贵 15%</td><td class="k">12</td></tr>
+          <tr><td class="n">小白</td><td>表演招人,投喂快 25%</td><td class="k">20</td></tr>
+          <tr><td class="n">老翘</td><td>每次觅食多带 1 个</td><td class="k">30</td></tr>
+          <tr><td class="n">墩墩</td><td>离线少亏 10%</td><td class="k">42</td></tr>
+          <tr><td class="n">丫丫</td><td>稀有食材多出 50%</td><td class="k">56</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="fact">
+      <span class="tag">食材图鉴</span>
+      <p>记的是<strong>累计见过多少</strong>,花掉了不减 —— 图鉴是见闻不是库存。所有加食材的路径都走 <code>rules.js</code> 的 <code>gain()</code>,拿背包反推会越玩越少。</p>
+      <p>老档升 v6 时按背包开个底 —— 手上有的显然见过。不开底的话老玩家升上来是一本空图鉴,看着像坏了。</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>待定 <span class="en">Open questions</span></h2>
+    <p class="sub">三个需要你拍板的,拍完 P1 就能开工。</p>
+    <ol class="open">
+      <li>「欧币」这个货币名要不要换?<span>和「鸥」谐音其实挺好,但容易和欧元混。</span></li>
+      <li>季节按现实时间走,还是游戏内自有节奏?<span>现实时间更有陪伴感,但夏天会冷清好几个月。</span></li>
+      <li>飞行玩法留几分?<span>完全砍掉最省事,但它是目前唯一的「操作乐趣」。</span></li>
+      <li>料理要不要各画各的图标?<span>现在 9 道菜复用食材图标,米凉虾和红糖长得一样。</span></li>
+    </ol>
+  </section>
+
+</main>
+
+<footer class="wrap">
+  哇鸥 · 去大坝整点饵块 · 策划稿 v0.6 &nbsp;·&nbsp; 仓库内同步版本 DESIGN.md
+</footer>
+
+<script type="module">
+/* 素材直接 import 游戏的 pixels.js —— 这页画的就是游戏里那只,
+   不是抄一份快照。改了 tools/ 重新 emit,这页跟着变。 */
+import { PAL, WAOU, ICON_GRIDS } from '/js/game/pixels.js';
+const ICON = ICON_GRIDS.waou;
+
+function paint(cv, grid, scale) {
+  const gw = grid[0].length, gh = grid.length;
+  const dpr = Math.min(window.devicePixelRatio || 1, 3);
+  cv.width = gw * scale * dpr;
+  cv.height = gh * scale * dpr;
+  cv.style.width = gw * scale + 'px';
+  cv.style.height = gh * scale + 'px';
+  const c = cv.getContext('2d');
+  c.setTransform(dpr, 0, 0, dpr, 0, 0);
+  c.clearRect(0, 0, gw * scale, gh * scale);
+  for (let y = 0; y < gh; y++) {
+    for (let x = 0; x < gw; x++) {
+      const ch = grid[y][x];
+      if (ch === '.') continue;
+      c.fillStyle = PAL[ch];
+      c.fillRect(x * scale, y * scale, scale, scale);
+    }
+  }
+}
+
+/* 四帧 + 16px 图标 */
+const LABELS = ['UP', 'MID', 'DOWN', 'MID'];
+const frames = document.getElementById('frames');
+[0, 1, 2].forEach(i => {
+  const d = document.createElement('div');
+  d.className = 'frame';
+  const cv = document.createElement('canvas');
+  d.appendChild(cv);
+  const b = document.createElement('b');
+  b.textContent = LABELS[i];
+  d.appendChild(b);
+  frames.appendChild(d);
+  paint(cv, WAOU[i], 3);
+});
+(() => {
+  const d = document.createElement('div');
+  d.className = 'frame';
+  const cv = document.createElement('canvas');
+  d.appendChild(cv);
+  const b = document.createElement('b');
+  b.textContent = '16PX';
+  d.appendChild(b);
+  frames.appendChild(d);
+  paint(cv, ICON, 5);
+})();
+
+/* 会扇翅膀的那只 */
+const live = document.getElementById('live');
+const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+paint(live, WAOU[1], 7);
+if (!reduce) {
+  let i = 0;
+  setInterval(() => { i = (i + 1) % 4; paint(live, WAOU[i], 7); }, 83);
+} else {
+  live.nextElementSibling.textContent = 'STATIC';
+}
+
+/* 色板 */
+const SW = [
+  ['X', '#e8384f', '哇鸥红', '嘴、脚 · 招牌色,别挪作他用'],
+  ['V', '#dfe4e8', '肚皮灰', '腹部'],
+  ['w', '#fffdf4', '浪花白', '身体 · 沿用全站的白'],
+  ['K', '#4a3628', '深褐', '描边、眼睛、翅膀 · 不用纯黑'],
+];
+const sws = document.getElementById('swatches');
+for (const [ch, hex, name, use] of SW) {
+  const d = document.createElement('div');
+  d.className = 'sw';
+  d.innerHTML = '<i style="background:' + hex + '"></i><div><b>' + name +
+    '</b><span>' + ch + ' &nbsp; ' + hex + '<br>' + use + '</span></div>';
+  sws.appendChild(d);
+}
+
+/* 头图:滇池天空的色带 + 一只飞过去的哇鸥。色带取自 scene.js 的 SKY.sunny */
+(() => {
+  const cv = document.getElementById('sky');
+  const c = cv.getContext('2d');
+  const SKY = ['#3f9edd', '#57b3e6', '#7cc9ec', '#a3dcf0', '#c6eaf2', '#e4f2e2', '#fbe6bf'];
+  const H = 116;                 // 虚拟高度
+  const PXS = 2;                 // 2 CSS px 一个像素点,和游戏画面一致
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const buf = document.createElement('canvas');
+  const b = buf.getContext('2d');
+  let W = 0;
+
+  function resize() {
+    const next = Math.ceil((cv.parentElement.clientWidth || 900) / PXS);
+    if (next === W) return false;
+    W = next;
+    buf.width = W; buf.height = H;
+    cv.width = W * PXS * dpr;
+    cv.height = H * PXS * dpr;
+    cv.style.height = (H * PXS) + 'px';
+    b.imageSmoothingEnabled = false;
+    c.imageSmoothingEnabled = false;
+    return true;
+  }
+
+  function frame(t) {
+    const step = H / SKY.length;
+    SKY.forEach((col, i) => {
+      b.fillStyle = col;
+      b.fillRect(0, Math.round(i * step), W, Math.ceil(step) + 1);
+    });
+    for (let i = 1; i < SKY.length; i++) {          // 抖动过渡,不用渐变
+      const y = Math.round(i * step);
+      b.fillStyle = SKY[i - 1];
+      for (let x = i % 2; x < W; x += 2) b.fillRect(x, y, 1, 1);
+      b.fillStyle = SKY[i];
+      for (let x = (i + 1) % 2; x < W; x += 2) b.fillRect(x, y - 1, 1, 1);
+    }
+    b.fillStyle = '#7ea8b8';                        // 远处的鸥群
+    for (let i = 0; i < 7; i++) {
+      const p = t * 0.00004 + i * 0.41;
+      const x = Math.round(40 + i * 48 + Math.cos(p * 6.28) * 26) % W;
+      const y = Math.round(22 + (i % 4) * 13 + Math.sin(p * 12) * 3);
+      const up = Math.sin(t * 0.005 + i) > 0 ? 0 : 1;
+      b.fillRect(x - 2, y + up, 2, 1);
+      b.fillRect(x, y + 1, 1, 1);
+      b.fillRect(x + 1, y + up, 2, 1);
+    }
+    const g = WAOU[reduce ? 1 : Math.floor(t / 83) % 4];   // 主角
+    const bx = Math.round(W * 0.72) - 16;
+    const by = 40 + (reduce ? 0 : Math.round(Math.sin(t * 0.0016) * 4));
+    for (let y = 0; y < 32; y++) {
+      for (let x = 0; x < 32; x++) {
+        const ch = g[y][x];
+        if (ch === '.') continue;
+        b.fillStyle = PAL[ch];
+        b.fillRect(bx + x, by + y, 1, 1);
+      }
+    }
+    c.drawImage(buf, 0, 0, W, H, 0, 0, cv.width, cv.height);
+  }
+
+  resize();
+  frame(0);
+  addEventListener('resize', () => { if (resize()) frame(last); });
+  let t0 = null, last = 0;
+  if (!reduce) {
+    const loop = ts => {
+      if (t0 === null) t0 = ts;
+      last = ts - t0;
+      frame(last);
+      requestAnimationFrame(loop);
+    };
+    requestAnimationFrame(loop);
+  }
+})();
+</script>
+</body>
+</html>
