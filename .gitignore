@@ -1,0 +1,7 @@
+dist
+node_modules
+
+__pycache__/
+
+# 编辑器配置,不是项目内容
+.obsidian/

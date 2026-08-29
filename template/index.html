@@ -1,0 +1,1136 @@
+<!DOCTYPE html>  
+<html lang="zh-CN">  
+<head>  
+    <meta charset="UTF-8">  
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">  
+    <title>喔 · 去码头整点薯条</title>  
+    <style>  
+        * {  
+            margin: 0;  
+            padding: 0;  
+            box-sizing: border-box;  
+            user-select: none;  
+            font-family: 'Segoe UI', 'PingFang SC', Roboto, sans-serif;  
+        }  
+        body {  
+            background: #1a2634;  
+            min-height: 100vh;  
+            display: flex;  
+            justify-content: center;  
+            align-items: center;  
+            padding: 16px;  
+        }  
+        .game-wrapper {  
+            background: #2d3a47;  
+            padding: 14px;  
+            border-radius: 28px;  
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.7);  
+            border-bottom: 6px solid #151e26;  
+            width: 880px;  
+            max-width: 100%;  
+        }  
+        .game-screen {  
+            position: relative;  
+            width: 100%;  
+            aspect-ratio: 880 / 620;  
+            background: #a8d8ea;  
+            border-radius: 16px;  
+            overflow: hidden;  
+            box-shadow: inset 0 0 0 2px #4a5f6e;  
+        }  
+        canvas {  
+            display: block;  
+            width: 100%;  
+            height: 100%;  
+        }  
+  
+        /* 底层背景海浪 Canvas */  
+        #bgCanvas {  
+            position: absolute;  
+            top: 0;  
+            left: 0;  
+            z-index: 1;  
+        }  
+  
+        /* UI图片层 */  
+        #uiImage {  
+            position: absolute;  
+            top: 0;  
+            left: 0;  
+            width: 100%;  
+            height: 100%;  
+            z-index: 8;  
+            pointer-events: none;  
+            object-fit: contain;  
+        }  
+  
+        /* 透明按钮层 */  
+        #uiButtons {  
+            position: absolute;  
+            top: 0;  
+            left: 0;  
+            width: 100%;  
+            height: 100%;  
+            z-index: 9;  
+            pointer-events: none;  
+        }  
+        #uiButtons .btn-area {  
+            position: absolute;  
+            cursor: pointer;  
+            pointer-events: auto;  
+            background: transparent;  
+            border: none;  
+            /* 调试时可加红色边框 */  
+            /* border: 1px solid red; */  
+        }  
+        #uiButtons .btn-area:hover {  
+            background: rgba(255, 255, 255, 0.1);  
+            border-radius: 8px;  
+        }  
+  
+        /* 飞行覆盖层 */  
+        .game-overlay {  
+            position: absolute;  
+            top: 0;  
+            left: 0;  
+            width: 100%;  
+            height: 100%;  
+            z-index: 20;  
+            display: none;  
+            background: rgba(0, 0, 0, 0.1);  
+            border-radius: 16px;  
+        }  
+        .game-overlay.active {  
+            display: block;  
+        }  
+        #flyCanvas {  
+            width: 100%;  
+            height: 100%;  
+            display: block;  
+        }  
+        .game-hud {  
+            position: absolute;  
+            top: 10px;  
+            left: 0;  
+            width: 100%;  
+            padding: 0 16px;  
+            display: flex;  
+            justify-content: space-between;  
+            color: #fff;  
+            font-size: 16px;  
+            text-shadow: 0 2px 8px rgba(0, 0, 0, 0.7);  
+            z-index: 25;  
+            pointer-events: none;  
+        }  
+        .game-hud span {  
+            background: rgba(0, 0, 0, 0.5);  
+            backdrop-filter: blur(4px);  
+            padding: 4px 14px;  
+            border-radius: 40px;  
+        }  
+        .game-hud .score {  
+            color: #facc15;  
+            font-size: 22px;  
+        }  
+        .game-ctrl {  
+            position: absolute;  
+            bottom: 16px;  
+            right: 18px;  
+            z-index: 25;  
+            display: flex;  
+            gap: 8px;  
+        }  
+        .game-ctrl button {  
+            background: rgba(0, 0, 0, 0.6);  
+            border: none;  
+            color: #fff;  
+            padding: 6px 16px;  
+            border-radius: 40px;  
+            font-size: 14px;  
+            font-weight: 600;  
+            cursor: pointer;  
+            backdrop-filter: blur(4px);  
+            border: 1px solid rgba(255, 255, 255, 0.1);  
+            transition: 0.2s;  
+        }  
+        .game-ctrl button:hover {  
+            background: #facc15;  
+            color: #1a2634;  
+        }  
+        .pause-mask {  
+            position: absolute;  
+            top: 0;  
+            left: 0;  
+            width: 100%;  
+            height: 100%;  
+            background: rgba(0, 0, 0, 0.6);  
+            backdrop-filter: blur(6px);  
+            z-index: 26;  
+            display: none;  
+            justify-content: center;  
+            align-items: center;  
+            flex-direction: column;  
+            color: #fff;  
+            border-radius: 16px;  
+        }  
+        .pause-mask.active {  
+            display: flex;  
+        }  
+        .pause-mask h2 {  
+            font-size: 36px;  
+            margin-bottom: 14px;  
+            color: #facc15;  
+        }  
+        .btn {  
+            background: #facc15;  
+            border: none;  
+            padding: 8px 18px;  
+            font-size: 15px;  
+            font-weight: 700;  
+            color: #1a2634;  
+            border-radius: 40px;  
+            box-shadow: 0 4px 0 #b7811a;  
+            cursor: pointer;  
+            transition: 0.08s linear;  
+            margin: 4px;  
+        }  
+        .btn:hover {  
+            transform: translateY(-2px);  
+            box-shadow: 0 6px 0 #b7811a;  
+        }  
+        .btn:active {  
+            transform: translateY(4px);  
+            box-shadow: 0 2px 0 #b7811a;  
+        }  
+  
+        /* 成就通知 */  
+        .achievement-toast {  
+            position: absolute;  
+            top: 50%;  
+            left: 50%;  
+            transform: translate(-50%, -50%);  
+            background: rgba(0, 0, 0, 0.8);  
+            backdrop-filter: blur(8px);  
+            padding: 20px 40px;  
+            border-radius: 20px;  
+            color: #fff;  
+            font-size: 24px;  
+            font-weight: 700;  
+            z-index: 40;  
+            display: none;  
+            border: 2px solid #facc15;  
+            text-align: center;  
+            pointer-events: none;  
+        }  
+        .achievement-toast.active {  
+            display: block;  
+            animation: fadeInOut 2.5s ease;  
+        }  
+        @keyframes fadeInOut {  
+            0% { opacity:0; transform: translate(-50%,-50%) scale(0.8); }  
+            15% { opacity:1; transform: translate(-50%,-50%) scale(1); }  
+            85% { opacity:1; transform: translate(-50%,-50%) scale(1); }  
+            100% { opacity:0; transform: translate(-50%,-50%) scale(0.8); }  
+        }  
+  
+        /* 响应式 */  
+        @media (max-width: 700px) {  
+            .game-wrapper { padding: 8px; }  
+        }  
+    </style>  
+</head>  
+<body>  
+  
+<div class="game-wrapper">  
+    <div class="game-screen" id="gameScreen">  
+  
+        <!-- ===== 动态海浪背景 ===== -->  
+        <canvas id="bgCanvas" width="880" height="620"></canvas>  
+  
+        <!-- ===== UI 图片层 ===== -->  
+        <img id="uiImage" src="images/main.png" alt="UI" style="display:block;">  
+  
+        <!-- ===== 透明按钮层 ===== -->  
+        <div id="uiButtons"></div>  
+  
+        <!-- ===== 飞行游戏覆盖层 ===== -->  
+        <div class="game-overlay" id="gameOverlay">  
+            <canvas id="flyCanvas" width="880" height="620"></canvas>  
+            <div class="game-hud">  
+                <span>🍟 <span class="score" id="flyScore">0</span> <span id="flyCombo" style="color:#facc15;font-size:14px;"></span></span>  
+                <span>❤️ <span id="flyLives">3</span> | ⭐ <span id="flyLevel">1</span></span>  
+            </div>  
+            <div class="game-ctrl">  
+                <button id="pauseFlyBtn">⏸️ 暂停</button>  
+                <button onclick="exitFlying()">✕ 退出</button>  
+            </div>  
+            <div class="pause-mask" id="pauseMask">  
+                <h2>⏸️ 暂停</h2>  
+                <button class="btn" id="resumeFlyBtn">▶ 继续</button>  
+            </div>  
+        </div>  
+  
+        <!-- ===== 成就通知 ===== -->  
+        <div class="achievement-toast" id="achievementToast"></div>  
+  
+    </div>  
+</div>  
+  
+<script>  
+    // ============================================================  
+    //  完整游戏 - 界面图片+功能逻辑  
+    // ============================================================  
+  
+    // ---------- 数据 ----------  
+    let gameData = {  
+        coins: 0,  
+        backpack: { fries: 2, burger: 1, fish: 1, shell: 1, seaweed: 1, egg: 0, bread: 0 },  
+        dailyTries: 5,  
+        lastDate: '',  
+        level: 1,  
+        exp: 0,  
+        expNext: 10,  
+        totalScore: 0,  
+        postcards: [  
+            { id: 0, name: '码头日落', emoji: '🌅', obtained: false },  
+            { id: 1, name: '海鸥群飞', emoji: '🐦', obtained: false },  
+            { id: 2, name: '薯条山', emoji: '🍟', obtained: false },  
+            { id: 3, name: '夏夜海风', emoji: '🌊', obtained: false },  
+            { id: 4, name: '灯塔晨光', emoji: '🗼', obtained: false },  
+            { id: 5, name: '雨中码头', emoji: '🌧️', obtained: false },  
+            { id: 6, name: '金色黄昏', emoji: '🌇', obtained: false },  
+        ],  
+        chatTree: 0,  
+        unlockedRecipes: ['fries'],  
+        orders: [],  
+        completedOrders: 0,  
+        mood: 'happy',  
+        weather: 'sunny',  
+        achievements: [],  
+        items: { shield: 0, magnet: 0, double: 0 },  
+        maxCombo: 0,  
+        weatherTimer: 0,  
+    };  
+  
+    // ---------- 食谱 ----------  
+    const allRecipes = [  
+        { id: 'fries', name: '炸薯条', emoji: '🍟', cost: { fries: 2 }, reward: 10, desc: '2薯条 → 10💰', levelReq: 1 },  
+        { id: 'fishburger', name: '鱼堡', emoji: '🐟🍔', cost: { fish: 2, burger: 1 }, reward: 25, desc: '2鱼+1汉堡 → 25💰', levelReq: 2 },  
+        { id: 'salad', name: '海藻沙拉', emoji: '🥗', cost: { seaweed: 3 }, reward: 15, desc: '3海藻 → 15💰', levelReq: 1 },  
+        { id: 'shell_soup', name: '贝壳汤', emoji: '🍲', cost: { shell: 3, seaweed: 1 }, reward: 20, desc: '3贝壳+1海藻 → 20💰', levelReq: 3 },  
+        { id: 'egg_burger', name: '蛋堡', emoji: '🥚🍔', cost: { egg: 2, bread: 1 }, reward: 18, desc: '2蛋+1面包 → 18💰', levelReq: 3 },  
+        { id: 'seafood_platter', name: '海鲜拼盘', emoji: '🦐', cost: { fish: 3, shell: 3, seaweed: 2 }, reward: 45, desc: '3鱼+3贝壳+2海藻 → 45💰', levelReq: 4 },  
+    ];  
+  
+    // ---------- 对话树 ----------  
+    const chatNodes = [  
+        { id: 0, bot: '你好呀！我是码头最快乐的海鸥～今天天气不错，要不要一起聊聊天？', options: [{ text: '你最喜欢吃什么？', next: 1 }, { text: '这里有什么好玩的？', next: 2 }, { text: '聊聊你的故事吧', next: 3 }] },  
+        { id: 1, bot: '当然是薯条啦！特别是刚炸出来的，又香又脆。不过我也喜欢吃鱼堡，你呢？', options: [{ text: '我也喜欢薯条！', next: 4 }, { text: '我更喜欢吃鱼', next: 5 }] },  
+        { id: 2, bot: '码头每天都有很多游客，他们会扔面包屑和薯条给我。我最喜欢看日落了，那时候海面都是金色的。', options: [{ text: '听起来好美呀', next: 6 }, { text: '你每天都来码头吗？', next: 7 }] },  
+        { id: 3, bot: '我出生在远处的礁石上，跟着妈妈学会了飞行。去年冬天我第一次飞到码头，就爱上了这里的烟火气。', options: [{ text: '你能飞多远？', next: 8 }, { text: '你有朋友吗？', next: 9 }] },  
+        { id: 4, bot: '嘻嘻，那我们是“薯条搭子”！下次我找到好吃的薯条，分你一半～', options: [{ text: '太棒了！', next: 0 }, { text: '我也给你带好吃的', next: 0 }] },  
+        { id: 5, bot: '鱼肉确实很鲜美，但得小心鱼刺哦。码头附近经常有小鱼群，那是我的“自助餐厅”！', options: [{ text: '真羡慕你', next: 0 }, { text: '我也想抓鱼', next: 0 }] },  
+        { id: 6, bot: '是啊，每次看到晚霞，我都觉得这一天没有白过。你要不要也找个时间来看看？', options: [{ text: '好呀，一定来', next: 0 }, { text: '我拍过很多日落', next: 0 }] },  
+        { id: 7, bot: '几乎每天都来！这里是我的“办公室”，也是我的“游乐场”。有时候还会遇到其他海鸥朋友。', options: [{ text: '你们会吵架吗？', next: 0 }, { text: '真好呀', next: 0 }] },  
+        { id: 8, bot: '我试过飞到对面的小岛，大概要飞半小时呢。不过我更喜欢在码头附近转悠，因为这里有好吃的！', options: [{ text: '你真厉害', next: 0 }, { text: '我飞不了那么远', next: 0 }] },  
+        { id: 9, bot: '有的！我有个好朋友叫“灰灰”，它是一只灰海鸥，我们经常一起抢薯条（开玩笑的，我们会分享）。', options: [{ text: '我也要认识灰灰', next: 0 }, { text: '你们真友好', next: 0 }] }  
+    ];  
+  
+    // ---------- 成就定义 ----------  
+    const achievementsDef = [  
+        { id: 'first_fly', name: '初次飞行', desc: '完成第一次觅食', check: d => d.totalScore >= 5 },  
+        { id: 'collect_50', name: '收集达人', desc: '累计收集50个食材', check: d => d.totalScore >= 50 },  
+        { id: 'cook_5', name: '小厨师', desc: '制作5道菜', check: d => d.completedOrders >= 5 },  
+        { id: 'rich_100', name: '小富翁', desc: '拥有100欧币', check: d => d.coins >= 100 },  
+        { id: 'postcard_3', name: '明信片爱好者', desc: '收集3张明信片', check: d => d.postcards.filter(p => p.obtained).length >= 3 },  
+        { id: 'level_5', name: '进阶海鸥', desc: '达到5级', check: d => d.level >= 5 },  
+        { id: 'combo_20', name: '连击高手', desc: '达成20连击', check: d => d.maxCombo >= 20 },  
+    ];  
+  
+    // ---------- DOM 引用 ----------  
+    const uiImage = document.getElementById('uiImage');  
+    const uiButtons = document.getElementById('uiButtons');  
+    const gameOverlay = document.getElementById('gameOverlay');  
+    const flyCanvas = document.getElementById('flyCanvas');  
+    const flyCtx = flyCanvas.getContext('2d');  
+    const flyScore = document.getElementById('flyScore');  
+    const flyLives = document.getElementById('flyLives');  
+    const flyLevel = document.getElementById('flyLevel');  
+    const flyCombo = document.getElementById('flyCombo');  
+    const pauseMask = document.getElementById('pauseMask');  
+    const achievementToast = document.getElementById('achievementToast');  
+  
+    // ---------- 工具函数 ----------  
+    function saveData() {  
+        gameData.lastDate = new Date().toDateString();  
+        localStorage.setItem('ouGameData', JSON.stringify(gameData));  
+    }  
+  
+    function loadData() {  
+        const saved = localStorage.getItem('ouGameData');  
+        if (saved) {  
+            try {  
+                const parsed = JSON.parse(saved);  
+                gameData = parsed;  
+                if (gameData.lastDate !== new Date().toDateString()) {  
+                    gameData.dailyTries = 5;  
+                    gameData.lastDate = new Date().toDateString();  
+                }  
+                if (!gameData.items) gameData.items = { shield: 0, magnet: 0, double: 0 };  
+                if (!gameData.maxCombo) gameData.maxCombo = 0;  
+                if (!gameData.weatherTimer) gameData.weatherTimer = 0;  
+                if (!gameData.orders) gameData.orders = [];  
+                if (!gameData.completedOrders) gameData.completedOrders = 0;  
+                if (!gameData.unlockedRecipes) gameData.unlockedRecipes = ['fries'];  
+                if (!gameData.achievements) gameData.achievements = [];  
+                return true;  
+            } catch (e) { return false; }  
+        }  
+        return false;  
+    }  
+  
+    function initData() {  
+        if (!loadData()) {  
+            const today = new Date().toDateString();  
+            gameData = {  
+                coins: 0,  
+                backpack: { fries: 2, burger: 1, fish: 1, shell: 1, seaweed: 1, egg: 0, bread: 0 },  
+                dailyTries: 5,  
+                lastDate: today,  
+                level: 1,  
+                exp: 0,  
+                expNext: 10,  
+                totalScore: 0,  
+                postcards: [  
+                    { id: 0, name: '码头日落', emoji: '🌅', obtained: false },  
+                    { id: 1, name: '海鸥群飞', emoji: '🐦', obtained: false },  
+                    { id: 2, name: '薯条山', emoji: '🍟', obtained: false },  
+                    { id: 3, name: '夏夜海风', emoji: '🌊', obtained: false },  
+                    { id: 4, name: '灯塔晨光', emoji: '🗼', obtained: false },  
+                    { id: 5, name: '雨中码头', emoji: '🌧️', obtained: false },  
+                    { id: 6, name: '金色黄昏', emoji: '🌇', obtained: false },  
+                ],  
+                chatTree: 0,  
+                unlockedRecipes: ['fries'],  
+                orders: [],  
+                completedOrders: 0,  
+                mood: 'happy',  
+                weather: 'sunny',  
+                achievements: [],  
+                items: { shield: 0, magnet: 0, double: 0 },  
+                maxCombo: 0,  
+                weatherTimer: 0,  
+            };  
+            saveData();  
+        }  
+        // 检查天气  
+        updateWeather();  
+        // 刷新订单  
+        refreshOrders();  
+        checkAchievements();  
+    }  
+  
+    // ---------- 天气 ----------  
+    function updateWeather() {  
+        const now = Date.now();  
+        if (now - gameData.weatherTimer > 300000) {  
+            const r = Math.random();  
+            if (r < 0.6) gameData.weather = 'sunny';  
+            else if (r < 0.85) gameData.weather = 'rainy';  
+            else gameData.weather = 'foggy';  
+            gameData.weatherTimer = now;  
+            saveData();  
+        }  
+    }  
+  
+    function getWeatherEmoji() {  
+        const map = { sunny: '☀️', rainy: '🌧️', foggy: '🌫️' };  
+        return map[gameData.weather] || '☀️';  
+    }  
+  
+    // ---------- 订单 ----------  
+    function refreshOrders() {  
+        if (gameData.orders.length === 0 && gameData.level >= 2) {  
+            const possible = [  
+                { name: '薯条套餐', reward: 15, need: { fries: 3 } },  
+                { name: '鱼堡套餐', reward: 30, need: { fish: 2, burger: 1 } },  
+                { name: '海藻沙拉', reward: 20, need: { seaweed: 3 } },  
+                { name: '贝壳汤', reward: 25, need: { shell: 3, seaweed: 1 } },  
+            ];  
+            const pick = possible[Math.floor(Math.random() * possible.length)];  
+            gameData.orders.push({ id: Date.now(), name: pick.name, reward: pick.reward, need: pick.need, completed: false });  
+            saveData();  
+        }  
+    }  
+  
+    function completeOrder(orderId) {  
+        const order = gameData.orders.find(o => o.id === orderId);  
+        if (!order || order.completed) return;  
+        for (let [k, v] of Object.entries(order.need)) {  
+            if ((gameData.backpack[k] || 0) < v) {  
+                alert(`❌ 材料不足！需要 ${k} ×${v}`);  
+                return;  
+            }  
+        }  
+        for (let [k, v] of Object.entries(order.need)) {  
+            gameData.backpack[k] -= v;  
+        }  
+        gameData.coins += order.reward;  
+        order.completed = true;  
+        gameData.completedOrders++;  
+        addExp(5);  
+        alert(`✅ 完成订单「${order.name}」，获得 ${order.reward} 欧币！`);  
+        saveData();  
+        checkAchievements();  
+        // 刷新界面（保持当前界面）  
+        renderCurrentUI();  
+    }  
+  
+    // ---------- 经验/等级 ----------  
+    function addExp(amount) {  
+        gameData.exp += amount;  
+        while (gameData.exp >= gameData.expNext) {  
+            gameData.exp -= gameData.expNext;  
+            gameData.level++;  
+            gameData.expNext = Math.floor(gameData.expNext * 1.4) + 5;  
+            allRecipes.forEach(r => {  
+                if (r.levelReq <= gameData.level && !gameData.unlockedRecipes.includes(r.id)) {  
+                    gameData.unlockedRecipes.push(r.id);  
+                    showAchievement(`🎉 解锁新食谱：${r.name}`);  
+                }  
+            });  
+            showAchievement(`🎊 升级！你现在是 Lv.${gameData.level}`);  
+            saveData();  
+        }  
+        saveData();  
+    }  
+  
+    // ---------- 成就 ----------  
+    function checkAchievements() {  
+        achievementsDef.forEach(a => {  
+            if (!gameData.achievements.includes(a.id) && a.check(gameData)) {  
+                gameData.achievements.push(a.id);  
+                showAchievement(`🏆 达成成就：${a.name}`);  
+            }  
+        });  
+        saveData();  
+    }  
+  
+    function showAchievement(text) {  
+        const toast = achievementToast;  
+        toast.textContent = text;  
+        toast.classList.remove('active');  
+        void toast.offsetWidth;  
+        toast.classList.add('active');  
+        setTimeout(() => toast.classList.remove('active'), 3000);  
+    }  
+  
+    // ---------- 动态海浪背景 ----------  
+    let bgAnimId = null;  
+    function drawBackground() {  
+        const canvas = document.getElementById('bgCanvas');  
+        const ctx = canvas.getContext('2d');  
+        const W = 880, H = 620;  
+        let frame = 0;  
+        function render() {  
+            frame++;  
+            // 天空  
+            const sky = ctx.createLinearGradient(0, 0, 0, H);  
+            let c1 = '#7fc8e8', c2 = '#b5dff5', c3 = '#f5e6d3';  
+            if (gameData.weather === 'rainy') { c1 = '#6b7f8a'; c2 = '#8a9ba8'; c3 = '#a0b0b8'; }  
+            else if (gameData.weather === 'foggy') { c1 = '#b0c4d9'; c2 = '#c9d8e8'; c3 = '#dce6ef'; }  
+            sky.addColorStop(0, c1);  
+            sky.addColorStop(0.6, c2);  
+            sky.addColorStop(1, c3);  
+            ctx.fillStyle = sky;  
+            ctx.fillRect(0, 0, W, H);  
+  
+            // 太阳  
+            if (gameData.weather === 'sunny') {  
+                ctx.shadowColor = 'rgba(255,200,50,0.2)';  
+                ctx.shadowBlur = 60;  
+                ctx.fillStyle = '#fde047';  
+                ctx.beginPath();  
+                ctx.arc(760, 60, 44, 0, Math.PI * 2);  
+                ctx.fill();  
+                ctx.shadowBlur = 0;  
+            }  
+  
+            // 动态海浪  
+            const seaY = H - 80;  
+            const seaGrad = ctx.createLinearGradient(0, seaY, 0, H);  
+            seaGrad.addColorStop(0, 'rgba(56,149,199,0.5)');  
+            seaGrad.addColorStop(0.4, 'rgba(37,117,168,0.6)');  
+            seaGrad.addColorStop(1, 'rgba(20,80,130,0.7)');  
+            ctx.fillStyle = seaGrad;  
+            ctx.beginPath();  
+            ctx.moveTo(0, seaY);  
+            for (let x = 0; x <= W; x += 2) {  
+                const wave1 = Math.sin(x * 0.02 + frame * 0.025) * 8;  
+                const wave2 = Math.sin(x * 0.035 + frame * 0.04 + 1.2) * 5;  
+                const wave3 = Math.sin(x * 0.005 + frame * 0.01 + 0.5) * 3;  
+                const y = seaY + wave1 + wave2 + wave3 + 12;  
+                ctx.lineTo(x, y);  
+            }  
+            ctx.lineTo(W, H);  
+            ctx.lineTo(0, H);  
+            ctx.closePath();  
+            ctx.fill();  
+  
+            // 码头桩  
+            for (let i = 0; i < 5; i++) {  
+                const px = 60 + i * 180;  
+                ctx.fillStyle = '#8b7355';  
+                ctx.fillRect(px - 4, seaY + 6, 8, 28);  
+                ctx.fillStyle = '#c4a882';  
+                ctx.fillRect(px - 8, seaY, 16, 6);  
+            }  
+  
+            // 天气图标  
+            ctx.fillStyle = 'rgba(255,255,255,0.2)';  
+            ctx.font = '24px sans-serif';  
+            ctx.fillText(getWeatherEmoji(), 40, 60);  
+  
+            updateWeather();  
+            bgAnimId = requestAnimationFrame(render);  
+        }  
+        if (bgAnimId) cancelAnimationFrame(bgAnimId);  
+        render();  
+    }  
+  
+    // ---------- 界面切换 ----------  
+    let currentUI = 'main';  
+    const uiConfig = {  
+        main: {  
+            image: 'main.png',  
+            buttons: [  
+                { x: 180, y: 410, w: 200, h: 60, action: startFlying },  
+                { x: 430, y: 410, w: 200, h: 60, action: () => switchUI('backpack') },  
+                { x: 680, y: 410, w: 200, h: 60, action: () => switchUI('postcard') },  
+                { x: 180, y: 490, w: 200, h: 60, action: () => switchUI('order') },  
+                { x: 430, y: 490, w: 200, h: 60, action: () => switchUI('shop') },  
+                { x: 680, y: 490, w: 200, h: 60, action: () => switchUI('achievement') },  
+            ]  
+        },  
+        backpack: {  
+            image: 'backpack.png',  
+            buttons: [  
+                { x: 100, y: 520, w: 150, h: 50, action: () => { alert('整理背包'); renderCurrentUI(); } },  
+                { x: 300, y: 520, w: 150, h: 50, action: () => { alert('使用道具'); renderCurrentUI(); } },  
+                { x: 750, y: 30, w: 80, h: 40, action: () => switchUI('main') },  
+            ]  
+        },  
+        postcard: {  
+            image: 'postcard.png',  
+            buttons: [  
+                { x: 100, y: 520, w: 150, h: 50, action: () => alert('查看明信片') },  
+                { x: 300, y: 520, w: 150, h: 50, action: () => alert('寄出明信片') },  
+                { x: 750, y: 30, w: 80, h: 40, action: () => switchUI('main') },  
+            ]  
+        },  
+        order: {  
+            image: 'order.png',  
+            buttons: [  
+                { x: 150, y: 480, w: 180, h: 60, action: () => { if (gameData.orders.length > 0) completeOrder(gameData.orders[0].id); else alert('暂无订单'); } },  
+                { x: 380, y: 480, w: 180, h: 60, action: () => alert('完成订单') },  
+                { x: 750, y: 30, w: 80, h: 40, action: () => switchUI('main') },  
+            ]  
+        },  
+        achievement: {  
+            image: 'achievement.png',  
+            buttons: [  
+                { x: 150, y: 520, w: 200, h: 50, action: () => alert('查看详情') },  
+                { x: 750, y: 30, w: 80, h: 40, action: () => switchUI('main') },  
+            ]  
+        },  
+        settings: {  
+            image: 'settings.png',  
+            buttons: [  
+                { x: 750, y: 30, w: 80, h: 40, action: () => switchUI('main') },  
+            ]  
+        },  
+        chat: {  
+            image: 'chat.png',  
+            buttons: [  
+                { x: 100, y: 520, w: 300, h: 60, action: () => { gameData.chatTree = (gameData.chatTree + 1) % chatNodes.length; alert(chatNodes[gameData.chatTree].bot); renderCurrentUI(); } },  
+                { x: 750, y: 30, w: 80, h: 40, action: () => switchUI('main') },  
+            ]  
+        },  
+        shop: {  
+            image: 'shop.png',  
+            buttons: [  
+                { x: 150, y: 480, w: 180, h: 60, action: () => alert('购买物品') },  
+                { x: 380, y: 480, w: 180, h: 60, action: () => alert('购买') },  
+                { x: 750, y: 30, w: 80, h: 40, action: () => switchUI('main') },  
+            ]  
+        },  
+        map: {  
+            image: 'map.png',  
+            buttons: [  
+                { x: 150, y: 500, w: 200, h: 50, action: () => alert('前往码头入口') },  
+                { x: 400, y: 500, w: 200, h: 50, action: () => alert('前往薯条小店') },  
+                { x: 750, y: 30, w: 80, h: 40, action: () => switchUI('main') },  
+            ]  
+        },  
+        daily: {  
+            image: 'daily.png',  
+            buttons: [  
+                { x: 150, y: 480, w: 200, h: 50, action: () => alert('领取今日目标奖励') },  
+                { x: 750, y: 30, w: 80, h: 40, action: () => switchUI('main') },  
+            ]  
+        },  
+        avatar: {  
+            image: 'avatar.png',  
+            buttons: [  
+                { x: 100, y: 500, w: 150, h: 50, action: () => alert('保存形象') },  
+                { x: 750, y: 30, w: 80, h: 40, action: () => switchUI('main') },  
+            ]  
+        }  
+    };  
+  
+    function switchUI(state) {  
+        currentUI = state;  
+        renderCurrentUI();  
+    }  
+  
+    function renderCurrentUI() {  
+        const config = uiConfig[currentUI];  
+        if (!config) return;  
+        uiImage.src = 'images/' + config.image;  
+        uiImage.style.display = 'block';  
+        // 清空按钮  
+        uiButtons.innerHTML = '';  
+        // 生成按钮  
+        config.buttons.forEach(btn => {  
+            const div = document.createElement('div');  
+            div.className = 'btn-area';  
+            div.style.left = btn.x + 'px';  
+            div.style.top = btn.y + 'px';  
+            div.style.width = btn.w + 'px';  
+            div.style.height = btn.h + 'px';  
+            // 添加点击事件  
+            div.addEventListener('click', btn.action);  
+            uiButtons.appendChild(div);  
+        });  
+        // 更新数据（如有需要可显示动态数据）  
+    }  
+  
+    // ---------- 觅食飞行游戏 ----------  
+    let flyRunning = false;  
+    let flyPaused = false;  
+    let flyAnimId = null;  
+    let flyData = {  
+        score: 0,  
+        lives: 3,  
+        seagullY: 300,  
+        mouseY: 300,  
+        foods: [],  
+        obstacles: [],  
+        powerups: [],  
+        spawnTimer: 0,  
+        spawnInterval: 1100,  
+        speed: 2.5,  
+        frame: 0,  
+        collectedCount: 0,  
+        combo: 0,  
+        maxCombo: 0,  
+        shieldActive: false,  
+        magnetActive: false,  
+        doubleActive: false,  
+    };  
+  
+    function startFlying() {  
+        if (gameData.dailyTries <= 0) {  
+            alert('⏰ 今天已经觅食5次了，明天再来吧！');  
+            return;  
+        }  
+        gameData.dailyTries--;  
+        saveData();  
+  
+        gameOverlay.classList.add('active');  
+        // 重置数据  
+        flyData.score = 0;  
+        flyData.lives = 3;  
+        flyData.seagullY = 300;  
+        flyData.mouseY = 300;  
+        flyData.foods = [];  
+        flyData.obstacles = [];  
+        flyData.powerups = [];  
+        flyData.spawnTimer = 0;  
+        flyData.frame = 0;  
+        flyData.collectedCount = 0;  
+        flyData.combo = 0;  
+        flyData.maxCombo = 0;  
+        let speedBase = 2.5 + (gameData.level - 1) * 0.4;  
+        if (gameData.weather === 'rainy') speedBase *= 1.3;  
+        if (gameData.weather === 'foggy') speedBase *= 0.9;  
+        flyData.speed = speedBase;  
+        flyData.spawnInterval = Math.max(700, 1100 - gameData.level * 50);  
+        flyData.shieldActive = (gameData.items.shield || 0) > 0;  
+        flyData.magnetActive = (gameData.items.magnet || 0) > 0;  
+        flyData.doubleActive = (gameData.items.double || 0) > 0;  
+        if (flyData.shieldActive) gameData.items.shield--;  
+        if (flyData.magnetActive) gameData.items.magnet--;  
+        if (flyData.doubleActive) gameData.items.double--;  
+        saveData();  
+  
+        flyScore.textContent = '0';  
+        flyLives.textContent = '3';  
+        flyLevel.textContent = gameData.level;  
+        flyCombo.textContent = '';  
+        flyPaused = false;  
+        pauseMask.classList.remove('active');  
+        document.getElementById('pauseFlyBtn').textContent = '⏸️ 暂停';  
+        flyRunning = true;  
+        if (flyAnimId) cancelAnimationFrame(flyAnimId);  
+        flyLoop();  
+    }  
+  
+    function exitFlying() {  
+        flyRunning = false;  
+        if (flyAnimId) cancelAnimationFrame(flyAnimId);  
+        gameOverlay.classList.remove('active');  
+        // 结算  
+        if (flyData.score > 0) {  
+            let finalScore = flyData.score;  
+            if (flyData.doubleActive) finalScore *= 2;  
+            gameData.totalScore += finalScore;  
+            // 明信片  
+            const chance = Math.floor(flyData.collectedCount / 3);  
+            for (let i = 0; i < chance; i++) {  
+                if (Math.random() < 0.08) {  
+                    const un = gameData.postcards.filter(p => !p.obtained);  
+                    if (un.length > 0) {  
+                        const picked = un[Math.floor(Math.random() * un.length)];  
+                        picked.obtained = true;  
+                        setTimeout(() => alert(`📮 获得明信片「${picked.name}」！`), 200);  
+                    }  
+                }  
+            }  
+            if (flyData.maxCombo > gameData.maxCombo) {  
+                gameData.maxCombo = flyData.maxCombo;  
+            }  
+            addExp(Math.floor(finalScore / 5));  
+            checkAchievements();  
+            saveData();  
+            alert(`✈️ 觅食结束！收集 ${flyData.collectedCount} 个食材，得分 ${finalScore}，连击最高 ${flyData.maxCombo}！`);  
+        } else {  
+            alert('💥 海鸥坠海了… 别灰心，明天再来！');  
+        }  
+        refreshOrders();  
+        renderCurrentUI();  
+    }  
+  
+    function togglePause() {  
+        if (!flyRunning) return;  
+        flyPaused = !flyPaused;  
+        pauseMask.classList.toggle('active', flyPaused);  
+        document.getElementById('pauseFlyBtn').textContent = flyPaused ? '▶️ 继续' : '⏸️ 暂停';  
+    }  
+  
+    function flyLoop() {  
+        if (!flyRunning) return;  
+        if (!flyPaused) {  
+            updateFly();  
+            drawFly();  
+        }  
+        flyAnimId = requestAnimationFrame(flyLoop);  
+    }  
+  
+    function updateFly() {  
+        flyData.frame++;  
+        flyData.seagullY += (flyData.mouseY - flyData.seagullY) * 0.12;  
+        flyData.seagullY = Math.max(40, Math.min(580, flyData.seagullY));  
+  
+        // 生成  
+        flyData.spawnTimer += 16.67;  
+        if (flyData.spawnTimer >= flyData.spawnInterval) {  
+            flyData.spawnTimer = 0;  
+            const r = Math.random();  
+            if (r < 0.7) {  
+                const types = ['fries', 'burger', 'fish', 'shell', 'seaweed'];  
+                const t = types[Math.floor(Math.random() * types.length)];  
+                flyData.foods.push({ x: 900, y: 60 + Math.random() * 480, type: t });  
+            } else if (r < 0.95) {  
+                const obs = ['cloud', 'balloon', 'kite'];  
+                const o = obs[Math.floor(Math.random() * obs.length)];  
+                flyData.obstacles.push({ x: 900, y: 60 + Math.random() * 480, type: o });  
+            } else {  
+                const ptypes = ['shield', 'magnet', 'double'];  
+                const pt = ptypes[Math.floor(Math.random() * ptypes.length)];  
+                flyData.powerups.push({ x: 900, y: 60 + Math.random() * 480, type: pt });  
+            }  
+            if (gameData.weather === 'rainy' && Math.random() < 0.3) {  
+                const obs = ['cloud', 'balloon', 'kite'];  
+                const o = obs[Math.floor(Math.random() * obs.length)];  
+                flyData.obstacles.push({ x: 900, y: 60 + Math.random() * 480, type: o });  
+            }  
+            if (gameData.weather === 'foggy' && Math.random() < 0.2) {  
+                const types = ['fries', 'burger', 'fish', 'shell', 'seaweed'];  
+                const t = types[Math.floor(Math.random() * types.length)];  
+                flyData.foods.push({ x: 900, y: 60 + Math.random() * 480, type: t });  
+            }  
+        }  
+  
+        // 食物移动与碰撞  
+        for (let i = flyData.foods.length - 1; i >= 0; i--) {  
+            const f = flyData.foods[i];  
+            f.x -= flyData.speed;  
+            if (f.x < -40) { flyData.foods.splice(i, 1); continue; }  
+            if (flyData.magnetActive) {  
+                const dx = 120 - f.x, dy = flyData.seagullY - f.y;  
+                if (Math.abs(dx) < 100 && Math.abs(dy) < 100) {  
+                    f.x += dx * 0.02;  
+                    f.y += dy * 0.02;  
+                }  
+            }  
+            if (Math.abs(120 - f.x) < 30 && Math.abs(flyData.seagullY - f.y) < 30) {  
+                const map = { 'fries': 'fries', 'burger': 'burger', 'fish': 'fish', 'shell': 'shell', 'seaweed': 'seaweed' };  
+                const key = map[f.type];  
+                if (key) gameData.backpack[key] = (gameData.backpack[key] || 0) + 1;  
+                let addScore = 5;  
+                flyData.combo++;  
+                if (flyData.combo > flyData.maxCombo) flyData.maxCombo = flyData.combo;  
+                if (flyData.combo >= 5) addScore += 2;  
+                if (flyData.combo >= 10) addScore += 5;  
+                if (flyData.doubleActive) addScore *= 2;  
+                flyData.score += addScore;  
+                flyData.collectedCount++;  
+                flyScore.textContent = flyData.score;  
+                if (flyData.combo >= 5) flyCombo.textContent = `🔥 ${flyData.combo}连击!`;  
+                else flyCombo.textContent = '';  
+                flyData.foods.splice(i, 1);  
+                continue;  
+            }  
+        }  
+  
+        // 障碍移动与碰撞  
+        for (let i = flyData.obstacles.length - 1; i >= 0; i--) {  
+            const o = flyData.obstacles[i];  
+            o.x -= flyData.speed;  
+            if (o.x < -40) { flyData.obstacles.splice(i, 1); continue; }  
+            if (Math.abs(120 - o.x) < 30 && Math.abs(flyData.seagullY - o.y) < 30) {  
+                if (flyData.shieldActive) {  
+                    flyData.shieldActive = false;  
+                    flyData.obstacles.splice(i, 1);  
+                    flyCombo.textContent = '🛡️ 护盾破碎!';  
+                    setTimeout(() => flyCombo.textContent = '', 500);  
+                    continue;  
+                }  
+                flyData.lives--;  
+                flyLives.textContent = flyData.lives;  
+                flyData.obstacles.splice(i, 1);  
+                flyData.combo = 0;  
+                flyCombo.textContent = '';  
+                if (flyData.lives <= 0) {  
+                    flyRunning = false;  
+                    if (flyAnimId) cancelAnimationFrame(flyAnimId);  
+                    setTimeout(() => exitFlying(), 200);  
+                    return;  
+                }  
+            }  
+        }  
+  
+        // 道具移动与拾取  
+        for (let i = flyData.powerups.length - 1; i >= 0; i--) {  
+            const p = flyData.powerups[i];  
+            p.x -= flyData.speed;  
+            if (p.x < -40) { flyData.powerups.splice(i, 1); continue; }  
+            if (Math.abs(120 - p.x) < 30 && Math.abs(flyData.seagullY - p.y) < 30) {  
+                gameData.items[p.type] = (gameData.items[p.type] || 0) + 1;  
+                flyData.powerups.splice(i, 1);  
+                flyCombo.textContent = `✨ 拾取 ${p.type}！`;  
+                setTimeout(() => flyCombo.textContent = '', 800);  
+                saveData();  
+            }  
+        }  
+  
+        if (flyData.frame % 300 === 0 && flyData.speed < (gameData.level >= 3 ? 6 : 5)) {  
+            flyData.speed += 0.12;  
+            flyData.spawnInterval = Math.max(500, flyData.spawnInterval - 8);  
+        }  
+    }  
+  
+    function drawFly() {  
+        const ctx = flyCtx;  
+        const W = 880, H = 620;  
+        ctx.clearRect(0, 0, W, H);  
+        // 简化背景（仅显示海浪和天空，与主背景一致）  
+        const sky = ctx.createLinearGradient(0, 0, 0, H);  
+        let c1 = '#7fc8e8', c2 = '#b5dff5', c3 = '#f5e6d3';  
+        if (gameData.weather === 'rainy') { c1 = '#6b7f8a'; c2 = '#8a9ba8'; c3 = '#a0b0b8'; }  
+        else if (gameData.weather === 'foggy') { c1 = '#b0c4d9'; c2 = '#c9d8e8'; c3 = '#dce6ef'; }  
+        sky.addColorStop(0, c1);  
+        sky.addColorStop(0.6, c2);  
+        sky.addColorStop(1, c3);  
+        ctx.fillStyle = sky;  
+        ctx.fillRect(0, 0, W, H);  
+        ctx.fillStyle = 'rgba(56,149,199,0.3)';  
+        ctx.fillRect(0, 500, W, 120);  
+  
+        // 绘制食物  
+        for (const f of flyData.foods) {  
+            ctx.save();  
+            ctx.translate(f.x, f.y);  
+            if (f.type === 'fries') {  
+                ctx.fillStyle = '#dc2626';  
+                ctx.fillRect(-12, -8, 24, 18);  
+                ctx.fillStyle = '#fbbf24';  
+                for (let i = -8; i <= 8; i += 4) ctx.fillRect(i-1, -16+Math.abs(i)*0.3, 3, 10);  
+            } else if (f.type === 'burger') {  
+                ctx.fillStyle = '#d97706';  
+                ctx.fillRect(-16, -4, 32, 10);  
+                ctx.fillStyle = '#22c55e';  
+                ctx.fillRect(-12, 0, 24, 4);  
+                ctx.fillStyle = '#78350f';  
+                ctx.fillRect(-14, 4, 28, 6);  
+                ctx.fillStyle = '#d97706';  
+                ctx.fillRect(-16, 8, 32, 4);  
+            } else if (f.type === 'fish') {  
+                ctx.fillStyle = '#3b82f6';  
+                ctx.beginPath();  
+                ctx.ellipse(0, 0, 14, 10, 0, 0, Math.PI*2);  
+                ctx.fill();  
+            } else if (f.type === 'shell') {  
+                ctx.fillStyle = '#f59e0b';  
+                ctx.beginPath();  
+                ctx.ellipse(0, 0, 10, 14, 0, 0, Math.PI*2);  
+                ctx.fill();  
+            } else if (f.type === 'seaweed') {  
+                ctx.fillStyle = '#22c55e';  
+                for (let i = -6; i <= 6; i+=4) ctx.fillRect(i, -10+Math.abs(i)*0.2, 3, 18);  
+            }  
+            ctx.restore();  
+        }  
+  
+        // 障碍  
+        for (const o of flyData.obstacles) {  
+            ctx.save();  
+            ctx.translate(o.x, o.y);  
+            if (o.type === 'cloud') {  
+                ctx.fillStyle = 'rgba(255,255,255,0.8)';  
+                ctx.beginPath();  
+                ctx.arc(0, 0, 22, 0, Math.PI*2);  
+                ctx.fill();  
+                ctx.beginPath();  
+                ctx.arc(-16, 4, 16, 0, Math.PI*2);  
+                ctx.fill();  
+                ctx.beginPath();  
+                ctx.arc(16, 4, 16, 0, Math.PI*2);  
+                ctx.fill();  
+            } else if (o.type === 'balloon') {  
+                ctx.fillStyle = '#ef4444';  
+                ctx.beginPath();  
+                ctx.ellipse(0, -2, 16, 22, 0, 0, Math.PI*2);  
+                ctx.fill();  
+                ctx.strokeStyle = '#94a3b8';  
+                ctx.lineWidth = 1.5;  
+                ctx.beginPath();  
+                ctx.moveTo(0, 20);  
+                ctx.lineTo(0, 28);  
+                ctx.stroke();  
+            } else if (o.type === 'kite') {  
+                ctx.fillStyle = '#f59e0b';  
+                ctx.beginPath();  
+                ctx.moveTo(0, -18);  
+                ctx.lineTo(16, 0);  
+                ctx.lineTo(0, 16);  
+                ctx.lineTo(-16, 0);  
+                ctx.closePath();  
+                ctx.fill();  
+            }  
+            ctx.restore();  
+        }  
+  
+        // 道具  
+        for (const p of flyData.powerups) {  
+            ctx.save();  
+            ctx.translate(p.x, p.y);  
+            ctx.font = '28px sans-serif';  
+            ctx.textAlign = 'center';  
+            ctx.textBaseline = 'middle';  
+            if (p.type === 'shield') ctx.fillText('🛡️', 0, 0);  
+            else if (p.type === 'magnet') ctx.fillText('🧲', 0, 0);  
+            else if (p.type === 'double') ctx.fillText('⭐', 0, 0);  
+            ctx.restore();  
+        }  
+  
+        // 海鸥（简笔画）  
+        ctx.save();  
+        ctx.translate(120, flyData.seagullY);  
+        ctx.fillStyle = '#f0f2f5';  
+        ctx.shadowColor = 'rgba(0,0,0,0.1)';  
+        ctx.shadowBlur = 8;  
+        ctx.beginPath();  
+        ctx.roundRect(-18, -14, 36, 28, 6);  
+        ctx.fill();  
+        ctx.fillStyle = '#d4d7dd';  
+        const wing = Math.sin(flyData.frame * 0.08);  
+        ctx.beginPath();  
+        ctx.moveTo(-12, -6);  
+        ctx.quadraticCurveTo(-28, -16 - 4*wing, -16, -6 - 3*wing);  
+        ctx.fill();  
+        ctx.beginPath();  
+        ctx.moveTo(12, -6);  
+        ctx.quadraticCurveTo(28, -16 - 4*wing, 16, -6 - 3*wing);  
+        ctx.fill();  
+        ctx.fillStyle = '#ffffff';  
+        ctx.beginPath();  
+        ctx.arc(0, -16, 14, 0, Math.PI*2);  
+        ctx.fill();  
+        ctx.fillStyle = '#e8742a';  
+        ctx.beginPath();  
+        ctx.moveTo(10, -18);  
+        ctx.lineTo(22, -14);  
+        ctx.lineTo(10, -12);  
+        ctx.closePath();  
+        ctx.fill();  
+        ctx.fillStyle = '#1e293b';  
+        ctx.beginPath();  
+        ctx.arc(4, -18, 3, 0, Math.PI*2);  
+        ctx.fill();  
+        ctx.beginPath();  
+        ctx.arc(-4, -18, 3, 0, Math.PI*2);  
+        ctx.fill();  
+        ctx.restore();  
+  
+        if (flyData.shieldActive) {  
+            ctx.strokeStyle = 'rgba(255,215,0,0.6)';  
+            ctx.lineWidth = 3;  
+            ctx.beginPath();  
+            ctx.arc(120, flyData.seagullY, 36, 0, Math.PI*2);  
+            ctx.stroke();  
+        }  
+  
+        ctx.fillStyle = 'rgba(255,255,255,0.4)';  
+        ctx.font = '14px sans-serif';  
+        ctx.fillText(`🖱️ 鼠标控制 · ❤️=${flyData.lives}`, 20, 580);  
+    }  
+  
+    // ---------- 飞行鼠标事件 ----------  
+    document.addEventListener('DOMContentLoaded', () => {  
+        flyCanvas.addEventListener('mousemove', (e) => {  
+            const rect = flyCanvas.getBoundingClientRect();  
+            const scaleY = flyCanvas.height / rect.height;  
+            const canvasY = (e.clientY - rect.top) * scaleY;  
+            flyData.mouseY = Math.max(40, Math.min(580, canvasY));  
+        });  
+        document.getElementById('pauseFlyBtn').addEventListener('click', togglePause);  
+        document.getElementById('resumeFlyBtn').addEventListener('click', togglePause);  
+    });  
+  
+    // ---------- 初始化 ----------  
+    function init() {  
+        initData();  
+        drawBackground();  
+        // 默认显示主界面  
+        switchUI('main');  
+        console.log('🐦 喔·去码头整点薯条 图片版已加载！');  
+        console.log('📁 请将图片放入 images/ 文件夹，文件名对应：main.png, backpack.png, postcard.png, order.png, achievement.png, settings.png, chat.png, shop.png, map.png, daily.png, avatar.png');  
+    }  
+  
+    // 页面加载完成后初始化  
+    window.onload = init;  
+</script>  
+</body>  
+</html>  
