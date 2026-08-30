@@ -656,3 +656,24 @@
 @media (prefers-reduced-motion: reduce) {
     .px-tab--coach { animation: none; }
 }
+
+/* ============ 今日运势卡片 ============ */
+.px-cardbox {
+    display: flex;
+    gap: 20px;
+    align-items: flex-start;
+    flex-wrap: wrap;
+}
+/* 图是 1080×1440,这里按 3:4 显示成 240 宽。
+   image-rendering 必须写 —— 缩小的时候浏览器默认插值,像素会糊成一片。 */
+.px-card {
+    width: 240px;
+    height: 320px;
+    flex: none;
+    image-rendering: pixelated;
+    background: var(--sand-2);
+    box-shadow: inset 0 0 0 3px var(--ink), 4px 4px 0 rgba(74, 54, 40, .25);
+}
+@media (max-width: 560px) {
+    .px-card { width: 180px; height: 240px; }
+}

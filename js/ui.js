@@ -15,6 +15,7 @@ import {
     TUTORIAL, TUTORIAL_GIFT,
 } from './data.js';
 import { paintWearPreview, paintWearItem } from './game/wear.js';
+import { renderCard } from './game/card.js';
 import { ICON_GRIDS } from './game/pixels.js';
 import * as c4 from './game/connect4.js';
 import { now } from './clock.js';
@@ -193,6 +194,18 @@ export class UI {
                 this.c4turn = 'b';
                 this.render();
                 if (c4.winner(this.board)) this.c4Settle(); else this.c4Reply();
+                break;
+            }
+
+            case 'savecard': {
+                const img = this.$panel.querySelector('[data-card]');
+                if (!img?.src) return this.toast('图还没画好,等一下', 'star');
+                const a = document.createElement('a');
+                a.href = img.src;
+                a.download = `哇鸥今日签-${now().toDateString()}.png`;
+                a.click();
+                // 手机上 <a download> 常常被拦,所以这句话不是废话
+                this.toast('存不下来的话,长按图片保存', 'postcard');
                 break;
             }
 
@@ -590,7 +603,8 @@ export class UI {
                    <strong>${HOURS.noon.span}</strong> 回来歇脚,
                    <strong>${HOURS.evening.span}</strong> 待在屋里,
                    之后就睡了。</p>
-            </div>`;
+            </div>
+            ${this.fortuneCard()}`;
         }
         if (slot === 'night') {
             return `
@@ -600,7 +614,8 @@ export class UI {
             <div class="px-panel px-panel--sea">
                 <p>${icon('waou')} 哇鸥缩成一团睡着了,呼吸把肚皮一起一伏地顶着。</p>
                 <p class="px-muted">别吵它。明天晌午再来吧。</p>
-            </div>`;
+            </div>
+            ${this.fortuneCard()}`;
         }
 
         const drink = DRINKS[s.drink];
@@ -619,7 +634,8 @@ export class UI {
                 <p class="px-muted" style="font-size:13px;margin-bottom:10px">
                     海鸥一族的老法子:看今天的天,再看捡来那枚贝壳上的纹。一天一次。</p>
                 ${f ? `<p><strong>${f.name}</strong> <span class="px-muted">· ${s.fortuneMark}</span></p>
-                       <p class="px-muted" style="font-size:13px">${f.text}</p>`
+                       <p class="px-muted" style="font-size:13px">${f.text}</p>
+                       <p class="px-muted" style="font-size:12px;margin-top:6px">签在下面,可以存下来。</p>`
                     : `<button class="px-btn px-btn--sm" data-act="divine">转一卦</button>`}
             </div>
 
@@ -633,10 +649,37 @@ export class UI {
             </div>
         </div>
 
-        <h3 style="margin-bottom:10px">海鸥四子棋
+        ${this.fortuneCard()}
+
+        <h3 style="margin:24px 0 10px">海鸥四子棋
             <span class="px-muted" style="font-size:13px">
                 你执白,它执黑 · ${s.c4.win} 胜 ${s.c4.lose} 负 ${s.c4.draw} 平</span></h3>
         ${this.c4View()}`;
+    }
+
+    /**
+     * 今日签的卡片。今天还没转就什么都不画。
+     *
+     * 图是 canvas 画完转成 data URL 塞进 <img> 的,不是直接摆一块 canvas ——
+     * **手机上长按 <img> 才有「保存图片」,长按 canvas 没有。**
+     * 而在国内的浏览器和 App 内置浏览器里,长按保存比 <a download> 靠谱得多。
+     */
+    fortuneCard() {
+        const s = this.getState();
+        if (s.fortune === null || s.fortuneDate !== now().toDateString()) return '';
+        return `
+        <h3 style="margin:24px 0 10px">今日签</h3>
+        <div class="px-cardbox">
+            <img class="px-card" data-card alt="哇鸥今日运势">
+            <div>
+                <p class="px-muted" style="font-size:13px;line-height:1.8">
+                    一天一张,明天的签是另一张。<br>
+                    手机上<strong>长按图片</strong>就能存;电脑上点下面这个。
+                </p>
+                <button class="px-btn px-btn--sm" data-act="savecard"
+                        style="margin-top:10px">存成图片</button>
+            </div>
+        </div>`;
     }
 
     /** 四子棋的棋盘。没开局就显示一个开始按钮。 */
@@ -1005,6 +1048,36 @@ export class UI {
         for (const cv of this.$panel.querySelectorAll('[data-wear-item]')) {
             if (cv.dataset.wearItem) paintWearItem(cv, cv.dataset.wearItem);
         }
+        this.paintCard();
+    }
+
+    /**
+     * 运势卡片。画一次缓存住 —— 一张 1080×1440 的 PNG 转 data URL 不便宜,
+     * 而面板每秒可能重绘好几次。
+     *
+     * **必须等 document.fonts.ready。** canvas 画字是一次性的:字体还没到就画,
+     * 会拿系统字体先落下去,而且不会像 DOM 那样等字体到了自己回流重排。
+     */
+    paintCard() {
+        const img = this.$panel.querySelector('[data-card]');
+        if (!img) return;
+        const s = this.getState();
+        const key = [s.fortune, s.fortuneMark, s.fortuneDate, s.weather, s.level].join('|');
+        if (this._cardKey === key && this._cardUrl) { img.src = this._cardUrl; return; }
+
+        document.fonts.ready.then(() => {
+            // 等字体的这段时间里玩家可能已经翻到别的页去了
+            const live = this.$panel.querySelector('[data-card]');
+            if (!live) return;
+            const url = renderCard({
+                fortune: s.fortune, mark: s.fortuneMark,
+                weather: s.weather, date: now(), level: s.level,
+            });
+            if (!url) return;
+            this._cardKey = key;
+            this._cardUrl = url;
+            live.src = url;
+        });
     }
 
     viewChat() {

@@ -10,7 +10,10 @@
  */
 
 import { createInitialState, FOOD_KEYS, ITEM_KEYS, TUTORIAL_DONE } from './state.js';
-import { RECIPES, POSTCARDS, ACHIEVEMENTS, UPGRADES, DRINK_KEYS, COSMETICS, EVENTS } from './data.js';
+import {
+    RECIPES, POSTCARDS, ACHIEVEMENTS, UPGRADES, DRINK_KEYS, COSMETICS, EVENTS,
+    FORTUNES, SHELL_MARKS,
+} from './data.js';
 import { seeded } from './game/rng.js';
 import { setClock } from './clock.js';
 import * as sfx from './audio.js';
@@ -256,6 +259,20 @@ export function installDev({ getState, mutate, storage, fly, getFlight, rules })
             return name + (sfx.isMuted() ? '(现在是静音,听不见)' : '');
         },
 
+        /**
+         * 直接把今日签设成第 id 卦、第 markIdx 种花纹,跳过一天一次的限制。
+         * 用来一张张看运势卡片 —— 八种签的正文长短不一,排版会不会溢出得挨个看。
+         */
+        fortune(id = 0, markIdx = 0) {
+            mutate(s => {
+                s.fortune = id % 8;
+                s.fortuneMark = SHELL_MARKS[markIdx % SHELL_MARKS.length];
+                s.fortuneDate = new Date().toDateString();
+                if (!s.fortuneSeen.includes(s.fortune)) s.fortuneSeen.push(s.fortune);
+            });
+            return `${FORTUNES[this.s.fortune].name} · ${this.s.fortuneMark}`;
+        },
+
         /** 从头走一遍开场引导 */
         tutorial(step = 0) {
             mutate(s => { s.tutorial = step; });
@@ -444,6 +461,7 @@ export function installDev({ getState, mutate, storage, fly, getFlight, rules })
                 'wa.clearLog()':   '清空大坝事件日志',
                 'wa.sfx(name)':    '试听音效;不传参数列出全部名字',
                 'wa.tutorial(n)':  '把开场引导拨回第 n+1 步(默认从头)',
+                'wa.fortune(i,m)': '直接把今日签设成第 i 卦、第 m 种花纹(看卡片排版)',
                 'wa.seed(n)':      '固定飞行随机序列,同一局可重放',
                 'wa.fly()':        '直接开一局',
                 'wa.away(h)':      '假装离线 h 小时后重载,看离线结算',

@@ -69,8 +69,9 @@ function shade(hex, phase) {
 
 const paletteCache = new Map();
 
-/** 取某个 (天气, 时段) 下的整套颜色。算一次就缓存,每帧重算 40 个 mix 没必要。 */
-function pal(weather, phase = 'day') {
+/** 取某个 (天气, 时段) 下的整套颜色。算一次就缓存,每帧重算 40 个 mix 没必要。
+    导出是给运势卡片用的 —— 卡片必须和游戏画面同一套颜色,各调一份迟早会漂。 */
+export function pal(weather, phase = 'day') {
     const key = weather + ':' + phase;
     let p = paletteCache.get(key);
     if (p) return p;

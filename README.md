@@ -118,6 +118,25 @@ tools/                像素素材生成器,见 tools/README.md
 而默认情况下浏览器把手指的纵向拖动当成滚页面,直接发一个 `pointercancel`。
 `#flyCanvas` 上的 `touch-action: none` 就是干这个的,别删。
 
+### 今日运势卡片
+
+占卜的结果会画成一张 1080×1440 的竖图(`js/game/card.js`),玩家能存下来发出去。
+3:4 是小红书的竖图比例。
+
+画法沿用低分辨率那一套:先在 360×480 上画完再整块放大 3 倍。文字只用 12 / 24
+两个字号 —— 字体本体是 12px 设计的,别的字号都在拉伸。
+
+两个容易踩的:
+
+- **画完转成 data URL 塞进 `<img>`,不直接摆一块 canvas。** 手机上长按 `<img>`
+  才有「保存图片」,长按 canvas 没有 —— 而在国内的浏览器里长按保存比
+  `<a download>` 靠谱得多。
+- **必须等 `document.fonts.ready`。** canvas 画字是一次性的,字体没到就画,
+  会拿系统字体落下去,而且不会像 DOM 那样自己回流重排。
+
+`wa.fortune(i, m)` 直接把今日签设成第 i 卦、第 m 种花纹 —— 八种签正文长短不一,
+排版会不会溢出得挨个看过。
+
 ### 开场引导
 
 四步(`js/data.js` 的 `TUTORIAL`),让第一次打开的人看懂三条线是一个圈:
@@ -382,4 +401,5 @@ AOU1.C.RZBPa8MwDMW_yzvrkGQr63Qb27mDbbcRimMrialjB9vpH0q_-3Ba2EnSk5DeT1ccJSYbPLgm6
 | 界面文案里的新字 | 写完跑 `npm run font` | 不用 |
 | 音效 | `js/audio.js` 的 `SFX`,`wa.sfx('名字')` 试听 | 不用 |
 | 引导步骤 | `js/data.js` 的 `TUTORIAL` | 不用 |
+| 签文 / 宜忌 | `js/data.js` 的 `FORTUNES`,卡片版式在 `js/game/card.js` | 不用 |
 | 存档字段 | `js/state.js`:`SAVE_VERSION` +1,并补一条迁移 | **要** |
