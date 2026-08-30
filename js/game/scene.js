@@ -10,6 +10,7 @@
 
 import { sprite, drawSprite, drawStanding, bands, dither } from './pixmap.js';
 import { drawWear } from './wear.js';
+import { PHASE, mix, shade, shadedSprite } from './tint.js';
 import { PAL, SCENERY, ICON_GRIDS } from './pixels.js';
 
 /** 虚拟分辨率。880×620 的显示画布正好放大 2 倍。 */
@@ -45,27 +46,8 @@ const FAR = { sunny: '#7ea8b8', rainy: '#5a6a74', foggy: '#a8bcc8' };
  * 加一档天气就要再加三张,而且很难保证九张之间的关系一致。
  * 偏色 + 压暗是一个函数,改一次全都跟着变。
  */
-const PHASE = {
-    day:   null,
-    dusk:  { to: '#e0834a', k: 0.32, dark: 0.12 },
-    night: { to: '#1b2a48', k: 0.60, dark: 0.34 },
-};
-
-/** 把一张图整体按时段调色。夜里要点亮的地方用 override 单独指定。 */
-function shadedSprite(name, grid, phase, override = {}) {
-    const remap = {};
-    for (const ch of new Set(grid.join(''))) {
-        if (ch === '.' || !PAL[ch]) continue;
-        remap[ch] = override[ch] ?? shade(PAL[ch], phase);
-    }
-    return sprite(name + ':' + phase, grid, { remap });
-}
-
-function shade(hex, phase) {
-    const p = PHASE[phase];
-    if (!p) return hex;
-    return mix(mix(hex, p.to, p.k), '#000000', p.dark);
-}
+// PHASE / shade / shadedSprite / mix 都搬去 tint.js 了 —— wear.js 也要用,
+// 而 scene.js 本来就 import wear.js,反过来再 import 会成环。
 
 const paletteCache = new Map();
 
@@ -186,12 +168,7 @@ const XISHAN = [
 ];
 
 /** 两个颜色按 t 混合(0 = a,1 = b) */
-function mix(a, b, t) {
-    const p = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
-    const [r1, g1, b1] = p(a), [r2, g2, b2] = p(b);
-    const c = (x, y) => Math.round(x + (y - x) * t).toString(16).padStart(2, '0');
-    return '#' + c(r1, r2) + c(g1, g2) + c(b1, b2);
-}
+
 
 /**
  * 远景里的东西要整体往天色退,不然会比它站着的那座山看起来近得多,
@@ -442,18 +419,29 @@ export function paintPier(ctx, deckY, bottom, weather = 'sunny', phase = 'day',
     drawStanding(ctx, farSprite('bollard', SCENERY.bollard, weather, 0.34, {}, phase), 66, back);
     drawStanding(ctx, farSprite('barrel', SCENERY.barrel, weather, 0.34, {}, phase), 356, back);
 
-    drawStanding(ctx, sprite('stand', SCENERY.stand), 88, deckY - 13);
+    shadow(ctx, 88, deckY - 13, 44);
+    drawStanding(ctx, shadedSprite('stand', SCENERY.stand, phase), 88, deckY - 13);
     paintStallUpgrades(ctx, deckY, phase, upgrades);
-    drawStanding(ctx, sprite('bollard', SCENERY.bollard), 300, deckY - 13);
-    drawStanding(ctx, sprite('bollard', SCENERY.bollard), 396, deckY - 13);
+    for (const bx of [300, 396]) {
+        shadow(ctx, bx, deckY - 13, 8);
+        drawStanding(ctx, shadedSprite('bollard', SCENERY.bollard, phase), bx, deckY - 13);
+    }
     // 大坝上一排路灯,给画面几根竖线。夜里灯头要亮起来。
     // 夜里灯头点亮:'y' 是灯罩、'w' 是灯芯,这两格不跟着压暗
     const lampCv = shadedSprite('lamp', SCENERY.lamp, phase,
         phase === 'night' ? { y: '#ffe08a', w: '#fff6d0' } : {});
-    for (const x of [24, 250, 420]) drawStanding(ctx, lampCv, x, deckY - 13);
+    // 路灯的 x 躲开栏杆立柱的间距(每 22 格一根),免得杆子和柱子重成一根。
+    // 灯杆本身也加长过了(见 tools/scenery.py):**灯头必须高过栏杆**,
+    // 第一版灯头正好落在栏杆横杆上,两样东西糊成一团 —— 那不是位置问题,
+    // 是高度不够,挪到哪儿都救不回来。
+    for (const x of [17, 259, 413]) {
+        shadow(ctx, x, deckY - 13, 10, 0.26);
+        drawStanding(ctx, lampCv, x, deckY - 13);
+    }
 
     // 哇鸥的草棚。整个大坝上唯一能点进去的东西,所以它得比别的陈设显眼:
     // 位置固定,SHACK_HIT 里同一份坐标给点击判定用,两边别各写各的。
+    shadow(ctx, SHACK_HIT.cx, deckY - 13, 26);
     drawStanding(ctx, shadedSprite('shack', SCENERY.shack, phase),
                  SHACK_HIT.cx, deckY - 13);
     if (phase !== 'day') {                         // 屋里透出来的光
@@ -541,6 +529,22 @@ export function drawReeds(ctx, weather, t, phase = 'day') {
 }
 
 /**
+ * 地上的影子。**这是纵深里最便宜也最有效的一笔** ——
+ * 一样东西没有影子就像贴在背景上的纸片,有了影子才像站在地上。
+ *
+ * 太阳画在右上(paintSun 在 x=372),所以影子一律往左下拉。
+ * 用半透明的黑而不是调色板里的暗色:影子要能压在木纹、石头、任何底色上都成立。
+ */
+export function shadow(ctx, cx, baseY, w, k = 0.22) {
+    ctx.fillStyle = `rgba(30, 20, 12, ${k})`;
+    const half = Math.round(w / 2);
+    // 两层扁椭圆,里深外浅 —— 一条实心黑杠会显得东西浮在半空
+    ctx.fillRect(Math.round(cx - half - 2), baseY - 1, w + 4, 2);
+    ctx.fillStyle = `rgba(30, 20, 12, ${k * 0.6})`;
+    ctx.fillRect(Math.round(cx - half - 5), baseY, w + 8, 1);
+}
+
+/**
  * 摊位的升级件。**升级要看得见** —— 四条线原来只是数字变大,
  * 玩家花掉几十万鸥币,画面上一格都没变,那笔钱花得毫无实感。
  *
@@ -600,7 +604,8 @@ export function drawPierFoam(ctx, weather, deckY, t, phase = 'day') {
  * @param {boolean} fedNow 这一帧是否刚好有人投喂,有就冒个食材出来
  * @param {object} wearing 戴着的装扮,state.wearing
  */
-export function drawPerformance(ctx, x, baseY, t, shows = 1, fedNow = false, wearing = null) {
+export function drawPerformance(ctx, x, baseY, t, shows = 1, fedNow = false,
+                                wearing = null, phase = 'day') {
     const CYCLE = 4000;
     const p = t % CYCLE;
 
@@ -611,24 +616,35 @@ export function drawPerformance(ctx, x, baseY, t, shows = 1, fedNow = false, wea
     else if (p < 3400) { grid = SCENERY.waou_bow;     hop = 0; }
     else               { grid = ICON_GRIDS.waou;      hop = 0; }
 
-    // 围观的人。节目越多围的人越多,最多五个。
-    // 四种人轮着排,而且**不按 i 直接取模** —— 那样左右两边永远是同一个人,
-    // 一眼就看出是复制粘贴。错开一位,同侧相邻的两个才不一样。
-    const crowd = Math.min(5, 1 + Math.floor(shows / 2));
+    // 围观的人。节目越多围的人越多。
+    //
+    // **每个人有自己的举手节奏**,而且真有人投喂的那一下(fedNow)会多一个人举手 ——
+    // 动作和规则层的产出是同一件事,不是各演各的。一排人整齐地一起动是最假的。
+    const crowd = Math.min(7, 2 + Math.floor(shows * 0.7));
     for (let i = 0; i < crowd; i++) {
         const side = i % 2 ? 1 : -1;
-        const dx = side * (17 + Math.floor(i / 2) * 13);
-        const key = ONLOOKERS[(i * 3 + 1) % ONLOOKERS.length];
+        // 最近的一对也要离哇鸥 28 格 —— 人是 24 格高、哇鸥只有 16 格,
+        // 围太近的话主角直接淹没在一排人腿里
+        const dx = side * (28 + Math.floor(i / 2) * 15);
+        const who = ONLOOKERS[(i * 3 + 1) % ONLOOKERS.length];
+        // 每人一个错开的周期,轮到自己那一小段就举手
+        const cycle = 5200 + i * 900;
+        const waving = (t + i * 1700) % cycle < 700 || (fedNow && i === (t / 97 | 0) % crowd);
+        const key = waving ? who + '_wave' : who;
         const bob = Math.sin(t * 0.0016 + i * 1.7) > 0.6 ? 1 : 0;
-        drawStanding(ctx, sprite(key, SCENERY[key]), x + dx, baseY + bob);
+        shadow(ctx, x + dx, baseY + bob, 12, 0.18);
+        drawStanding(ctx, shadedSprite(key, SCENERY[key], phase), x + dx, baseY + bob);
     }
 
+    shadow(ctx, x, baseY, 14, 0.2);
     const bowing = grid === SCENERY.waou_bow;
-    drawStanding(ctx, sprite('perf:' + (grid === ICON_GRIDS.waou ? 'idle'
-        : grid === SCENERY.waou_wing ? 'wing' : 'bow'), grid), x, baseY + hop);
+    // 哇鸥也跟天色走。**这是画的时候上的色,素材本身一格没动** ——
+    // 不跟的话傍晚整个大坝都暗下来了,只有它一只还是白天那么亮,像贴上去的
+    drawStanding(ctx, shadedSprite('perf:' + (grid === ICON_GRIDS.waou ? 'idle'
+        : grid === SCENERY.waou_wing ? 'wing' : 'bow'), grid, phase), x, baseY + hop);
     // 装扮的锚点按 16×16 那张图的框算。鞠躬帧被裁短了 3 格、头也确实低了,
     // 所以框要跟着往下挪 —— 按精灵图底边对齐的话帽子会浮在脑袋上方。
-    drawWear(ctx, wearing, 'small', x, baseY + hop - (bowing ? 13 : 16));
+    drawWear(ctx, wearing, 'small', x, baseY + hop - (bowing ? 13 : 16), phase);
 
     // 有人投喂:冒一个食材出来,飘一下
     if (fedNow) feedPops.push({ x, y: baseY - 20, t0: t, key: FEED_ICONS[(t / 97 | 0) % FEED_ICONS.length] });
@@ -645,6 +661,27 @@ const ONLOOKERS = ['onlooker_a', 'onlooker_b', 'onlooker_c', 'onlooker_d'];
 
 const FEED_ICONS = ['erkuai', 'potato', 'rice', 'douhua', 'chili'];
 const feedPops = [];
+
+/**
+ * 只是路过的人。和围观的人分开:围观是玩法的一部分(节目越多人越多),
+ * 路过纯粹是「这地方有人气」—— 一个大坝上不可能所有人都在看一只鸟。
+ *
+ * 走路就两帧:站姿(腿并着)和迈步(腿前后错开),来回换就是走。
+ * 三帧以上在这个尺寸上看不出区别,纯浪费素材。
+ */
+export function drawStrollers(ctx, deckY, t, phase = 'day') {
+    const SPAN = VW + 60;
+    for (let i = 0; i < 3; i++) {
+        const speed = 0.010 + i * 0.005;
+        let x = (t * speed + i * 240) % SPAN - 30;
+        if (i % 2) x = VW - x;                       // 一半往左走
+        const who = ONLOOKERS[(i * 2 + 2) % ONLOOKERS.length];
+        const step = Math.floor(t / 260 + i) % 2;    // 两帧来回换
+        const key = step ? who + '_walk' : who;
+        shadow(ctx, x, deckY - 13, 12, 0.16);
+        drawStanding(ctx, shadedSprite(key, SCENERY[key], phase), Math.round(x), deckY - 13);
+    }
+}
 
 /** 远处漂着的小船,慢慢横穿画面。淡淡退一点,让它待在水面那层 */
 export function drawBoat(ctx, y, t, weather = 'sunny') {

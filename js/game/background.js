@@ -10,7 +10,7 @@ import { PixelScreen } from './pixmap.js';
 import {
     VW, VH, paintSky, paintPier, drawSea, drawClouds, drawFarGulls,
     drawPierFoam, drawPerformance, drawBoat, drawRain, drawFog, hitShack,
-    paintFarDam, drawReeds,
+    paintFarDam, drawReeds, drawStrollers,
 } from './scene.js';
 import { unlockedShows } from './rules.js';
 import { dayPhase, onDam } from '../data.js';
@@ -95,6 +95,8 @@ export class Background {
         drawBoat(ctx, HORIZON + 24, t, weather);
         drawPierFoam(ctx, weather, DECK_Y, t, phase);
         ctx.drawImage(this.pier.cv, 0, 0);
+        // 路过的人不看时段 —— 大坝上白天晚上都有人散步
+        drawStrollers(ctx, DECK_Y, t, phase);
         // 哇鸥只在「不在小屋」的时段出现在大坝上 —— 它睡着的时候
         // 大坝上还站着一只在表演,那就是两个哇鸥了。
         if (onDam(when)) {
@@ -102,7 +104,8 @@ export class Background {
             const fedNow = showMs < this.lastShowMs;
             this.lastShowMs = showMs;
             drawPerformance(ctx, 336, DECK_Y - 13, t,
-                unlockedShows(this.getState()).length, fedNow, this.getState().wearing);
+                unlockedShows(this.getState()).length, fedNow,
+                this.getState().wearing, phase);
         }
 
         // 近景压在所有东西之上,包括哇鸥 —— 被前景挡住一点才有纵深

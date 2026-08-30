@@ -11,6 +11,7 @@
 
 import { WEAR } from './pixels.js';
 import { sprite } from './pixmap.js';
+import { shadedSprite } from './tint.js';
 
 /** 槽位的绘制顺序。脖子上的先画,帽子压在上面 —— 头巾的角要盖住绳结。 */
 const ORDER = ['neck', 'hat'];
@@ -21,8 +22,10 @@ const ORDER = ['neck', 'hat'];
  * @param {'big'|'small'} which  用哪一套图
  * @param {number} cx       精灵图的水平中心
  * @param {number} topY     精灵图**内容顶行**的 y(锚点从这里算起)
+ * @param {string} [phase]  时段。装扮也得跟着天色走,不然傍晚整个画面暗下来,
+ *                          只有它头上那顶帽子还是白天那么亮
  */
-export function drawWear(ctx, wearing, which, cx, topY) {
+export function drawWear(ctx, wearing, which, cx, topY, phase = 'day') {
     if (!wearing) return;
     for (const slot of ORDER) {
         const id = wearing[slot];
@@ -30,7 +33,7 @@ export function drawWear(ctx, wearing, which, cx, topY) {
         if (!w) continue;
         const grid = w[which];
         const dy = which === 'big' ? w.bigY : w.smallY;
-        const cv = sprite(`wear:${id}:${which}`, grid);
+        const cv = shadedSprite(`wear:${id}:${which}`, grid, phase);
         ctx.drawImage(cv, Math.round(cx - cv.width / 2), Math.round(topY + dy));
     }
 }
