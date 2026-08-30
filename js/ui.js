@@ -11,7 +11,7 @@ import {
     TOTAL_FEATHERS, CHAT_NODES, WEATHER,
     UPGRADES, upgradeCost, SHOWS,
     DRINKS, FORTUNES, HOURS, hourSlot,
-    CREW, FOOD_SOURCE, COSMETICS, SLOTS,
+    CREW, FOOD_SOURCE, COSMETICS, SLOTS, dayPhase,
     TUTORIAL, TUTORIAL_GIFT,
 } from './data.js';
 import { paintWearPreview, paintWearItem } from './game/wear.js';
@@ -1062,7 +1062,10 @@ export class UI {
         const img = this.$panel.querySelector('[data-card]');
         if (!img) return;
         const s = this.getState();
-        const key = [s.fortune, s.fortuneMark, s.fortuneDate, s.weather, s.level].join('|');
+        // 天光跟真实时段走,所以时段也得进 key —— 不然傍晚转的卦到了夜里
+        // 还是白天那张图
+        const key = [s.fortune, s.fortuneMark, s.fortuneDate, s.weather, s.level,
+                     dayPhase(now())].join('|');
         if (this._cardKey === key && this._cardUrl) { img.src = this._cardUrl; return; }
 
         document.fonts.ready.then(() => {
@@ -1072,6 +1075,8 @@ export class UI {
             const url = renderCard({
                 fortune: s.fortune, mark: s.fortuneMark,
                 weather: s.weather, date: now(), level: s.level,
+                // dev 里 wa.card() 钉住的组合;生产构建里这个字段永远是 undefined
+                ...(this._cardForce ?? {}),
             });
             if (!url) return;
             this._cardKey = key;

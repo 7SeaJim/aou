@@ -17,6 +17,7 @@ import {
 import { seeded } from './game/rng.js';
 import { setClock } from './clock.js';
 import * as sfx from './audio.js';
+import { CARD_SCENES, CARD_STYLES, CARD_PHASES } from './game/card.js';
 
 /* ============================================================
    预设存档。**要加调试场景就改这里。**
@@ -128,8 +129,9 @@ function backup() {
  * @param {()=>void} deps.fly            开一局觅食
  * @param {()=>object|null} deps.getFlight
  * @param {object} deps.rules
+ * @param {object} deps.ui
  */
-export function installDev({ getState, mutate, storage, fly, getFlight, rules }) {
+export function installDev({ getState, mutate, storage, fly, getFlight, rules, ui }) {
     const reload = async (state) => {
         await storage.replace(state);
         location.reload();
@@ -271,6 +273,28 @@ export function installDev({ getState, mutate, storage, fly, getFlight, rules })
                 if (!s.fortuneSeen.includes(s.fortune)) s.fortuneSeen.push(s.fortune);
             });
             return `${FORTUNES[this.s.fortune].name} · ${this.s.fortuneMark}`;
+        },
+
+        /**
+         * 把游戏里那张运势卡片钉到某个组合上,方便对着改。
+         * 不传参数列出可选值;传 null 恢复成「按当天自动挑」。
+         *
+         *   wa.card({ scene: 'city', style: 'full', phase: 'night' })
+         *
+         * 要一次看全部组合,开 /card-preview.html。
+         */
+        card(opt) {
+            if (opt === undefined) {
+                return {
+                    scene: Object.entries(CARD_SCENES).map(([k, v]) => `${k}(${v.name})`),
+                    style: Object.entries(CARD_STYLES).map(([k, v]) => `${k}(${v.name})`),
+                    phase: Object.entries(CARD_PHASES).map(([k, v]) => `${k}(${v})`),
+                };
+            }
+            ui._cardForce = opt ?? {};
+            ui._cardKey = null;          // 逼它重画,不然缓存挡着
+            ui.render();
+            return opt ? `钉住 ${JSON.stringify(opt)}` : '恢复自动';
         },
 
         /** 从头走一遍开场引导 */
@@ -462,6 +486,7 @@ export function installDev({ getState, mutate, storage, fly, getFlight, rules })
                 'wa.sfx(name)':    '试听音效;不传参数列出全部名字',
                 'wa.tutorial(n)':  '把开场引导拨回第 n+1 步(默认从头)',
                 'wa.fortune(i,m)': '直接把今日签设成第 i 卦、第 m 种花纹(看卡片排版)',
+                'wa.card(opt)':    "钉住卡片的背景/版式/天光;不传列出可选值,传 null 恢复自动",
                 'wa.seed(n)':      '固定飞行随机序列,同一局可重放',
                 'wa.fly()':        '直接开一局',
                 'wa.away(h)':      '假装离线 h 小时后重载,看离线结算',

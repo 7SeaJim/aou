@@ -120,6 +120,7 @@ async function boot() {
         mutate,
         storage,
         rules,
+        ui,
         fly: () => startFlight(sprites),
         getFlight: () => flight,
     });

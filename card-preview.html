@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>运势卡片 · 全部组合</title>
+<link rel="stylesheet" href="css/pixel-tokens.css">
+<link rel="stylesheet" href="css/pixel-base.css">
+<link rel="stylesheet" href="css/pixel-icons.css">
+<link rel="stylesheet" href="css/pixel-ui.css">
+<style>
+    body { display: block; padding: 20px 16px 60px; }
+    .wrap { max-width: 1200px; margin-inline: auto; }
+    h1 { font-size: 24px; margin-bottom: 6px; }
+    .bar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin: 16px 0; }
+    .bar > span { font-size: 13px; color: var(--ink-soft); }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 18px; }
+    figure { margin: 0; }
+    figure img {
+        width: 100%; aspect-ratio: 3 / 4; display: block;
+        image-rendering: pixelated;
+        background: var(--sand-2);
+        box-shadow: inset 0 0 0 3px var(--ink);
+    }
+    figcaption { font-size: 12px; margin-top: 6px; color: var(--ink-soft); }
+    .note { font-size: 13px; line-height: 1.9; color: var(--ink-soft); max-width: 60ch; }
+    .note code { background: var(--sand-2); padding: 1px 4px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+    <h1>运势卡片 · 全部组合</h1>
+    <p class="note">
+        每一格是一个「背景 × 版式 × 天光」的组合。要改图就改
+        <code>js/game/card.js</code> 里的 <code>CARD_SCENES</code>(背景)、
+        <code>CARD_STYLES</code>(版式);要改文案改
+        <code>js/data.js</code> 的 <code>FORTUNES</code>。
+        存盘之后这一页会热更新,不用手动刷。
+    </p>
+
+    <div class="bar">
+        <span>天气</span><span id="weatherBtns"></span>
+        <span style="margin-left:12px">签</span><span id="fortuneBtns"></span>
+    </div>
+
+    <div class="grid" id="grid"></div>
+</div>
+
+<script type="module">
+import { renderCard, CARD_SCENES, CARD_STYLES, CARD_PHASES } from './js/game/card.js';
+import { FORTUNES, SHELL_MARKS, WEATHER } from './js/data.js';
+
+let weather = 'sunny';
+let fortune = 0;
+
+const btns = (host, items, get, set) => {
+    host.innerHTML = items.map(([k, label]) =>
+        `<button class="px-btn px-btn--sm" data-k="${k}"
+                 style="${get() === k ? '' : 'opacity:.5'}">${label}</button>`).join(' ');
+    host.onclick = e => {
+        const b = e.target.closest('[data-k]');
+        if (!b) return;
+        set(b.dataset.k);
+        draw();
+    };
+};
+
+async function draw() {
+    // canvas 画字是一次性的,字体没到就画会拿系统字体落下去
+    await document.fonts.ready;
+
+    btns(weatherBtns, Object.entries(WEATHER).map(([k, v]) => [k, v.name]),
+         () => weather, k => { weather = k; });
+    btns(fortuneBtns, FORTUNES.map(f => [String(f.id), f.name.split(' · ')[0]]),
+         () => String(fortune), k => { fortune = Number(k); });
+
+    const out = [];
+    for (const [sk, sv] of Object.entries(CARD_STYLES)) {
+        for (const [ck, cv] of Object.entries(CARD_SCENES)) {
+            for (const [pk, pv] of Object.entries(CARD_PHASES)) {
+                const url = renderCard({
+                    fortune, mark: SHELL_MARKS[fortune % SHELL_MARKS.length],
+                    weather, date: new Date(), level: 4,
+                    scene: ck, style: sk, phase: pk,
+                });
+                out.push(`<figure>
+                    <img src="${url}" alt="${cv.name}">
+                    <figcaption>${sv.name} · ${cv.name} · ${pv}</figcaption>
+                </figure>`);
+            }
+        }
+    }
+    grid.innerHTML = out.join('');
+}
+
+draw();
+</script>
+</body>
+</html>
