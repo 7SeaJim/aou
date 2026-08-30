@@ -490,3 +490,8 @@ ICONS['waou'] = [
 # 分开放是因为食材和料理是两批东西:食材的键进存档,料理的不进。
 from dishes import DISHES
 ICONS.update(DISHES)
+
+# 四条升级线的图标 + 重画的辣椒,见 tools/upgrades.py。
+# **放在最后 update**,所以 chili 是覆盖上面那版(直的那根被认成胡萝卜)。
+from upgrades import UPGRADE_ICONS
+ICONS.update(UPGRADE_ICONS)

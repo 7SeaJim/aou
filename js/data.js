@@ -195,13 +195,13 @@ export const COSMETICS = [
  * 改这里之后**一定要跑 `node tools/sim.mjs`** —— 这条曲线不是拍脑袋能对的。
  */
 export const UPGRADES = {
-    stove:  { name: '炉子',   icon: 'chili',    desc: '出餐更快',
+    stove:  { name: '炉子',   icon: 'stove',    desc: '出餐更快',
               max: 12, base: 60,   mul: lv => 1 + (lv - 1) * 0.24 },
-    sign:   { name: '招牌',   icon: 'shop',     desc: '每份卖得更贵',
+    sign:   { name: '招牌',   icon: 'sign',     desc: '每份卖得更贵',
               max: 12, base: 90,   mul: lv => 1 + (lv - 1) * 0.15 },
-    shelf:  { name: '货架',   icon: 'backpack', desc: '离线能攒更久',
+    shelf:  { name: '货架',   icon: 'shelf', desc: '离线能攒更久',
               max: 10, base: 150,  mul: lv => 2 + (lv - 1) },          // 小时
-    warmer: { name: '保温箱', icon: 'sugar',    desc: '离线少亏一点',
+    warmer: { name: '保温箱', icon: 'warmer',    desc: '离线少亏一点',
               max: 10, base: 200,  mul: lv => 0.40 + (lv - 1) * 0.05 },// 折扣
 };
 
