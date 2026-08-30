@@ -166,7 +166,7 @@
 .px-btn--lg { font-size: 20px; padding: 16px 32px; }
 .px-btn--sm { font-size: 13px; padding: 8px 14px; }
 
-/* ============ HUD 资源条(欧币 / 体力 / 天气) ============ */
+/* ============ HUD 资源条(鸥币 / 体力 / 天气) ============ */
 .px-chip {
     display: inline-flex;
     align-items: center;

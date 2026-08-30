@@ -5,10 +5,10 @@
  * 都在「第十天」「第三十天」那儿,而没人会为了调数值真玩一个月:
  *
  *   · 升到 10 级要几天?
- *   · 一百二十根羽毛够不够买齐五件装扮?差多少?
+ *   · 一百二十根瓶盖够不够买齐五件装扮?差多少?
  *   · 夏天(游客 0.8、招不到伙计)会不会冷清到玩不下去?
  *   · 摊子会不会一直饿着 —— 材料到底跟不跟得上?
- *   · 欧币会不会通胀到升级树见底、再赚也没处花?
+ *   · 鸥币会不会通胀到升级树见底、再赚也没处花?
  *
  * 用法:
  *   node tools/sim.mjs                       默认:三种玩家各跑 30 天,从冬天开始
@@ -26,7 +26,7 @@ import * as rules from '../js/game/rules.js';
 import { setClock } from '../js/clock.js';
 import {
     RECIPES, UPGRADES, upgradeCost, COSMETICS, CREW,
-    FOODS, SEASONS, seasonOf, ACHIEVEMENTS, TOTAL_FEATHERS, FEATHER,
+    FOODS, SEASONS, seasonOf, ACHIEVEMENTS, TOTAL_CAPS, CAP_VALUE, MARKET,
 } from '../js/data.js';
 
 /* ============================================================
@@ -91,6 +91,12 @@ function decide(s) {
             .filter(affordable)
             .sort((a, b) => b.reward - a.reward);
         if (open[0] && open[0].id !== cur?.id) rules.setStall(s, i, open[0].id);
+    }
+    // 进货:缺什么补什么。稀有的先买 —— 它们才是瓶颈,普通的本来就堆着
+    if (rules.marketOpen(s)) {
+        for (const k of ['mushroom', 'rusan', 'flower', 'sugar', 'chili', 'douhua']) {
+            if ((s.backpack[k] ?? 0) < 60) rules.buyFood(s, k, Infinity);
+        }
     }
     // 交订单
     for (const o of [...s.orders]) rules.deliverOrder(s, o.id);
@@ -164,7 +170,7 @@ function simulate(who, days, startMs) {
             season: SEASONS[seasonOf(new Date(day0))].name,
             level: s.level,
             coins: s.coins,
-            feathers: s.feathers,
+            caps: s.caps,
             bag: Object.values(s.backpack).reduce((a, b) => a + b, 0),
             ach: s.achievements.length,
             wear: s.cosmetics.length,
@@ -202,7 +208,7 @@ for (const who of (only ? [only] : ['idle', 'casual', 'active'])) {
 
     if (csv) {
         console.log(`# ${who}`);
-        console.log('day,season,level,coins,feathers,bag,ach,wear,crew,affinity,upgrades,served,fed');
+        console.log('day,season,level,coins,caps,bag,ach,wear,crew,affinity,upgrades,served,fed');
         for (const r of rows) console.log(Object.values(r).join(','));
         continue;
     }
@@ -211,11 +217,11 @@ for (const who of (only ? [only] : ['idle', 'casual', 'active'])) {
     console.log(`${p.name}(一天上 ${p.sessions.length} 次,每次 ${p.minutes} 分钟,`
         + `觅食 ${p.tries} 趟)· ${days} 天 · 从 ${new Date(start).toLocaleDateString('zh-CN')} 起`);
     console.log('='.repeat(72));
-    console.log(' 天  季  级      欧币   羽毛   背包  成就  装扮 伙计 好感  升级  出餐   投喂');
+    console.log(' 天  季  级      鸥币   瓶盖   背包  成就  装扮 伙计 好感  升级  出餐   投喂');
     for (const r of rows) {
         if (r.day % Math.max(1, Math.round(days / 15)) && r.day !== days) continue;
         console.log(`${pad(r.day, 3)}  ${r.season}  ${pad(r.level, 2)} ${pad(r.coins, 9)}`
-            + ` ${pad(r.feathers, 5)} ${pad(r.bag, 6)} ${pad(r.ach, 5)} ${pad(r.wear, 5)}`
+            + ` ${pad(r.caps, 5)} ${pad(r.bag, 6)} ${pad(r.ach, 5)} ${pad(r.wear, 5)}`
             + ` ${pad(r.crew, 4)} ${pad(r.aff, 4)} ${pad(r.up, 5)} ${pad(r.served, 6)} ${pad(r.fed, 6)}`);
     }
 
@@ -224,15 +230,15 @@ for (const who of (only ? [only] : ['idle', 'casual', 'active'])) {
     const say = (q, a) => console.log(`  ${q.padEnd(26, '·')} ${a}`);
     console.log('\n  ── 回答 ──');
     say('升到 10 级', dayAt(r => r.level >= 10) ? `第 ${dayAt(r => r.level >= 10)} 天` : `${days} 天没到,只有 ${last.level} 级`);
-    say('买齐 5 件装扮', dayAt(r => r.wear >= COSMETICS.length) ? `第 ${dayAt(r => r.wear >= COSMETICS.length)} 天` : `没买齐,${last.wear}/${COSMETICS.length} 件,手上 ${last.feathers} 根羽毛`);
+    say('买齐 5 件装扮', dayAt(r => r.wear >= COSMETICS.length) ? `第 ${dayAt(r => r.wear >= COSMETICS.length)} 天` : `没买齐,${last.wear}/${COSMETICS.length} 件,手上 ${last.caps} 根瓶盖`);
     say('招齐 6 只伙计', dayAt(r => r.crew >= 6) ? `第 ${dayAt(r => r.crew >= 6)} 天` : `没招齐,${last.crew}/6 只`);
-    // 羽毛按「已达成成就的档次」直接算,别拿「手上的 + 买掉的」倒推 ——
+    // 瓶盖按「已达成成就的档次」直接算,别拿「手上的 + 买掉的」倒推 ——
     // 引导那 5 根见面礼不是成就给的,倒推会算出超过 100% 的怪数
     const earned = ACHIEVEMENTS.filter(a => s.achievements.includes(a.id))
-        .reduce((n, a) => n + FEATHER[a.tier], 0);
-    say('成就', `${last.ach}/${ACHIEVEMENTS.length},成就给了 ${earned}/${TOTAL_FEATHERS} 根羽毛`);
+        .reduce((n, a) => n + CAP_VALUE[a.tier], 0);
+    say('成就', `${last.ach}/${ACHIEVEMENTS.length},成就给了 ${earned}/${TOTAL_CAPS} 根瓶盖`);
     say('摊子断过料的天数', `${starvedDays}/${days} 天`);
-    // 整条升级线一共要多少钱 —— 这是欧币**唯一**的去处
+    // 整条升级线一共要多少钱 —— 这是鸥币**唯一**的去处
     const treeCost = Object.entries(UPGRADES).reduce((sum, [k, u]) => {
         for (let lv = 1; lv < u.max; lv++) sum += upgradeCost(k, lv);
         return sum;
@@ -240,8 +246,8 @@ for (const who of (only ? [only] : ['idle', 'casual', 'active'])) {
     const maxDay = dayAt(r => r.maxed);
     const upMax = Object.values(UPGRADES).reduce((a, u) => a + u.max, 0);
     say('升级线', `${last.up}/${upMax} 级`
-        + (maxDay ? ` — 第 ${maxDay} 天就买满了(全线一共 ${treeCost} 欧币)` : ''));
-    say('末日欧币', `${last.coins}`
+        + (maxDay ? ` — 第 ${maxDay} 天就买满了(全线一共 ${treeCost} 鸥币)` : ''));
+    say('末日鸥币', `${last.coins}`
         + (maxDay ? ` —— 满级之后又赚了 ${last.coins - rows[maxDay - 1].coins},没处花` : ''));
     say('末日背包', `${last.bag} 个材料`
         + (dayAt(r => r.over) ? ` — 第 ${dayAt(r => r.over)} 天起有单样超过 9999(存档上限,重载会被削)` : ''));

@@ -22,7 +22,7 @@
 | `.px-panel__title` | 骑在面板上边框的木牌标题 |
 | `.px-btn` | 厚底可按压按钮;变体 `--sea` `--coral` `--wood`,尺寸 `--lg` `--sm` |
 | `.px-tabs` > `.px-tab` | 界面切换标签页,选中项加 `aria-selected="true"` |
-| `.px-chip` | HUD 资源条(欧币/天气/连击);压在画面上用 `--dark` |
+| `.px-chip` | HUD 资源条(鸥币/天气/连击);压在画面上用 `--dark` |
 | `.px-bar` > `.px-bar__fill` + `.px-bar__label` | 进度条;变体 `--hp` `--exp` `--sea` |
 | `.px-slot` | 背包格子;状态 `--selected` `--locked`,角标用 `.px-slot__count` |
 | `.px-dialog` | 对话框,配 `__name` `__text` `__next` `__options` |

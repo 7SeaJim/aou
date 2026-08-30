@@ -7,12 +7,12 @@
  */
 
 import {
-    RECIPES, ACHIEVEMENTS, FEATHER, ORDER_TEMPLATES, WEATHER,
+    RECIPES, ACHIEVEMENTS, CAP_VALUE, ORDER_TEMPLATES, WEATHER,
     UPGRADES, upgradeCost, slotsAt, SERVE_MS,
     SHOWS, SHOW_MS, SHOW_WEATHER, POSTCARDS,
     DRINKS, DRINK_KEYS, SHELL_MARKS, divine, hourSlot, onDam,
     CREW, crewBonus, SEASONS, seasonOf,
-    COSMETICS, EVENTS, ITEMS,
+    COSMETICS, EVENTS, ITEMS, MARKET, MARKET_LEVEL, FOODS,
 } from '../data.js';
 import { DAILY_TRIES } from '../state.js';
 import { now as clockNow } from '../clock.js';
@@ -76,7 +76,7 @@ export function addExp(state, amount) {
 /**
  * 逐条判定成就。**每 tick 都会被调用**,所以 check 必须是纯读取、够快。
  *
- * 达成即发羽毛(装扮的唯一货币)。发放写在这里而不是 UI 层 ——
+ * 达成即发瓶盖(装扮的唯一货币)。发放写在这里而不是 UI 层 ——
  * 离线结算也会走这里,UI 那时还没渲染。
  */
 export function checkAchievements(state) {
@@ -85,9 +85,9 @@ export function checkAchievements(state) {
         if (state.achievements.includes(a.id)) continue;
         if (!a.check(state)) continue;
         state.achievements.push(a.id);
-        const feathers = FEATHER[a.tier] ?? 1;
-        state.feathers += feathers;
-        events.push({ type: 'achievement', achievement: a, feathers });
+        const caps = CAP_VALUE[a.tier] ?? 1;
+        state.caps += caps;
+        events.push({ type: 'achievement', achievement: a, caps });
     }
     return events;
 }
@@ -156,7 +156,7 @@ export function deliverOrder(state, orderId) {
 /* ============================================================
    摊位:放置玩法的核心
 
-   一句话:摊位自动出餐,吃背包里的食材,产出欧币。
+   一句话:摊位自动出餐,吃背包里的食材,产出鸥币。
    食材不够就停在那儿等 —— 这条是整个循环的关节,
    它让「出去觅食」和「挂机赚钱」互相咬住,而不是两件不相干的事。
 
@@ -320,7 +320,7 @@ export function buyUpgrade(state, key) {
     const lv = state.upgrades[key] ?? 1;
     const cost = upgradeCost(key, lv);
     if (cost === null) return { ok: false, reason: '已经满级了' };
-    if (state.coins < cost) return { ok: false, reason: `还差 ${cost - state.coins} 欧币` };
+    if (state.coins < cost) return { ok: false, reason: `还差 ${cost - state.coins} 鸥币` };
 
     state.coins -= cost;
     state.upgrades[key] = lv + 1;
@@ -393,8 +393,9 @@ export function showInfo(state) {
         shows,
         pool,
         interval,
-        // 等级越高,路人一次给得越多
-        per: 1 + Math.floor(state.level / 4),
+        // 等级越高,路人一次给得越多。每 6 级 +1,不是每 4 级 ——
+        // 表演是完全被动的,它涨得比觅食快的话,主动玩法就没意义了
+        per: 1 + Math.floor(state.level / 6),
         locked: SHOWS.filter(sh => !shows.includes(sh)),
     };
 }
@@ -490,10 +491,16 @@ export function recordC4(state, who) {
  * 收进背包并记一笔图鉴。**所有加食材的地方都走这里** ——
  * 图鉴记的是「累计见过多少」,花掉了不减,所以不能拿 backpack 反推。
  */
+/** 背包每样的上限。和 state.js 的 normalize 保持一致 —— 见下面那段注释。 */
+export const BAG_MAX = 9999;
+
 function gain(state, key, n) {
     if (n <= 0) return;
-    state.backpack[key] = (state.backpack[key] ?? 0) + n;
-    state.codex[key] = (state.codex[key] ?? 0) + n;
+    // **这里必须封顶。** normalize() 存盘再读时会把每样夹到 9999,
+    // 而在内存里不拦的话玩家能攒到几万,重载之后数字凭空掉一大截 ——
+    // 看起来就是「存档把我的东西吃了」。宁可在攒的时候就停住。
+    state.backpack[key] = Math.min(BAG_MAX, (state.backpack[key] ?? 0) + n);
+    state.codex[key] = (state.codex[key] ?? 0) + n;      // 图鉴记见闻,不封顶
 }
 
 /** 当前季节 */
@@ -513,12 +520,55 @@ export function hireCrew(state, id, when = clockNow()) {
     if (state.affinity < c.affinity) {
         return { ok: false, reason: `好感度还差 ${c.affinity - state.affinity} —— 哇鸥还没熟到肯把亲戚介绍给你` };
     }
-    if (state.coins < c.cost) return { ok: false, reason: `还差 ${c.cost - state.coins} 欧币` };
+    if (state.coins < c.cost) return { ok: false, reason: `还差 ${c.cost - state.coins} 鸥币` };
 
     state.coins -= c.cost;
     state.crew.push(id);
     return { ok: true, crew: c, events: [{ type: 'crew', crew: c }, ...checkAchievements(state)] };
 }
+
+/* ---------- 篆新市场 ---------- */
+
+export const marketOpen = state => state.level >= MARKET_LEVEL;
+
+/** 今天这一样还能买几个。跨天自动清零 —— 存的是日期,不是定时器。 */
+export function marketLeft(state, key, when = clockNow()) {
+    const m = MARKET[key];
+    if (!m) return 0;
+    const today = when.toDateString();
+    const bought = state.market.date === today ? (state.market.bought[key] ?? 0) : 0;
+    return Math.max(0, m.daily - bought);
+}
+
+/**
+ * 进货。
+ * @param {number} n 买几个;传 Infinity 就是「今天剩下的全要」
+ */
+export function buyFood(state, key, n = 1, when = clockNow()) {
+    const m = MARKET[key];
+    if (!m) return { ok: false, reason: '市场没有这个' };
+    if (!marketOpen(state)) {
+        return { ok: false, reason: `${MARKET_LEVEL} 级以后阿姨才会来坝上摆摊` };
+    }
+    const today = when.toDateString();
+    if (state.market.date !== today) state.market = { date: today, bought: {} };
+
+    const left = marketLeft(state, key, when);
+    if (left <= 0) return { ok: false, reason: '今天这样卖完了,明天再来' };
+
+    // 钱不够就买得起几个买几个 —— 让玩家自己算「我能买几个」是没必要的作业
+    const want = Math.min(n, left, Math.floor(state.coins / m.price));
+    if (want <= 0) return { ok: false, reason: `还差 ${m.price - state.coins} 鸥币` };
+
+    state.coins -= want * m.price;
+    state.market.bought[key] = (state.market.bought[key] ?? 0) + want;
+    gain(state, key, want);          // 走 gain,图鉴才记得上
+    return {
+        ok: true, key, n: want, cost: want * m.price,
+        events: [{ type: 'buy', key, n: want }, ...checkAchievements(state)],
+    };
+}
+
 
 /* ---------- 大坝上的随机事件 ---------- */
 
@@ -560,7 +610,7 @@ function pickEvent(state, rnd, when) {
 export function applyEvent(state, ev, rnd = Math.random) {
     const e = ev.effect ?? {};
     const mul = 1 + Math.floor(state.level / 4);
-    const got = { food: {}, coins: 0, affinity: 0, feathers: 0, item: null, postcard: null };
+    const got = { food: {}, coins: 0, affinity: 0, caps: 0, item: null, postcard: null };
 
     for (const [k, n] of Object.entries(e.food ?? {})) {
         const v = n * mul;
@@ -572,7 +622,7 @@ export function applyEvent(state, ev, rnd = Math.random) {
         state.coins += got.coins;
     }
     if (e.affinity) { got.affinity = e.affinity; state.affinity += e.affinity; }
-    if (e.feathers) { got.feathers = e.feathers; state.feathers += e.feathers; }
+    if (e.caps) { got.caps = e.caps; state.caps += e.caps; }
     if (e.item) {
         const keys = Object.keys(ITEMS);
         got.item = keys[Math.floor(rnd() * keys.length)];
@@ -641,16 +691,16 @@ export function cosmeticOpen(state, c) {
     return true;
 }
 
-/** 买一件。花羽毛,不花欧币 —— 两条线分开的理由见 data.js 的 COSMETICS。 */
+/** 买一件。花瓶盖,不花鸥币 —— 两条线分开的理由见 data.js 的 COSMETICS。 */
 export function buyCosmetic(state, id) {
     const c = COSMETICS.find(x => x.id === id);
     if (!c) return { ok: false, reason: '没有这件' };
     if (state.cosmetics.includes(id)) return { ok: false, reason: '已经有了' };
     if (!cosmeticOpen(state, c)) return { ok: false, reason: '还没解锁' };
-    if (state.feathers < c.cost) {
-        return { ok: false, reason: `还差 ${c.cost - state.feathers} 根羽毛 —— 去达成几个成就` };
+    if (state.caps < c.cost) {
+        return { ok: false, reason: `还差 ${c.cost - state.caps} 根瓶盖 —— 去达成几个成就` };
     }
-    state.feathers -= c.cost;
+    state.caps -= c.cost;
     state.cosmetics.push(id);
     // 买了就直接戴上。买完还要再点一次「戴」是纯粹的多余一步。
     state.wearing[c.slot] = id;
@@ -677,8 +727,9 @@ export function wearCosmetic(state, id) {
  * 一次捡到几个。等级越高,同样一趟带回来的越多 ——
  * 后期摊位吃得快,再按一颗一颗捡就跟不上了。
  */
+// 每三级 +1 太陡了:15 级时一趟顶五趟,材料直接爆仓(见数值体检)。改成每五级。
 export const haulPerPickup = (level, crew = []) =>
-    1 + Math.floor((level - 1) / 3) + crewBonus(crew).haul;
+    1 + Math.floor((level - 1) / 5) + crewBonus(crew).haul;
 
 export function settleFlight(state, result) {
     const events = [];

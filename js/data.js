@@ -50,11 +50,11 @@ export const POSTCARDS = [
  * 成就。P4 重做:原来七条全是飞行玩法的遗物,P2 的放置、P3 的表演/小屋/伙计
  * 一条都没有 —— 玩家把放置内核玩通了,成就页还是空的。
  *
- * 现在按**玩法分组**、每组内分档,并且每条给羽毛(见 FEATHER)。
- * 羽毛是装扮的唯一货币:成就不再只是一个弹窗,它是装扮的进度条。
+ * 现在按**玩法分组**、每组内分档,并且每条给瓶盖(见 CAP_VALUE)。
+ * 瓶盖是装扮的唯一货币:成就不再只是一个弹窗,它是装扮的进度条。
  *
  *   group  归到哪一栏,见 ACH_GROUPS
- *   tier   1/2/3,档次越高羽毛越多
+ *   tier   1/2/3,档次越高瓶盖越多
  *   check  只读 state,不能有副作用 —— 它每 tick 都会被跑一遍
  *
  * check 里用到的计数器都在 state.stats 里(存档 v7 加的)。
@@ -68,8 +68,8 @@ export const ACH_GROUPS = {
     roam:   '见闻',
 };
 
-/** 档次 → 羽毛。三档的差距要够大,不然玩家不会为了高档去绕远路。 */
-export const FEATHER = { 1: 1, 2: 3, 3: 8 };
+/** 档次 → 瓶盖。三档的差距要够大,不然玩家不会为了高档去绕远路。 */
+export const CAP_VALUE = { 1: 1, 2: 3, 3: 8 };
 
 export const ACHIEVEMENTS = [
     // ---- 觅食 ----
@@ -87,7 +87,7 @@ export const ACHIEVEMENTS = [
       check: s => s.maxCombo >= 50 },
 
     // ---- 摊子 ----
-    { id: 'rich_100',    group: 'stall',  tier: 1, name: '攒下第一笔', desc: '拥有 100 欧币',
+    { id: 'rich_100',    group: 'stall',  tier: 1, name: '攒下第一笔', desc: '拥有 100 鸥币',
       check: s => s.coins >= 100 },
     { id: 'cook_5',      group: 'stall',  tier: 1, name: '小摊主',     desc: '完成 5 个订单',
       check: s => s.completedOrders >= 5 },
@@ -97,7 +97,7 @@ export const ACHIEVEMENTS = [
       check: s => s.stats.offlineMs >= 24 * 3600_000 },
     { id: 'stove_5',     group: 'stall',  tier: 2, name: '炉火纯青',   desc: '炉子升到 5 级',
       check: s => s.upgrades.stove >= 5 },
-    { id: 'rich_5000',   group: 'stall',  tier: 3, name: '有点家底了', desc: '拥有 5000 欧币',
+    { id: 'rich_5000',   group: 'stall',  tier: 3, name: '有点家底了', desc: '拥有 5000 鸥币',
       check: s => s.coins >= 5000 },
 
     // ---- 大坝 ----
@@ -140,17 +140,17 @@ export const ACHIEVEMENTS = [
       check: s => s.postcards.length >= POSTCARDS.length },
 ];
 
-/** 全部羽毛加起来有多少。装扮定价拿它当分母,别定到玩家永远买不齐。 */
-export const TOTAL_FEATHERS = ACHIEVEMENTS.reduce((n, a) => n + FEATHER[a.tier], 0);
+/** 全部瓶盖加起来有多少。装扮定价拿它当分母,别定到玩家永远买不齐。 */
+export const TOTAL_CAPS = ACHIEVEMENTS.reduce((n, a) => n + CAP_VALUE[a.tier], 0);
 
 /* ============================================================
    装扮:哇鸥戴的东西
    ============================================================ */
 
 /**
- * 装扮。用羽毛买,不用欧币 —— 欧币要留给摊位升级,两条线抢一个钱包的话,
+ * 装扮。用瓶盖买,不用鸥币 —— 鸥币要留给摊位升级,两条线抢一个钱包的话,
  * 玩家买了帽子就升不了炉子,装扮会变成「明知道该忍住的浪费」。
- * 羽毛只从成就来,于是「打扮」这件事的进度条就是成就本身。
+ * 瓶盖只从成就来,于是「打扮」这件事的进度条就是成就本身。
  *
  * 两个槽位,一个槽只戴一件。做多了每件都被摊薄,不如少而认得出。
  * 素材和锚点在 tools/wear.py,五件各有两套图(小屋近景 / 大坝小图)。
@@ -184,22 +184,32 @@ export const COSMETICS = [
  * 成本走标准放置曲线 base × 1.5^(等级-1),等级越高越贵。
  * mul(lv) 返回该等级的系数,1 级一律是基准值。
  */
+/**
+ * 成本曲线在 2026-08-31 的数值体检之后整体上调过一轮。
+ *
+ * 之前整条线一共只要 22496 鸥币,休闲玩家第 4 天就买满了 ——
+ * 之后二十多天的收入完全没有去处,放置游戏最核心的「赚 → 买 → 赚更快」
+ * 那个圈,第一周就断掉了。现在底价 ×5、公比 1.5 → 1.62、上限各 +2,
+ * 目标是把买满推到第二十天以后。
+ *
+ * 改这里之后**一定要跑 `node tools/sim.mjs`** —— 这条曲线不是拍脑袋能对的。
+ */
 export const UPGRADES = {
     stove:  { name: '炉子',   icon: 'chili',    desc: '出餐更快',
-              max: 10, base: 60,  mul: lv => 1 + (lv - 1) * 0.28 },
+              max: 12, base: 60,   mul: lv => 1 + (lv - 1) * 0.24 },
     sign:   { name: '招牌',   icon: 'shop',     desc: '每份卖得更贵',
-              max: 10, base: 90,  mul: lv => 1 + (lv - 1) * 0.18 },
+              max: 12, base: 90,   mul: lv => 1 + (lv - 1) * 0.15 },
     shelf:  { name: '货架',   icon: 'backpack', desc: '离线能攒更久',
-              max: 8,  base: 150, mul: lv => 2 + (lv - 1) },          // 小时
+              max: 10, base: 150,  mul: lv => 2 + (lv - 1) },          // 小时
     warmer: { name: '保温箱', icon: 'sugar',    desc: '离线少亏一点',
-              max: 8,  base: 200, mul: lv => 0.40 + (lv - 1) * 0.05 },// 折扣
+              max: 10, base: 200,  mul: lv => 0.40 + (lv - 1) * 0.05 },// 折扣
 };
 
 /** 升到下一级要多少钱。已满级返回 null。 */
 export function upgradeCost(key, level) {
     const u = UPGRADES[key];
     if (!u || level >= u.max) return null;
-    return Math.round(u.base * Math.pow(1.5, level - 1));
+    return Math.round(u.base * Math.pow(2.5, level - 1));
 }
 
 /** 摊位格子按等级解锁:1 级 1 格,3 级 2 格,6 级 3 格 */
@@ -211,7 +221,7 @@ export const STALL_SLOTS = [
 export const slotsAt = level => STALL_SLOTS.filter(s => s.levelReq <= level).length;
 
 /** 一格出一份的基准间隔(毫秒)。除以炉子系数就是实际间隔。 */
-export const SERVE_MS = 24_000;
+export const SERVE_MS = 45_000;
 
 /**
  * 表演节目单。哇鸥不出去觅食的时候就在大坝上表演,路人看了会投喂 ——
@@ -480,6 +490,39 @@ export const TUTORIAL = [
 export const TUTORIAL_GIFT = 5;
 
 /* ============================================================
+   篆新市场:拿鸥币换材料
+   ============================================================ */
+
+/**
+ * 进货。这是**鸥币唯一的第二个去处**,加它是为了修两个数值体检查出来的毛病:
+ *
+ *   1. 升级线买满之后鸥币无处可花 —— 现在它能换成材料
+ *   2. 稀有材料是真瓶颈(第 30 天鲜花 1、菌子 106,而豆花 37025)
+ *      —— 现在缺什么可以买什么
+ *
+ * **每天限量**,这是整个设计的关键。不限量的话稀有材料就变成纯粹用钱买,
+ * 觅食和表演立刻都不用玩了 —— 那是拿一个洞去补另一个洞。
+ * 限量之后市场是「补缺口」,不是「代替玩法」。
+ *
+ * 价格按稀有度拉开:普通的便宜到随便买,菌子贵到你会掂量一下。
+ * 设定上是篆新农贸市场收摊的阿姨每天顺路来坝上摆一小摊 ——
+ * 摆一小摊,所以东西就那么点。
+ */
+export const MARKET_LEVEL = 4;      // 4 级开门。太早开会盖掉前期觅食的存在感
+
+export const MARKET = {
+    erkuai:   { price: 8,   daily: 30 },
+    potato:   { price: 8,   daily: 30 },
+    rice:     { price: 10,  daily: 30 },
+    douhua:   { price: 14,  daily: 24 },
+    chili:    { price: 14,  daily: 24 },
+    sugar:    { price: 18,  daily: 24 },
+    flower:   { price: 60,  daily: 10 },
+    rusan:    { price: 110, daily: 8 },
+    mushroom: { price: 180, daily: 6 },
+};
+
+/* ============================================================
    大坝上的随机事件
    ============================================================ */
 
@@ -536,8 +579,8 @@ export const EVENTS = [
       text: '云大的学生支着画板画它,画完把画举给它看。它假装看懂了。',
       effect: { coins: 8, affinity: 1 } },
     { id: 'moult', w: 3, name: '换羽',
-      text: '它抖了抖翅膀,掉下来一根还算完整的羽毛。',
-      effect: { feathers: 1 } },
+      text: '它抖了抖翅膀,掉下来一根还算完整的瓶盖。',
+      effect: { caps: 1 } },
     { id: 'shell', w: 4, name: '奇怪的贝壳',
       text: '浪打上来一枚花纹没见过的贝壳。「这个……可以再算一卦。」',
       effect: { resetFortune: true } },

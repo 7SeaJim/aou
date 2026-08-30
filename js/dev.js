@@ -57,12 +57,12 @@ export const SCENES = {
         totalScore: 5000, maxCombo: 30, completedOrders: 60,
     },
 
-    /** 调装扮:羽毛管够、五件全在手上,已经戴了一身,直接看渲染对不对 */
+    /** 调装扮:瓶盖管够、五件全在手上,已经戴了一身,直接看渲染对不对 */
     dressed: {
         level: 6, coins: 2000, affinity: 40,
         postcards: [0, 1, 2, 3, 4, 5, 6],
         crew: ['huihui', 'apang', 'xiaobai'],
-        feathers: 99,
+        caps: 99,
         cosmetics: ['douli', 'weijin', 'huahuan', 'lanhua', 'tongling'],
         wearing: { hat: 'douli', neck: 'weijin' },
         backpack: Object.fromEntries(FOOD_KEYS.map(k => [k, 40])),
@@ -203,10 +203,10 @@ export function installDev({ getState, mutate, storage, fly, getFlight, rules, u
             return '全解锁';
         },
 
-        /** 羽毛 +n(不填给 99)。买装扮用的。 */
-        feathers(n = 99) {
-            mutate(s => { s.feathers = n; });
-            return `羽毛 ${this.s.feathers}`;
+        /** 瓶盖 +n(不填给 99)。买装扮用的。 */
+        caps(n = 99) {
+            mutate(s => { s.caps = n; });
+            return `瓶盖 ${this.s.caps}`;
         },
 
         /**
@@ -237,9 +237,9 @@ export function installDev({ getState, mutate, storage, fly, getFlight, rules, u
             const r = mutate(s => rules.applyEvent(s, ev));
             const g = r.got;
             const bits = Object.entries(g.food).map(([k, n]) => `${k}×${n}`);
-            if (g.coins) bits.push(`${g.coins} 欧币`);
+            if (g.coins) bits.push(`${g.coins} 鸥币`);
             if (g.affinity) bits.push(`好感度 +${g.affinity}`);
-            if (g.feathers) bits.push(`羽毛 +${g.feathers}`);
+            if (g.caps) bits.push(`瓶盖 +${g.caps}`);
             if (g.item) bits.push(g.item);
             if (g.postcard != null) bits.push(`明信片 #${g.postcard}`);
             return `${ev.name} —— ${ev.text}` + (bits.length ? `  [${bits.join(' ')}]` : '');
@@ -373,7 +373,7 @@ export function installDev({ getState, mutate, storage, fly, getFlight, rules, u
                 '每份间隔': (info.serveMs / 1000).toFixed(1) + 's',
                 '价格系数': info.priceMul.toFixed(2),
                 '格子': info.slots,
-                '每分钟': Math.round(perMin) + ' 欧币',
+                '每分钟': Math.round(perMin) + ' 鸥币',
                 '离线上限': info.offlineCapMs / 3600_000 + 'h',
                 '离线折扣': Math.round(info.offlineRate * 100) + '%',
             };
@@ -471,13 +471,13 @@ export function installDev({ getState, mutate, storage, fly, getFlight, rules, u
                 'wa.restore()':    '把 scene/reset 之前那份存档换回来',
                 'wa.lv(n)':        '跳到 n 级(补齐食谱解锁)',
                 'wa.exp(n)':       '加经验,走正常的升级事件',
-                'wa.coins(n)':     '设欧币',
+                'wa.coins(n)':     '设鸥币',
                 'wa.give(k, n)':   '食材/道具 +n',
                 'wa.fill(n)':      '背包装满',
                 'wa.tries(n)':     '设觅食次数(默认 99)',
                 'wa.weather(w)':   "天气 — 'sunny' / 'rainy' / 'foggy'",
                 'wa.unlockAll()':  '食谱/明信片/成就/装扮全开',
-                'wa.feathers(n)':  '设羽毛数(默认 99)',
+                'wa.caps(n)':  '设瓶盖数(默认 99)',
                 'wa.wear(id)':     '直接戴上某件装扮;不传参数列出全部 id',
                 'wa.bare()':       '把装扮全脱了',
                 'wa.event(id)':    "触发一件大坝事件;不传列出全部,传 'roll' 随机",

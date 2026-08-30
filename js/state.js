@@ -5,7 +5,7 @@
  * 好处:改目录不用写迁移,存档也更小(存档码是要玩家复制的)。
  */
 
-export const SAVE_VERSION = 8;
+export const SAVE_VERSION = 9;
 
 // 食材的键。改这里要同步 data.js 的 FOODS,并且 SAVE_VERSION +1 补一条迁移 ——
 // 这些键是 backpack 的字段名,直接进存档。
@@ -78,8 +78,13 @@ export function createInitialState() {
         codex: {},
 
         // ---- 长线(P4) ----
-        /** 羽毛:装扮的唯一货币,只从成就来。和欧币分开,装扮才不会去和摊位升级抢钱。 */
-        feathers: 0,
+        /** 瓶盖:装扮的唯一货币,只从成就来。和鸥币分开,装扮才不会去和摊位升级抢钱。 */
+        caps: 0,
+        /**
+         * 今天在市场进了多少货。每天清零 —— 限量才是市场的意义:
+         * 不限量的话稀有材料变成纯粹用钱买,觅食和表演就都不用玩了。
+         */
+        market: { date: '', bought: {} },
         /** 已拥有的装扮 id */
         cosmetics: [],
         /** 正戴着的。每个槽位一件,null 表示空着。 */
@@ -108,6 +113,20 @@ export function createInitialState() {
  * 那种 falsy 判断 —— 字段真值为 0 或 '' 时会被误判成缺失。
  */
 const migrations = {
+    // v8 -> v9:货币改名(羽毛 -> 瓶盖),加篆新市场的每日进货记录。
+    //
+    // 字段跟着一起改名了(feathers -> caps),所以这一步要**搬值**,不是加字段。
+    // 只加不搬的话,老玩家攒的瓶盖会一夜之间归零。
+    8(old) {
+        const { feathers, ...rest } = old;
+        return {
+            ...rest,
+            version: 9,
+            caps: Number.isFinite(feathers) ? feathers : 0,
+            market: { date: '', bought: {} },
+        };
+    },
+
     // v7 -> v8:加开场引导的进度。
     //
     // 老档一律直接标成「走完」。**能升级上来的存档,人早就会玩了** ——
@@ -116,7 +135,7 @@ const migrations = {
         return { ...old, version: 8, tutorial: TUTORIAL_DONE };
     },
 
-    // v6 -> v7:加装扮、羽毛、随机事件和累计计数器。
+    // v6 -> v7:加装扮、瓶盖、随机事件和累计计数器。
     //
     // 计数器补不出历史 —— 老档挂机过多久、被投喂过多少次,存档里根本没记。
     // 只有两处能诚实地开个底:四子棋战绩本来就在 c4 里,今日占卜结果在 fortune 里。
@@ -127,6 +146,10 @@ const migrations = {
         return {
             ...old,
             version: 7,
+            // 注意:这里写的是 feathers 不是 caps。v7 那会儿这个字段就叫 feathers,
+            // v9 才改名叫瓶盖。**迁移函数的产物必须是那个版本当时的形状** ——
+            // 顺手改成新名字的话,v6 老档会跳过 v8→v9 那一步的改名逻辑,
+            // 将来再往上加一版就对不上了。
             feathers: 0,
             cosmetics: [],
             wearing: { hat: null, neck: null },
@@ -339,7 +362,13 @@ function normalize(s) {
     })();
 
     // ---- 长线字段 ----
-    out.feathers = clampInt(out.feathers, 0, 9_999_999);
+    out.caps = clampInt(out.caps, 0, 9_999_999);
+    out.market = (() => {
+        const m = { date: '', bought: {} };
+        if (typeof out.market?.date === 'string') m.date = out.market.date;
+        for (const k of FOOD_KEYS) m.bought[k] = clampInt(out.market?.bought?.[k], 0, 9999);
+        return m;
+    })();
     out.cosmetics = uniq(asArray(out.cosmetics).filter(x => typeof x === 'string')).slice(0, 50);
     out.wearing = (() => {
         const w = {};

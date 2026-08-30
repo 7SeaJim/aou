@@ -6,13 +6,13 @@
  */
 
 import {
-    FOODS, ITEMS, RECIPES, POSTCARDS, ACHIEVEMENTS, ACH_GROUPS, FEATHER,
+    FOODS, ITEMS, RECIPES, POSTCARDS, ACHIEVEMENTS, ACH_GROUPS, CAP_VALUE,
     EVENTS,
-    TOTAL_FEATHERS, CHAT_NODES, WEATHER,
+    TOTAL_CAPS, CHAT_NODES, WEATHER,
     UPGRADES, upgradeCost, SHOWS,
     DRINKS, FORTUNES, HOURS, hourSlot,
     CREW, FOOD_SOURCE, COSMETICS, SLOTS, dayPhase,
-    TUTORIAL, TUTORIAL_GIFT,
+    TUTORIAL, TUTORIAL_GIFT, MARKET, MARKET_LEVEL,
 } from './data.js';
 import { paintWearPreview, paintWearItem } from './game/wear.js';
 import { renderCard } from './game/card.js';
@@ -103,7 +103,7 @@ export class UI {
             case 'cook': {
                 const r = this.mutate(st => rules.cook(st, data.id));
                 if (!r.ok) return this.toast(this.explain(r), 'erkuai');
-                this.toast(`做好了 ${RECIPES.find(x => x.id === data.id).name},+${data.reward} 欧币`, 'coin');
+                this.toast(`做好了 ${RECIPES.find(x => x.id === data.id).name},+${data.reward} 鸥币`, 'coin');
                 this.showEvents(r.events);
                 break;
             }
@@ -111,7 +111,7 @@ export class UI {
             case 'deliver': {
                 const r = this.mutate(st => rules.deliverOrder(st, Number(data.id)));
                 if (!r.ok) return this.toast(this.explain(r), 'postcard');
-                this.toast(`交付完成,+${r.events[0].order.reward} 欧币`, 'coin');
+                this.toast(`交付完成,+${r.events[0].order.reward} 鸥币`, 'coin');
                 this.showEvents(r.events);
                 break;
             }
@@ -142,15 +142,15 @@ export class UI {
 
             case 'buywear': {
                 const r = this.mutate(st => rules.buyCosmetic(st, data.id));
-                if (!r.ok) return this.toast(r.reason, 'feather');
-                this.toast(`${r.cosmetic.name} —— 戴上了`, 'feather');
+                if (!r.ok) return this.toast(r.reason, 'cap');
+                this.toast(`${r.cosmetic.name} —— 戴上了`, 'cap');
                 this.showEvents(r.events.slice(1));
                 break;
             }
 
             case 'wear': {
                 const r = this.mutate(st => rules.wearCosmetic(st, data.id));
-                if (!r.ok) return this.toast(r.reason, 'feather');
+                if (!r.ok) return this.toast(r.reason, 'cap');
                 break;
             }
 
@@ -214,6 +214,14 @@ export class UI {
                 this.toast('引导关了。想再看一遍就清档重开', 'star');
                 break;
 
+            case 'buy': {
+                const r = this.mutate(st => rules.buyFood(st, data.key, Number(data.n)));
+                if (!r.ok) return this.toast(r.reason, 'coin');
+                this.toast(`${FOODS[r.key].name} ×${r.n},花了 ${r.cost} 鸥币`, FOODS[r.key].icon);
+                this.showEvents(r.events.slice(1));
+                break;
+            }
+
             case 'mute':
                 this.toast(sfx.toggleMute() ? '静音了' : '音效开着', 'star');
                 this.renderHud();
@@ -250,7 +258,7 @@ export class UI {
             : '';
         // 事件只报个数,细节在大坝页的日志里 —— 一条吐司塞六件事没人读得完
         const ev = e.events?.length ? ` 坝上还发生了 ${e.events.length} 件事。` : '';
-        this.toast(`你走了 ${away},摊子卖出 ${what},赚了 ${e.coins} 欧币${capped}。${fed}${ev}`, 'coin');
+        this.toast(`你走了 ${away},摊子卖出 ${what},赚了 ${e.coins} 鸥币${capped}。${fed}${ev}`, 'coin');
     }
 
     /**
@@ -269,9 +277,9 @@ export class UI {
         // 一条 2.6 秒排下去要刷半分钟,而且前面的还没看完就被顶掉了。
         const ach = queue.filter(e => e.type === 'achievement');
         if (ach.length > 3) {
-            const f = ach.reduce((n, e) => n + e.feathers, 0);
+            const f = ach.reduce((n, e) => n + e.caps, 0);
             queue = queue.filter(e => e.type !== 'achievement');
-            queue.unshift({ type: 'many', text: `一口气达成 ${ach.length} 个成就 · 羽毛 +${f}` });
+            queue.unshift({ type: 'many', text: `一口气达成 ${ach.length} 个成就 · 瓶盖 +${f}` });
         }
 
         const start = off ? TOAST_MS + 200 : 400;      // 离线那条先让它读完
@@ -280,7 +288,7 @@ export class UI {
             if (e.type === 'recipe')      this.toast(`解锁新食谱:${e.recipe.name}`, e.recipe.icon);
             if (e.type === 'achievement') {
                 sfx.play('achieve');
-                this.toast(`达成成就:${e.achievement.name} · 羽毛 +${e.feathers}`, 'trophy');
+                this.toast(`达成成就:${e.achievement.name} · 瓶盖 +${e.caps}`, 'trophy');
             }
             if (e.type === 'postcard')    { sfx.play('get'); this.toast(`获得明信片「${POSTCARDS[e.id].name}」`, 'postcard'); }
             if (e.type === 'upgrade')     this.toast(`${UPGRADES[e.key].name} 升到 ${e.level} 级`, UPGRADES[e.key].icon);
@@ -289,6 +297,46 @@ export class UI {
             if (e.type === 'crew')        this.toast(`${e.crew.name} 加入了摊子`, 'waou');
             if (e.type === 'many')        { sfx.play('achieve'); this.toast(e.text, 'trophy'); }
         }, start + i * (TOAST_MS + 200)));
+    }
+
+    /**
+     * 篆新市场。**鸥币唯一的第二个去处**,也是稀有材料唯一的稳定来源。
+     *
+     * 每天限量,而且限量本身要显眼 —— 玩家得一眼看出「今天还能买几个」,
+     * 否则会以为可以无限买,然后在这里把钱花光。
+     */
+    marketView() {
+        const s = this.getState();
+        if (!rules.marketOpen(s)) {
+            return `<div class="px-panel px-panel--sea" style="margin-bottom:28px">
+                <p>${icon('shop')} 篆新市场</p>
+                <p class="px-muted">收摊的阿姨每天顺路来坝上摆一小摊,缺什么可以拿鸥币换。
+                   <strong>Lv.${MARKET_LEVEL}</strong> 之后她才认得你。</p>
+            </div>`;
+        }
+        const rows = Object.entries(MARKET).map(([k, m]) => {
+            const left = rules.marketLeft(s, k);
+            const can = left > 0 && s.coins >= m.price;
+            return `
+            <div class="px-ach">
+                ${icon(FOODS[k].icon, 'lg')}
+                <div style="flex:1">
+                    <strong>${FOODS[k].name}</strong>
+                    <p class="px-muted">${icon('coin')} ${m.price} / 个 ·
+                        今天还剩 <strong>${left}</strong> / ${m.daily}</p>
+                </div>
+                <button class="px-btn px-btn--sm" data-act="buy" data-key="${k}" data-n="1"
+                        ${can ? '' : 'disabled'}>买 1</button>
+                <button class="px-btn px-btn--sm px-btn--sea" data-act="buy" data-key="${k}" data-n="99"
+                        ${can ? '' : 'disabled'}>全要</button>
+            </div>`;
+        }).join('');
+        return `
+        <h3 style="margin-bottom:6px">篆新市场</h3>
+        <p class="px-muted" style="margin-bottom:12px">
+            收摊的阿姨顺路来坝上摆一小摊。<strong>每样每天就那么点</strong> ——
+            她也只是顺路,不是给你开批发的。零点补货。</p>
+        <div style="margin-bottom:28px">${rows}</div>`;
     }
 
     /**
@@ -403,10 +451,10 @@ export class UI {
         const w = WEATHER[s.weather] ?? WEATHER.sunny;
         const pct = Math.min(100, Math.round(s.exp / s.expNext * 100));
         this.$hud.innerHTML = `
-            <span class="px-chip">${icon('coin')} <strong>${s.coins}</strong> 欧币</span>
+            <span class="px-chip">${icon('coin')} <strong>${s.coins}</strong> 鸥币</span>
             <span class="px-chip">${icon(w.icon)} ${w.name}</span>
             <span class="px-chip">${icon('star')} Lv.<strong>${s.level}</strong></span>
-            <span class="px-chip">${icon('feather')} <strong>${s.feathers}</strong> 羽毛</span>
+            <span class="px-chip">${icon('cap')} <strong>${s.caps}</strong> 瓶盖</span>
             <span class="px-chip">${icon('waou')} 觅食 <strong>${s.dailyTries}</strong>/${DAILY_TRIES}</span>
             <button class="px-chip px-chip--btn" data-act="mute" title="音效开关">
                 ${icon('star')} 音效 <strong>${sfx.isMuted() ? '关' : '开'}</strong></button>
@@ -432,13 +480,13 @@ export class UI {
         const last = s.tutorial + 1 >= TUTORIAL.length;
         this.mutate(st => {
             st.tutorial = last ? TUTORIAL_DONE : st.tutorial + 1;
-            if (last) st.feathers += TUTORIAL_GIFT;
+            if (last) st.caps += TUTORIAL_GIFT;
         });
         this._tutBusy = false;
 
         sfx.play(last ? 'achieve' : 'get');
         if (last) {
-            this.toast(`会玩了。送你 ${TUTORIAL_GIFT} 根羽毛 —— 够去「装扮」买顶斗笠`, 'feather');
+            this.toast(`会玩了。送你 ${TUTORIAL_GIFT} 根瓶盖 —— 够去「装扮」买顶斗笠`, 'cap');
         }
     }
 
@@ -463,7 +511,7 @@ export class UI {
             ['dock', '大坝', 'map'], ['hut', '小屋', 'waou'],
             ['bag', '背包', 'backpack'], ['cook', '摊子', 'shop'],
             ['postcard', '明信片', 'postcard'], ['achievement', '成就', 'trophy'],
-            ['wear', '装扮', 'feather'],
+            ['wear', '装扮', 'cap'],
             ['chat', '聊天', 'waou'], ['save', '存档', 'coin'],
         ];
         const s = this.getState();
@@ -515,7 +563,7 @@ export class UI {
             <p class="px-muted">需要 ${Object.entries(order.need)
                 .map(([k, v]) => `${icon(FOODS[k].icon)} ${FOODS[k].name}×${v}`).join(' ')}</p>
             <div style="display:flex;gap:16px;align-items:center;margin-top:14px">
-                <span class="px-tag px-tag--gold">奖励 ${order.reward} 欧币</span>
+                <span class="px-tag px-tag--gold">奖励 ${order.reward} 鸥币</span>
                 <button class="px-btn px-btn--sm" data-act="deliver" data-id="${order.id}">交付</button>
             </div>
         </div>` : `<p class="px-muted">暂时没有订单。${s.level < 2 ? '到 2 级后游客会开始点单。' : '出去转一圈看看?'}</p>`}`;
@@ -526,9 +574,9 @@ export class UI {
         const g = e.got ?? {};
         const bits = [];
         for (const [k, n] of Object.entries(g.food ?? {})) bits.push(`${FOODS[k].name}×${n}`);
-        if (g.coins)     bits.push(`${g.coins} 欧币`);
+        if (g.coins)     bits.push(`${g.coins} 鸥币`);
         if (g.affinity)  bits.push(`好感度 +${g.affinity}`);
-        if (g.feathers)  bits.push(`羽毛 +${g.feathers}`);
+        if (g.caps)  bits.push(`瓶盖 +${g.caps}`);
         if (g.item)      bits.push(ITEMS[g.item].name);
         if (g.postcard !== null && g.postcard !== undefined) {
             bits.push(`明信片「${POSTCARDS.find(p => p.id === g.postcard)?.name}」`);
@@ -806,7 +854,7 @@ export class UI {
         });
         return `<div class="px-panel px-panel--sea" style="margin-bottom:24px">
             <p>摊子在卖 ${live.map(st => RECIPES.find(x => x.id === st.recipe).name).join('、')}
-               · 约 <strong>${Math.round(perMin)}</strong> 欧币/分钟</p>
+               · 约 <strong>${Math.round(perMin)}</strong> 鸥币/分钟</p>
             ${short.length ? `<p class="px-muted">${icon('erkuai')} 材料不够了,出去觅食补一趟</p>`
                            : `<p class="px-muted">离线也在卖,最多攒 ${info.offlineCapMs / 3600_000} 小时</p>`}
         </div>`;
@@ -868,7 +916,7 @@ export class UI {
                 </div>
                 <p class="px-muted" style="font-size:12px;line-height:1.6">
                     每 ${(info.serveMs / 1000).toFixed(1)} 秒一份 ·
-                    ${Math.round(r.reward * info.priceMul)} 欧币<br>
+                    ${Math.round(r.reward * info.priceMul)} 鸥币<br>
                     吃 ${Object.entries(r.cost).map(([k, v]) => `${FOODS[k].name}×${v}`).join(' ')}
                     ${enough ? '' : '<br><span style="color:var(--coral)">材料不够,停着</span>'}
                 </p>
@@ -903,7 +951,7 @@ export class UI {
                 ${icon(r.icon, 'lg')}
                 <strong style="min-width:5em">${unlocked ? r.name : '???'}</strong>
                 <span class="px-muted" style="flex:1">
-                    ${unlocked ? `${cost} → ${r.reward} 欧币` : `Lv.${r.levelReq} 解锁`}</span>
+                    ${unlocked ? `${cost} → ${r.reward} 鸥币` : `Lv.${r.levelReq} 解锁`}</span>
                 <button class="px-btn px-btn--sm" data-act="cook" data-id="${r.id}"
                     data-reward="${r.reward}" ${ok ? '' : 'disabled'}>制作</button>
             </div>`;
@@ -915,6 +963,8 @@ export class UI {
             摆上去的菜会自己卖,吃背包里的材料。你不在的时候也在卖,
             按 ${Math.round(info.offlineRate * 100)}% 折算,最多攒 ${info.offlineCapMs / 3600_000} 小时。</p>
         <div class="px-grid" style="--min:230px;margin-bottom:28px">${slots}</div>
+
+        ${this.marketView()}
 
         <h3 style="margin-bottom:12px">升级</h3>
         <div class="px-grid" style="--min:190px;margin-bottom:28px">${ups}</div>
@@ -953,7 +1003,7 @@ export class UI {
             const got = list.filter(a => s.achievements.includes(a.id)).length;
             const rows = list.map(a => {
                 const has = s.achievements.includes(a.id);
-                const f = FEATHER[a.tier];
+                const f = CAP_VALUE[a.tier];
                 return `
                 <div class="px-ach ${has ? 'px-ach--got' : ''}">
                     ${icon(has ? 'trophy' : 'star')}
@@ -961,7 +1011,7 @@ export class UI {
                         <strong>${a.name}</strong>
                         <p class="px-muted">${a.desc}</p>
                     </div>
-                    <span class="px-tag ${has ? 'px-tag--leaf' : ''}">${icon('feather')} ${f}</span>
+                    <span class="px-tag ${has ? 'px-tag--leaf' : ''}">${icon('cap')} ${f}</span>
                 </div>`;
             }).join('');
             return `
@@ -975,8 +1025,8 @@ export class UI {
         return `
         <h2 style="margin-bottom:6px">成就 ${s.achievements.length} / ${ACHIEVEMENTS.length}</h2>
         <p class="px-muted" style="margin-bottom:18px">
-            每条成就给羽毛,羽毛在「装扮」里花掉。全部达成共 ${TOTAL_FEATHERS} 根,
-            现有 ${s.feathers} 根。
+            每条成就给瓶盖,瓶盖在「装扮」里花掉。全部达成共 ${TOTAL_CAPS} 根,
+            现有 ${s.caps} 根。
         </p>
         ${groups}`;
     }
@@ -999,8 +1049,8 @@ export class UI {
                                data-act="wear" data-id="${c.id}">${worn ? '脱下来' : '戴上'}</button>`
                     : open
                     ? `<button class="px-btn px-btn--sm" data-act="buywear" data-id="${c.id}"
-                               ${s.feathers >= c.cost ? '' : 'disabled'}>
-                           ${icon('feather')} ${c.cost}</button>`
+                               ${s.caps >= c.cost ? '' : 'disabled'}>
+                           ${icon('cap')} ${c.cost}</button>`
                     : `<span class="px-tag">${this.wearNeed(c)}</span>`;
                 return `
                 <div class="px-ach ${worn ? 'px-ach--got' : ''}">
@@ -1020,8 +1070,8 @@ export class UI {
         return `
         <h2 style="margin-bottom:6px">装扮</h2>
         <p class="px-muted" style="margin-bottom:18px">
-            用羽毛买,不花欧币 —— 欧币留着升摊子。羽毛只从成就来,现有
-            <strong>${s.feathers}</strong> 根。戴上之后大坝和小屋里都看得见。</p>
+            用瓶盖买,不花鸥币 —— 鸥币留着升摊子。瓶盖只从成就来,现有
+            <strong>${s.caps}</strong> 根。戴上之后大坝和小屋里都看得见。</p>
         <div style="display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap">
             <canvas class="px-wear-preview" width="144" height="144" data-wear-preview></canvas>
             <div style="flex:1;min-width:280px">${rows}</div>
