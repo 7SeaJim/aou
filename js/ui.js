@@ -19,6 +19,7 @@ import * as c4 from './game/connect4.js';
 import { now } from './clock.js';
 import { FOOD_KEYS, DAILY_TRIES } from './state.js';
 import * as rules from './game/rules.js';
+import * as sfx from './audio.js';
 
 const $ = sel => document.querySelector(sel);
 const el = (tag, cls, html) => {
@@ -61,14 +62,21 @@ export class UI {
 
         this.$tabs.addEventListener('click', e => {
             const btn = e.target.closest('[data-screen]');
-            if (btn) this.go(btn.dataset.screen);
+            if (btn) { sfx.play('tab'); this.go(btn.dataset.screen); }
+        });
+        // HUD 里目前只有静音一个按钮,但也走委托 —— renderHud 每秒可能重绘
+        this.$hud.addEventListener('click', e => {
+            const btn = e.target.closest('[data-act]');
+            if (btn) this.handle(btn.dataset.act, btn.dataset);
         });
         // 面板内所有按钮走事件委托,重绘后不用重新绑定
         this.$panel.addEventListener('click', e => {
             const nav = e.target.closest('[data-screen]');
             if (nav) return this.go(nav.dataset.screen);
             const btn = e.target.closest('[data-act]');
-            if (btn) this.handle(btn.dataset.act, btn.dataset);
+            // 点击音统一在这儿发,不在每个 case 里各发各的 —— 那样迟早漏。
+            // 有自己音色的动作(落子、转卦)在 case 里再补一个,限流会挡掉重复。
+            if (btn) { sfx.play('click'); this.handle(btn.dataset.act, btn.dataset); }
         });
         this.render();
     }
@@ -153,6 +161,7 @@ export class UI {
             }
 
             case 'divine': {
+                sfx.play('fortune');
                 const r = this.mutate(st => rules.castFortune(st));
                 if (!r.ok) return this.toast(r.reason, 'star');
                 this.toast(`${r.mark} · ${r.fortune.name}`, 'star');
@@ -178,12 +187,18 @@ export class UI {
                 if (this.c4turn !== 'w' || c4.winner(this.board)) return;
                 const next = c4.drop(this.board, Number(data.col), 'w');
                 if (!next) return this.toast('这一列满了', 'shop');
+                sfx.play('stone');
                 this.board = next;
                 this.c4turn = 'b';
                 this.render();
                 if (c4.winner(this.board)) this.c4Settle(); else this.c4Reply();
                 break;
             }
+
+            case 'mute':
+                this.toast(sfx.toggleMute() ? '静音了' : '音效开着', 'star');
+                this.renderHud();
+                break;
 
             case 'export': this.exportCode(); break;
             case 'import': this.importCode(); break;
@@ -242,17 +257,18 @@ export class UI {
 
         const start = off ? TOAST_MS + 200 : 400;      // 离线那条先让它读完
         queue.forEach((e, i) => setTimeout(() => {
-            if (e.type === 'levelup')     this.toast(`升级!你现在是 Lv.${e.level}`, 'star');
+            if (e.type === 'levelup')     { sfx.play('levelup'); this.toast(`升级!你现在是 Lv.${e.level}`, 'star'); }
             if (e.type === 'recipe')      this.toast(`解锁新食谱:${e.recipe.name}`, e.recipe.icon);
             if (e.type === 'achievement') {
+                sfx.play('achieve');
                 this.toast(`达成成就:${e.achievement.name} · 羽毛 +${e.feathers}`, 'trophy');
             }
-            if (e.type === 'postcard')    this.toast(`获得明信片「${POSTCARDS[e.id].name}」`, 'postcard');
+            if (e.type === 'postcard')    { sfx.play('get'); this.toast(`获得明信片「${POSTCARDS[e.id].name}」`, 'postcard'); }
             if (e.type === 'upgrade')     this.toast(`${UPGRADES[e.key].name} 升到 ${e.level} 级`, UPGRADES[e.key].icon);
             if (e.type === 'affinity')    this.toast(`好感度 +${e.by}`, 'waou');
-            if (e.type === 'event')       this.toast(this.eventLine(e), 'map');
+            if (e.type === 'event')       { sfx.play('event'); this.toast(this.eventLine(e), 'map'); }
             if (e.type === 'crew')        this.toast(`${e.crew.name} 加入了摊子`, 'waou');
-            if (e.type === 'many')        this.toast(e.text, 'trophy');
+            if (e.type === 'many')        { sfx.play('achieve'); this.toast(e.text, 'trophy'); }
         }, start + i * (TOAST_MS + 200)));
     }
 
@@ -372,6 +388,8 @@ export class UI {
             <span class="px-chip">${icon('star')} Lv.<strong>${s.level}</strong></span>
             <span class="px-chip">${icon('feather')} <strong>${s.feathers}</strong> 羽毛</span>
             <span class="px-chip">${icon('waou')} 觅食 <strong>${s.dailyTries}</strong>/${DAILY_TRIES}</span>
+            <button class="px-chip px-chip--btn" data-act="mute" title="音效开关">
+                ${icon('star')} 音效 <strong>${sfx.isMuted() ? '关' : '开'}</strong></button>
             <div class="px-bar px-bar--exp" style="flex:1;min-width:160px">
                 <div class="px-bar__fill" style="width:${pct}%"></div>
                 <div class="px-bar__label">经验 ${s.exp} / ${s.expNext}</div>

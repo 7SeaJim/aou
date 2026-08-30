@@ -13,6 +13,7 @@ import { createInitialState, FOOD_KEYS, ITEM_KEYS } from './state.js';
 import { RECIPES, POSTCARDS, ACHIEVEMENTS, UPGRADES, DRINK_KEYS, COSMETICS, EVENTS } from './data.js';
 import { seeded } from './game/rng.js';
 import { setClock } from './clock.js';
+import * as sfx from './audio.js';
 
 /* ============================================================
    预设存档。**要加调试场景就改这里。**
@@ -242,6 +243,16 @@ export function installDev({ getState, mutate, storage, fly, getFlight, rules })
             return '再过两秒左右就该撞上一件事了(得是大坝时间)';
         },
 
+        /**
+         * 试听一个音效。不传参数列出全部名字。
+         * 调音色的时候用 —— 改完 js/audio.js 存盘,热更新之后直接再敲一次。
+         */
+        sfx(name) {
+            if (!name) return sfx.SFX_KEYS.join(' / ');
+            sfx.play(name);
+            return name + (sfx.isMuted() ? '(现在是静音,听不见)' : '');
+        },
+
         /** 清空事件日志 */
         clearLog() {
             mutate(s => { s.log = []; });
@@ -422,6 +433,7 @@ export function installDev({ getState, mutate, storage, fly, getFlight, rules })
                 'wa.event(id)':    "触发一件大坝事件;不传列出全部,传 'roll' 随机",
                 'wa.eventSoon()':  '把事件计时推到临界点,等它自己冒出来',
                 'wa.clearLog()':   '清空大坝事件日志',
+                'wa.sfx(name)':    '试听音效;不传参数列出全部名字',
                 'wa.seed(n)':      '固定飞行随机序列,同一局可重放',
                 'wa.fly()':        '直接开一局',
                 'wa.away(h)':      '假装离线 h 小时后重载,看离线结算',

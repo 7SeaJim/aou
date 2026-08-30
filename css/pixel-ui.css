@@ -608,3 +608,12 @@
     background: var(--sea);
     box-shadow: inset 0 0 0 3px var(--ink);
 }
+
+/* HUD 里那个静音按钮。芯片本来是 <span>,当按钮用要把浏览器默认样式抹掉。 */
+.px-chip--btn {
+    font: inherit;
+    cursor: pointer;
+    border: none;
+    color: inherit;
+}
+.px-chip--btn:hover { filter: brightness(1.06); }

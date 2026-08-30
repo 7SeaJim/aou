@@ -13,6 +13,7 @@ import { Hut } from './game/hut.js';
 import { hourSlot } from './data.js';
 import { now } from './clock.js';
 import { UI } from './ui.js';
+import * as sfx from './audio.js';
 import { FOODS } from './data.js';
 
 /** PNG 图集清单(可选)。图不存在时 SpriteBook 静默失败,
@@ -141,6 +142,8 @@ function showTitle(skip = false) {
     title.start();
 
     const enter = () => {
+        // 第一次发声必须在用户手势之后,浏览器才不拦 —— 这个点击就是那个手势
+        sfx.play('click');
         el.classList.add('is-gone');
         title.stop();
         if (pendingEvents.length) { ui.showEvents(pendingEvents); pendingEvents = []; }
@@ -179,6 +182,7 @@ function startStallLoop() {
             return;
         }
         if (r.served) {
+            sfx.play(r.coins > 0 ? 'coin' : 'serve');
             storage.save(state);
             if (ui.screen === 'dock' || ui.screen === 'cook') ui.render();
         }

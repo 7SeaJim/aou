@@ -11,6 +11,7 @@
  */
 
 import { weatherOf } from './rules.js';
+import * as sfx from '../audio.js';
 import { PixelScreen, sprite, drawSprite } from './pixmap.js';
 import {
     VW, VH, paintSky, drawSea, drawClouds, drawFarGulls, drawRain, drawFog,
@@ -184,6 +185,7 @@ export class Flight {
                 }
             }
             if (hit(o)) {
+                sfx.play('pickup');
                 f.foods.splice(i, 1);
                 f.collected[o.type] = (f.collected[o.type] ?? 0) + 1;
                 f.itemCount++;
@@ -208,10 +210,12 @@ export class Flight {
 
             f.obstacles.splice(i, 1);
             if (f.shield) {
+                sfx.play('event');      // 护盾挡下:响一下但不是挨打那声
                 f.shield = false;
                 this._emit();
                 continue;
             }
+            sfx.play('hit');
             f.lives--;
             f.combo = 0;
             f.hurtUntil = f.elapsed + 450;      // 闪一下,给个挨打的反馈
