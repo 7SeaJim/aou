@@ -12,12 +12,13 @@ import {
     UPGRADES, upgradeCost, SHOWS,
     DRINKS, FORTUNES, HOURS, hourSlot,
     CREW, FOOD_SOURCE, COSMETICS, SLOTS,
+    TUTORIAL, TUTORIAL_GIFT,
 } from './data.js';
 import { paintWearPreview, paintWearItem } from './game/wear.js';
 import { ICON_GRIDS } from './game/pixels.js';
 import * as c4 from './game/connect4.js';
 import { now } from './clock.js';
-import { FOOD_KEYS, DAILY_TRIES } from './state.js';
+import { FOOD_KEYS, DAILY_TRIES, TUTORIAL_DONE } from './state.js';
 import * as rules from './game/rules.js';
 import * as sfx from './audio.js';
 
@@ -195,6 +196,11 @@ export class UI {
                 break;
             }
 
+            case 'skiptut':
+                this.mutate(st => { st.tutorial = TUTORIAL_DONE; });
+                this.toast('引导关了。想再看一遍就清档重开', 'star');
+                break;
+
             case 'mute':
                 this.toast(sfx.toggleMute() ? '静音了' : '音效开着', 'star');
                 this.renderHud();
@@ -362,9 +368,10 @@ export class UI {
     /* ---------- 渲染 ---------- */
 
     render() {
+        this.advanceTutorial();
         this.renderHud();
         this.renderTabs();
-        this.$panel.innerHTML = ({
+        this.$panel.innerHTML = this.coachView() + ({
             dock: () => this.viewDock(),
             hut: () => this.viewHut(),
             bag: () => this.viewBag(),
@@ -396,6 +403,48 @@ export class UI {
             </div>`;
     }
 
+    /**
+     * 引导推进。**每次重绘都跑一遍,靠读状态判定,不靠「玩家点了哪个按钮」** ——
+     * 挂在按钮上的引导,一旦玩家用别的路径达成就会卡在原地等一个不会来的点击。
+     *
+     * 里面调了 mutate(),而 mutate 会再触发一次 render,所以要个闸门防递归。
+     * 递归回来的那次 render 用的是新状态,外层接着往下走也是新状态,不会画错。
+     */
+    advanceTutorial() {
+        const s = this.getState();
+        if (this._tutBusy || s.tutorial >= TUTORIAL.length) return;
+        if (!TUTORIAL[s.tutorial].done(s, this)) return;
+
+        this._tutBusy = true;
+        const last = s.tutorial + 1 >= TUTORIAL.length;
+        this.mutate(st => {
+            st.tutorial = last ? TUTORIAL_DONE : st.tutorial + 1;
+            if (last) st.feathers += TUTORIAL_GIFT;
+        });
+        this._tutBusy = false;
+
+        sfx.play(last ? 'achieve' : 'get');
+        if (last) {
+            this.toast(`会玩了。送你 ${TUTORIAL_GIFT} 根羽毛 —— 够去「装扮」买顶斗笠`, 'feather');
+        }
+    }
+
+    /** 引导条。走完了就什么都不画。 */
+    coachView() {
+        const s = this.getState();
+        if (s.tutorial >= TUTORIAL.length) return '';
+        const step = TUTORIAL[s.tutorial];
+        return `
+        <div class="px-coach">
+            <div class="px-coach__no">${s.tutorial + 1}/${TUTORIAL.length}</div>
+            <div style="flex:1">
+                <strong>${step.title}</strong>
+                <p>${step.text}</p>
+            </div>
+            <button class="px-btn px-btn--sm" data-act="skiptut">不用了</button>
+        </div>`;
+    }
+
     renderTabs() {
         const tabs = [
             ['dock', '大坝', 'map'], ['hut', '小屋', 'waou'],
@@ -404,8 +453,12 @@ export class UI {
             ['wear', '装扮', 'feather'],
             ['chat', '聊天', 'waou'], ['save', '存档', 'coin'],
         ];
+        const s = this.getState();
+        // 引导期间给目标页签描一圈,不然「去『摊子』」四个字在九个页签里得找一会儿
+        const want = s.tutorial < TUTORIAL.length ? TUTORIAL[s.tutorial].tab : null;
         this.$tabs.innerHTML = tabs.map(([id, name, ico]) =>
-            `<button class="px-tab" data-screen="${id}" aria-selected="${this.screen === id}">
+            `<button class="px-tab${id === want && id !== this.screen ? ' px-tab--coach' : ''}"
+                     data-screen="${id}" aria-selected="${this.screen === id}">
                 ${icon(ico)} ${name}</button>`).join('');
 
         // 窄屏上页签是横着滑的一条,选中的那个可能在屏幕外。

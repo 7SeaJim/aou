@@ -118,6 +118,18 @@ tools/                像素素材生成器,见 tools/README.md
 而默认情况下浏览器把手指的纵向拖动当成滚页面,直接发一个 `pointercancel`。
 `#flyCanvas` 上的 `touch-action: none` 就是干这个的,别删。
 
+### 开场引导
+
+四步(`js/data.js` 的 `TUTORIAL`),让第一次打开的人看懂三条线是一个圈:
+觅食囤材料 → 摊子自动吃材料出餐 → 不出去时在坝上表演被投喂补材料。
+
+**每一步靠 `done(state, ui)` 读状态判定,不靠「玩家点了哪个按钮」。**
+挂在按钮上的引导,一旦玩家用别的路径达成就会卡在原地等一个不会来的点击。
+`advanceTutorial()` 每次重绘跑一遍,所以 `done()` 必须是纯读取。
+
+老档升 v8 时一律标成走完 —— 能升级上来的存档,人早就会玩了。
+`wa.tutorial(0)` 可以拨回去再看一遍;`?scene=fresh` 是唯一保留引导的预设档。
+
 ### 音效
 
 **全部现场合成,一个音频文件都不带**(`js/audio.js`)。理由和像素画同一条:
@@ -368,4 +380,6 @@ AOU1.C.RZBPa8MwDMW_yzvrkGQr63Qb27mDbbcRimMrialjB9vpH0q_-3Ba2EnSk5DeT1ccJSYbPLgm6
 | 装扮 | `tools/wear.py` + `js/data.js` 的 `COSMETICS`,跑 `npm run icons` | 不用 |
 | 大坝事件 | `js/data.js` 的 `EVENTS` | 不用 |
 | 界面文案里的新字 | 写完跑 `npm run font` | 不用 |
+| 音效 | `js/audio.js` 的 `SFX`,`wa.sfx('名字')` 试听 | 不用 |
+| 引导步骤 | `js/data.js` 的 `TUTORIAL` | 不用 |
 | 存档字段 | `js/state.js`:`SAVE_VERSION` +1,并补一条迁移 | **要** |

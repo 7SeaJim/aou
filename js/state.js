@@ -5,7 +5,7 @@
  * 好处:改目录不用写迁移,存档也更小(存档码是要玩家复制的)。
  */
 
-export const SAVE_VERSION = 7;
+export const SAVE_VERSION = 8;
 
 // 食材的键。改这里要同步 data.js 的 FOODS,并且 SAVE_VERSION +1 补一条迁移 ——
 // 这些键是 backpack 的字段名,直接进存档。
@@ -23,6 +23,9 @@ export const SLOT_KEYS = ['hat', 'neck'];
 export const STAT_KEYS = ['flights', 'served', 'fed', 'drinks', 'c4win', 'events', 'offlineMs'];
 
 export const DAILY_TRIES = 5;
+
+/** 引导走完了。存一个够大的数,以后加步骤也不会让老玩家重新被引导一遍。 */
+export const TUTORIAL_DONE = 99;
 
 export function createInitialState() {
     return {
@@ -85,6 +88,8 @@ export function createInitialState() {
         fortuneSeen: [],
         /** 大坝事件攒了多久还没触发。和 showMs 一样,留余数才不会每 tick 丢时间。 */
         eventMs: 0,
+        /** 开场引导走到第几步。TUTORIAL_DONE 表示走完或跳过了。 */
+        tutorial: 0,
         /** 累计计数器,见 STAT_KEYS */
         stats: { flights: 0, served: 0, fed: 0, drinks: 0, c4win: 0, events: 0, offlineMs: 0 },
         /**
@@ -103,6 +108,14 @@ export function createInitialState() {
  * 那种 falsy 判断 —— 字段真值为 0 或 '' 时会被误判成缺失。
  */
 const migrations = {
+    // v7 -> v8:加开场引导的进度。
+    //
+    // 老档一律直接标成「走完」。**能升级上来的存档,人早就会玩了** ——
+    // 给一个玩了两周的人弹「点一下出发觅食」是冒犯。
+    7(old) {
+        return { ...old, version: 8, tutorial: TUTORIAL_DONE };
+    },
+
     // v6 -> v7:加装扮、羽毛、随机事件和累计计数器。
     //
     // 计数器补不出历史 —— 老档挂机过多久、被投喂过多少次,存档里根本没记。
@@ -340,6 +353,7 @@ function normalize(s) {
     out.fortuneSeen = uniq(asArray(out.fortuneSeen)
         .filter(n => Number.isInteger(n) && n >= 0 && n < 8));
     out.eventMs = clampInt(out.eventMs, 0, 60 * 60_000);
+    out.tutorial = clampInt(out.tutorial, 0, TUTORIAL_DONE);
     out.stats = (() => {
         const t = {};
         for (const k of STAT_KEYS) t[k] = clampInt(out.stats?.[k], 0, 9_999_999_999);

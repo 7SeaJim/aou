@@ -9,7 +9,7 @@
  * 起服务后在浏览器控制台敲 `wa.help()`。
  */
 
-import { createInitialState, FOOD_KEYS, ITEM_KEYS } from './state.js';
+import { createInitialState, FOOD_KEYS, ITEM_KEYS, TUTORIAL_DONE } from './state.js';
 import { RECIPES, POSTCARDS, ACHIEVEMENTS, UPGRADES, DRINK_KEYS, COSMETICS, EVENTS } from './data.js';
 import { seeded } from './game/rng.js';
 import { setClock } from './clock.js';
@@ -89,6 +89,9 @@ function buildScene(name) {
     // 食谱按等级自动解锁,省得补丁里手抄一份
     s.unlockedRecipes = RECIPES.filter(r => r.levelReq <= s.level).map(r => r.id);
     s.lastDate = new Date().toDateString();     // 别一进来就被跨天重置
+    // 除了 fresh,预设档都当成「已经会玩了」—— 调数值时不想每次先被引导一遍。
+    // fresh 保留引导,那正是用来试引导本身的。
+    if (name !== 'fresh') s.tutorial = TUTORIAL_DONE;
     // 上一行顺带跳过了 refreshDaily,而每日饮品是在那儿发的 —— 这里补上,
     // 否则所有预设档进小屋都是「今天这杯已经给它了」,请喝那条路根本试不了。
     s.drink = DRINK_KEYS[Math.floor(Math.random() * DRINK_KEYS.length)];
@@ -251,6 +254,12 @@ export function installDev({ getState, mutate, storage, fly, getFlight, rules })
             if (!name) return sfx.SFX_KEYS.join(' / ');
             sfx.play(name);
             return name + (sfx.isMuted() ? '(现在是静音,听不见)' : '');
+        },
+
+        /** 从头走一遍开场引导 */
+        tutorial(step = 0) {
+            mutate(s => { s.tutorial = step; });
+            return `引导回到第 ${step + 1} 步`;
         },
 
         /** 清空事件日志 */
@@ -434,6 +443,7 @@ export function installDev({ getState, mutate, storage, fly, getFlight, rules })
                 'wa.eventSoon()':  '把事件计时推到临界点,等它自己冒出来',
                 'wa.clearLog()':   '清空大坝事件日志',
                 'wa.sfx(name)':    '试听音效;不传参数列出全部名字',
+                'wa.tutorial(n)':  '把开场引导拨回第 n+1 步(默认从头)',
                 'wa.seed(n)':      '固定飞行随机序列,同一局可重放',
                 'wa.fly()':        '直接开一局',
                 'wa.away(h)':      '假装离线 h 小时后重载,看离线结算',
