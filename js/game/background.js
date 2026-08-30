@@ -10,7 +10,7 @@ import { PixelScreen } from './pixmap.js';
 import {
     VW, VH, paintSky, paintPier, drawSea, drawClouds, drawFarGulls,
     drawPierFoam, drawPerformance, drawBoat, drawRain, drawFog, hitShack,
-    paintFarDam, drawReeds, drawStrollers,
+    paintFarDam, drawReeds, drawStrollers, drawStallSteam, drawUpgradePop,
 } from './scene.js';
 import { unlockedShows } from './rules.js';
 import { dayPhase, onDam } from '../data.js';
@@ -30,6 +30,10 @@ export class Background {
         /** 上一帧的 showMs。它回绕(变小)就说明规则层刚结算了一次投喂,
             画面据此冒一个食材出来 —— 动画和真实产出是同一件事,不是各演各的。 */
         this.lastShowMs = 0;
+        /** 上一帧四条升级线的总级数。**变大就说明刚买了升级**,画面冒一串星星。
+            这样比从 UI 层一路把「买了」传进来省事,而且不会漏 —— 不管从哪儿买的都算。 */
+        this.lastUpTotal = null;
+        this.popAt = -1e9;
         this._loop = this._loop.bind(this);
     }
 
@@ -97,6 +101,13 @@ export class Background {
         ctx.drawImage(this.pier.cv, 0, 0);
         // 路过的人不看时段 —— 大坝上白天晚上都有人散步
         drawStrollers(ctx, DECK_Y, t, phase);
+
+        const up = this.getState().upgrades;
+        drawStallSteam(ctx, DECK_Y, t, up);
+        const total = up ? up.stove + up.sign + up.shelf + up.warmer : 0;
+        if (this.lastUpTotal !== null && total > this.lastUpTotal) this.popAt = t;
+        this.lastUpTotal = total;
+        drawUpgradePop(ctx, DECK_Y, t - this.popAt);
         // 哇鸥只在「不在小屋」的时段出现在大坝上 —— 它睡着的时候
         // 大坝上还站着一只在表演,那就是两个哇鸥了。
         if (onDam(when)) {

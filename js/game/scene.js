@@ -545,40 +545,125 @@ export function shadow(ctx, cx, baseY, w, k = 0.22) {
 }
 
 /**
- * 摊位的升级件。**升级要看得见** —— 四条线原来只是数字变大,
- * 玩家花掉几十万鸥币,画面上一格都没变,那笔钱花得毫无实感。
+ * 摊位的升级件。**升级要看得见**,而且要**一直看得见**。
  *
- * 阈值都卡在 3 级(第二档再卡 6/7 级):太早的话新手第一次升级就看见变化,
- * 反而分不清是哪条线的功劳。
+ * 第一版只在 3 级和 6/7 级各变一次,结果是:
  *
- * 摆在摊子**旁边**而不是摊子身上 —— 贴在摊子上要精确对准它内部的柜台、
- * 篷顶,`stand` 那张图一改所有偏移全废。摆在旁边只依赖甲板那条线。
+ *     炉子   1-6 级一共花 9726 鸥币,7 级以后花 943909
+ *     招牌   1-6 级一共花 14589,7 级以后花 1415864
+ *
+ * —— **99% 的钱花在画面完全没变化的那一段。** 玩家掏出去几十万,
+ * 摊子一格不动,那笔钱花得跟没花一样。
+ *
+ * 现在每条线在 1 到满级之间分四到五档,越贵的那几级也照样有东西看。
+ * 摆在摊子**旁边**而不是身上:贴在摊子上要精确对准它内部的柜台和篷顶,
+ * `stand` 那张图一改所有偏移全废。
  */
 function paintStallUpgrades(ctx, deckY, phase, up) {
     if (!up) return;
     const base = deckY - 13;
+    const put = (name, grid, x, y, over) =>
+        drawStanding(ctx, shadedSprite(name, grid, phase, over), x, y);
 
-    // 炉子:灶台,7 级起灶口透火光
+    /* ---- 炉子:小灶 → 带火 → 双灶 → 双灶冒烟 ---- */
     if (up.stove >= 3) {
-        const hot = up.stove >= 7;
+        const hot = up.stove >= 6;
+        const twin = up.stove >= 9;
         const grid = hot ? SCENERY.stove_hot : SCENERY.stove_s;
+        const name = hot ? 'stove_hot' : 'stove_s';
         // 火光不跟着天色压暗,不然夜里灶是灭的
-        drawStanding(ctx, shadedSprite(hot ? 'stove_hot' : 'stove_s', grid, phase,
-            hot ? { X: '#ef7757', Y: '#ffd24a' } : {}), 58, base);
+        const over = hot ? { X: '#ef7757', Y: '#ffd24a' } : {};
+        shadow(ctx, 58, base, 14);
+        put(name, grid, 58, base, over);
+        if (twin) {
+            shadow(ctx, 42, base, 14);
+            put(name, grid, 42, base, over);
+        }
     }
-    // 招牌:挂在摊子上方。7 级换成带灯的,夜里灯泡亮着
+
+    /* ---- 招牌:小牌 → 大牌 → 带灯 → 挂彩旗 ---- */
     if (up.sign >= 3) {
-        const lit = up.sign >= 7;
-        const grid = lit ? SCENERY.sign_lit : SCENERY.sign_b;
-        drawStanding(ctx, shadedSprite(lit ? 'sign_lit' : 'sign_b', grid, phase,
-            lit && phase !== 'day' ? { y: '#fff3b0' } : {}), 88, base - 32);
+        const lit = up.sign >= 9;
+        const big = up.sign >= 6;
+        const grid = lit ? SCENERY.sign_lit : big ? SCENERY.sign_b : SCENERY.sign_s;
+        const name = lit ? 'sign_lit' : big ? 'sign_b' : 'sign_s';
+        put(name, grid, 88, base - 32, lit && phase !== 'day' ? { y: '#fff3b0' } : {});
+        if (up.sign >= 12) put('flags', SCENERY.flags, 88, base - 44);
     }
-    // 货架:旁边码起来的箱子。直接复用 crate,不为这个再画一张
-    if (up.shelf >= 3) drawStanding(ctx, sprite('crate', SCENERY.crate), 116, base);
-    if (up.shelf >= 6) drawStanding(ctx, sprite('crate', SCENERY.crate), 116, base - 10);
-    // 保温箱
+
+    /* ---- 货架:一个箱 → 两个 → 三个 → 一整排货架 ---- */
+    if (up.shelf >= 9) {
+        shadow(ctx, 120, base, 16);
+        put('rack', SCENERY.rack, 120, base);
+    } else {
+        const n = up.shelf >= 7 ? 3 : up.shelf >= 5 ? 2 : up.shelf >= 3 ? 1 : 0;
+        if (n) shadow(ctx, 116, base, 12);
+        // 第三个摞在旁边不摞在顶上 —— 三个叠起来比摊子还高,喧宾夺主
+        if (n >= 1) put('crate', SCENERY.crate, 116, base);
+        if (n >= 2) put('crate', SCENERY.crate, 116, base - 10);
+        if (n >= 3) { shadow(ctx, 132, base, 12); put('crate', SCENERY.crate, 132, base); }
+    }
+
+    /* ---- 保温箱:一个 → 两个 → 两个加盖布 ---- */
     if (up.warmer >= 3) {
-        drawStanding(ctx, shadedSprite('warmbox', SCENERY.warmbox, phase), 134, base);
+        const x = up.shelf >= 9 ? 142 : 150;      // 换成大货架之后往边上让一让
+        shadow(ctx, x, base, 12);
+        put('warmbox', SCENERY.warmbox, x, base);
+        if (up.warmer >= 6) put('warmbox', SCENERY.warmbox, x, base - 10);
+        if (up.warmer >= 9) {                     // 盖布:说明它真在保温
+            const P = pal('sunny', phase).wood;
+            ctx.fillStyle = P.dark;
+            ctx.fillRect(x - 7, base - 10 - 11, 14, 3);
+            ctx.fillStyle = P.light;
+            ctx.fillRect(x - 7, base - 10 - 11, 14, 1);
+        }
+    }
+}
+
+/**
+ * 刚买完升级的那一下。
+ *
+ * 静态的多一件东西是「结果」,这个是「事件」—— 玩家掏钱的那一瞬间,
+ * 画面得回应他一次。**摊子页和大坝画面是同屏的**(画面在上、面板在下),
+ * 所以在这儿冒一串星星,买的人一定看得见。
+ *
+ * @param {number} age 距离买下来过了多少毫秒;超过 1200 就不画了
+ */
+export function drawUpgradePop(ctx, deckY, age) {
+    if (age < 0 || age > 1200) return;
+    const p = age / 1200;
+    for (let i = 0; i < 7; i++) {
+        const t0 = i * 0.09;
+        if (p < t0) continue;
+        const q = Math.min(1, (p - t0) / (1 - t0));
+        const x = Math.round(88 + Math.sin(i * 2.1) * 26);
+        const y = Math.round(deckY - 20 - q * 34);
+        const a = (1 - q) * 0.95;
+        ctx.fillStyle = `rgba(255, 224, 138, ${a.toFixed(2)})`;
+        // 画个小十字,比方点更像「加了点什么」
+        ctx.fillRect(x - 2, y, 5, 1);
+        ctx.fillRect(x, y - 2, 1, 5);
+    }
+}
+
+/**
+ * 灶上冒的蒸汽。**这是唯一会动的升级反馈** —— 别的都是静态的多一件东西,
+ * 只有它在说「这摊子正在开火」。所以它不烤进静态图层,每帧现画。
+ */
+export function drawStallSteam(ctx, deckY, t, up) {
+    if (!up || up.stove < 6) return;
+    const base = deckY - 13 - 12;              // 灶台顶
+    const cols = up.stove >= 9 ? [42, 58] : [58];
+    for (const cx of cols) {
+        for (let i = 0; i < 3; i++) {
+            const p = ((t * 0.00055) + i * 0.33) % 1;
+            const y = Math.round(base - p * 22);
+            const x = Math.round(cx + Math.sin(p * 5 + i * 2) * 4);
+            const a = 0.5 * (1 - p);
+            ctx.fillStyle = `rgba(255, 253, 244, ${a.toFixed(2)})`;
+            const w = 2 + Math.round(p * 3);
+            ctx.fillRect(x - (w >> 1), y, w, 2);
+        }
     }
 }
 

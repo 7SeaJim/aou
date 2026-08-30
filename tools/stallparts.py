@@ -93,5 +93,54 @@ STALL_PARTS = {
     'warmbox':  WARMBOX,
 }
 
+# 小木牌:招牌线的第一档。比 SIGN 小一圈,好让「换了块大的」看得出来
+SIGN_S = [
+    "..K...K..",
+    "..K...K..",
+    "KKKKKKKKK",
+    "KDDDDDDDK",
+    "KDdDDdDDK",
+    "KDDDDDDDK",
+    "KKKKKKKKK",
+]
+
+# 正经货架:三层板,顶上还码着东西。货架线最后一档,
+# 前面几档是「箱子越堆越多」,到这儿变成「有家具了」
+RACK = [
+    "KKKKKKKKKKKKKKK",
+    "KDDDDDDDDDDDDDK",
+    "KKKKKKKKKKKKKKK",
+    "K.RRK.BBK.YYK.K",
+    "K.RRK.BBK.YYK.K",
+    "KKKKKKKKKKKKKKK",
+    "KDDDDDDDDDDDDDK",
+    "KKKKKKKKKKKKKKK",
+    "K.GGK.CCK.ppK.K",
+    "K.GGK.CCK.ppK.K",
+    "KKKKKKKKKKKKKKK",
+    "KDDDDDDDDDDDDDK",
+    "KKKKKKKKKKKKKKK",
+    "K.ssK.eeK.LLK.K",
+    "K.ssK.eeK.LLK.K",
+    "KKKKKKKKKKKKKKK",
+    "KdDDDDDDDDDDDdK",
+    "KKKKKKKKKKKKKKK",
+]
+
+# 小彩旗:满级招牌上头挂的一串。纯装饰,但它是「这摊子到顶了」的记号
+FLAGS = [
+    "KKKKKKKKKKKKKKKKKKKKK",
+    "KXKKBKKYKKGKKRKKBKKXK",
+    ".XK.BK.YK.GK.RK.BK.X.",
+    ".XK.BK.YK.GK.RK.BK.X.",
+    "..K..K..K..K..K..K..K",
+]
+
+STALL_PARTS.update({
+    'sign_s': SIGN_S,
+    'rack':   RACK,
+    'flags':  FLAGS,
+})
+
 for _k, _g in STALL_PARTS.items():
     assert len({len(r) for r in _g}) == 1, f'{_k} 行宽不齐'
