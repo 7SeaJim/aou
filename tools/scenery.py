@@ -6,6 +6,9 @@
 主角哇鸥的四帧在 WAOU 里,身体不动只换翅膀。
 """
 
+from people import PEOPLE
+from stallparts import STALL_PARTS
+
 # ---------- 哇鸥 32×32 ----------
 # 主角。原型是红嘴鸥 —— 每年冬天从西伯利亚飞到滇池越冬的那种,
 # 红嘴红脚就是它的招牌。哇鸥是留下来没走的那一只。
@@ -410,64 +413,8 @@ WAOU_BOW = [
 # 围观的路人。9×24,只做剪影 —— 大坝上人来人往,画清楚反而抢戏。
 # 高度是刻意的:得明显高过 16px 的哇鸥,不然一只海鸥和成年人一样高,
 # 整个场景的尺度就垮了。
-ONLOOKER_A = [
-"...KKK...",
-"..KaaaK..",
-"..KaaaK..",
-"..KaaaK..",
-"...KKK...",
-"..KKKKK..",
-".KaaaaaK.",
-"KaaaaaaaK",
-"KaaaaaaaK",
-"KaaaaaaaK",
-"KaaaaaaaK",
-".KaaaaaK.",
-".KaaaaaK.",
-".KaaaaaK.",
-".KaaaaaK.",
-".KaaaaaK.",
-".KKaaaKK.",
-".Ka...aK.",
-".Ka...aK.",
-".Ka...aK.",
-".Ka...aK.",
-".KK...KK.",
-"KKa...aKK",
-"KKK...KKK",
-]
+# 围观路人搬去 tools/people.py 了 —— 原来那两个纯灰剪影站一排像一堵墙。
 
-ONLOOKER_B = [
-"...KKK...",
-"..KAAAK..",
-"..KAAAK..",
-"..KAAAK..",
-"...KKK...",
-"..KKKKK..",
-".KAAAAAK.",
-"KAAAAAAAK",
-"KAAAAAAAK",
-"KAAAAAAAK",
-".KAAAAAK.",
-".KAAAAAK.",
-".KAAAAAK.",
-".KAAAAAK.",
-".KAAAAAK.",
-".KKAAAKK.",
-".KA...AK.",
-".KA...AK.",
-".KA...AK.",
-".KA...AK.",
-".KA...AK.",
-".KK...KK.",
-"KKA...AKK",
-"KKK...KKK",
-]
-
-# ---------- 待机界面 ----------
-
-# 哇鸥侧脸特写 60×84,朝左凝视远方。**右边缘是硬裁切线**,不描边 ——
-# 它贴着屏幕右缘放,右半边本来就在画面外。
 GULL_BIG = [
 ".....................................................................................................",
 ".....................................................................................................",
@@ -991,8 +938,8 @@ SCENERY = {
     'rail':       RAIL,
     'waou_wing':  WAOU_WING,
     'waou_bow':   WAOU_BOW,
-    'onlooker_a': ONLOOKER_A,
-    'onlooker_b': ONLOOKER_B,
+    **PEOPLE,          # 四个围观路人,见 tools/people.py
+    **STALL_PARTS,     # 摊位的升级件,见 tools/stallparts.py
     'storm':      STORM,
     'boat':       BOAT,
     'cloud_a':    CLOUD_A,

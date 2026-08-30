@@ -10,6 +10,7 @@ import { PixelScreen } from './pixmap.js';
 import {
     VW, VH, paintSky, paintPier, drawSea, drawClouds, drawFarGulls,
     drawPierFoam, drawPerformance, drawBoat, drawRain, drawFog, hitShack,
+    paintFarDam, drawReeds,
 } from './scene.js';
 import { unlockedShows } from './rules.js';
 import { dayPhase, onDam } from '../data.js';
@@ -43,9 +44,12 @@ export class Background {
         this.rafId = null;
     }
 
-    /** 天空和栈桥不随帧变,天气或时段一换才重烤 */
+    /** 天空和栈桥不随帧变,天气、时段或**升级**一换才重烤 */
     _bake(weather, phase) {
-        const key = weather + ':' + phase;
+        // 升级件是烤进栈桥图层的,所以升级等级也得进 key ——
+        // 不进的话玩家买完升级,画面要等到天气轮换才跟上
+        const u = this.getState().upgrades ?? {};
+        const key = [weather, phase, u.stove, u.sign, u.shelf, u.warmer].join(':');
         if (this.bakedKey === key) return;
         this.bakedKey = key;
 
@@ -55,7 +59,7 @@ export class Background {
 
         this.pier = this.pier ?? this.screen.layer();
         this.pier.ctx.clearRect(0, 0, VW, VH);
-        paintPier(this.pier.ctx, DECK_Y, VH, weather, phase);
+        paintPier(this.pier.ctx, DECK_Y, VH, weather, phase, this.getState().upgrades);
     }
 
     /** 屏幕坐标落在草棚上了吗。main.js 拿它做点击判定。 */
@@ -86,6 +90,8 @@ export class Background {
         drawClouds(ctx, t, weather, phase);
         drawFarGulls(ctx, t);
         drawSea(ctx, weather, HORIZON, VH, t, phase);
+        // 远堤要压在海面之上 —— 海是每帧重画的,烤进静态图层会被盖掉
+        paintFarDam(ctx, weather, HORIZON, phase);
         drawBoat(ctx, HORIZON + 24, t, weather);
         drawPierFoam(ctx, weather, DECK_Y, t, phase);
         ctx.drawImage(this.pier.cv, 0, 0);
@@ -98,6 +104,9 @@ export class Background {
             drawPerformance(ctx, 336, DECK_Y - 13, t,
                 unlockedShows(this.getState()).length, fedNow, this.getState().wearing);
         }
+
+        // 近景压在所有东西之上,包括哇鸥 —— 被前景挡住一点才有纵深
+        drawReeds(ctx, weather, t, phase);
 
         if (weather === 'rainy') drawRain(ctx, t);
         if (weather === 'foggy') drawFog(ctx, t);

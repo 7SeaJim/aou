@@ -83,9 +83,13 @@ export function pal(weather, phase = 'day') {
         foam:  shade(w(FOAM), phase),
         crest: shade(w(CREST), phase),
         wood:  { ink: '#4a3628', light: '#e0b077', wood: '#cf9862', dark: '#9c6b43' },
+        // 石色:大坝靠湖那侧是水泥矮栏,不是木头。给它一组自己的色,
+        // 满画面木色里插一道冷灰,层次立刻分得开
+        stone: { ink: '#5d564c', light: '#d8d2c6', mid: '#b8b0a0', dark: '#7d7668' },
         night: phase === 'night',
     };
     for (const k of Object.keys(p.wood)) p.wood[k] = shade(p.wood[k], phase);
+    for (const k of Object.keys(p.stone)) p.stone[k] = shade(p.stone[k], phase);
     paletteCache.set(key, p);
     return p;
 }
@@ -193,13 +197,17 @@ function mix(a, b, t) {
  * 远景里的东西要整体往天色退,不然会比它站着的那座山看起来近得多,
  * 像贴上去的剪纸。
  */
-function farSprite(name, grid, weather, amount = 0.5, keep = {}) {
-    const tone = FAR[weather] ?? FAR.sunny;
+function farSprite(name, grid, weather, amount = 0.5, keep = {}, phase = 'day') {
+    const tone = shade(FAR[weather] ?? FAR.sunny, phase);
     const remap = {};
     for (const ch of new Set(grid.join(''))) {
-        if (ch !== '.' && PAL[ch]) remap[ch] = mix(PAL[ch], tone, keep[ch] ?? amount);
+        if (ch !== '.' && PAL[ch]) {
+            remap[ch] = mix(shade(PAL[ch], phase), tone, keep[ch] ?? amount);
+        }
     }
-    return sprite(name, grid, { remap });
+    // 缓存键必须带上远近和天气时段。以前只用 name —— 同一张图既画近的又画远的
+    // 时,后调的那次会直接拿到前一次的缓存,远的近的长得一模一样。
+    return sprite(`${name}:far:${weather}:${phase}:${amount}`, grid, { remap });
 }
 
 /**
@@ -323,6 +331,9 @@ export function drawSea(ctx, weather, horizon, bottom, t, phase = 'day') {
  * 分开写的话挪一次位置就会出现「看着在这儿、点不到」的鬼问题。
  * 判定框比图本身放宽几像素,手指没那么准。
  */
+/** 甲板厚度。栏杆脚、后排陈设、板缝都从它算,别在下面各写各的数字。 */
+export const DECK_H = 26;
+
 export const SHACK_HIT = { cx: 172, w: 34, h: 30, pad: 6 };
 
 /** 点在草棚上了吗。x/y 是虚拟坐标(440×310)。 */
@@ -351,7 +362,8 @@ function brace(ctx, x0, y0, x1, y1, color, edge) {
  * 木栈桥。静态内容,烤进图层缓存。
  * @param {number} deckY 甲板面
  */
-export function paintPier(ctx, deckY, bottom, weather = 'sunny', phase = 'day') {
+export function paintPier(ctx, deckY, bottom, weather = 'sunny', phase = 'day',
+                          upgrades = null) {
     const P = pal(weather, phase).wood;
 
     // 桥墩:先画,让甲板压在上面
@@ -383,25 +395,55 @@ export function paintPier(ctx, deckY, bottom, weather = 'sunny', phase = 'day') 
     ctx.fillStyle = P.dark;
     ctx.fillRect(0, deckY + 41, VW, 3);
 
+    // 甲板。原来只有 14 格高,所有东西只能挤在一条线上,画面就平了。
+    // 加宽到 26 格之后能站两排:后排贴着栏杆,前排贴着甲板前沿。
+    const S = pal(weather, phase).stone;
+    const railBase = deckY - DECK_H;         // 栏杆脚 = 甲板后沿
+    const railTop = railBase - 13;
+
+    // 靠湖那侧的水泥矮栏。**镂空的**,不做成实心挡板 ——
+    // 实心的会把水面从中间切断,画面反而更闷;镂空的柱子之间透出水,
+    // 才有「隔着栏杆看湖」的感觉。
+    ctx.fillStyle = S.ink;
+    ctx.fillRect(0, railTop, VW, 4);         // 扶手
+    ctx.fillStyle = S.light;
+    ctx.fillRect(0, railTop + 1, VW, 2);
+    for (let x = 6; x < VW; x += 22) {       // 立柱
+        ctx.fillStyle = S.ink;
+        ctx.fillRect(x, railTop, 4, railBase - railTop);
+        ctx.fillStyle = S.mid;
+        ctx.fillRect(x + 1, railTop + 2, 2, railBase - railTop - 3);
+    }
+    ctx.fillStyle = S.dark;
+    ctx.fillRect(0, railBase - 4, VW, 4);    // 栏杆脚线,压住甲板后沿
+
     // 甲板:一块块木板,缝隙用暗色
     ctx.fillStyle = P.ink;
-    ctx.fillRect(0, deckY - 14, VW, 14);
+    ctx.fillRect(0, deckY - DECK_H, VW, DECK_H);
     ctx.fillStyle = P.wood;
-    ctx.fillRect(0, deckY - 13, VW, 12);
+    ctx.fillRect(0, deckY - DECK_H + 1, VW, DECK_H - 2);
+    ctx.fillStyle = P.dark;
+    ctx.fillRect(0, deckY - DECK_H + 1, VW, 3);     // 后沿在阴影里
     ctx.fillStyle = P.light;
     ctx.fillRect(0, deckY - 13, VW, 2);     // 受光的板面前沿
     ctx.fillStyle = P.dark;
     ctx.fillRect(0, deckY - 3, VW, 2);      // 背光的板边
     for (let x = 6; x < VW; x += 19) {      // 板缝
         ctx.fillStyle = P.dark;
-        ctx.fillRect(x, deckY - 11, 1, 8);
+        ctx.fillRect(x, deckY - DECK_H + 4, 1, DECK_H - 7);
     }
 
-    // 陈设
+    // 陈设分两排。后排走空气透视(farSprite),前排原色 ——
+    // 光是错开 y 还不够,人眼靠的是对比度判断远近。
+    const back = deckY - DECK_H + 4;
+    drawStanding(ctx, farSprite('barrel', SCENERY.barrel, weather, 0.34, {}, phase), 212, back);
+    drawStanding(ctx, farSprite('crate', SCENERY.crate, weather, 0.34, {}, phase), 230, back);
+    drawStanding(ctx, farSprite('crate', SCENERY.crate, weather, 0.34, {}, phase), 246, back);
+    drawStanding(ctx, farSprite('bollard', SCENERY.bollard, weather, 0.34, {}, phase), 66, back);
+    drawStanding(ctx, farSprite('barrel', SCENERY.barrel, weather, 0.34, {}, phase), 356, back);
+
     drawStanding(ctx, sprite('stand', SCENERY.stand), 88, deckY - 13);
-    drawStanding(ctx, sprite('barrel', SCENERY.barrel), 196, deckY - 13);
-    drawStanding(ctx, sprite('crate', SCENERY.crate), 216, deckY - 13);
-    drawStanding(ctx, sprite('crate', SCENERY.crate), 232, deckY - 13);
+    paintStallUpgrades(ctx, deckY, phase, upgrades);
     drawStanding(ctx, sprite('bollard', SCENERY.bollard), 300, deckY - 13);
     drawStanding(ctx, sprite('bollard', SCENERY.bollard), 396, deckY - 13);
     // 大坝上一排路灯,给画面几根竖线。夜里灯头要亮起来。
@@ -417,6 +459,122 @@ export function paintPier(ctx, deckY, bottom, weather = 'sunny', phase = 'day') 
     if (phase !== 'day') {                         // 屋里透出来的光
         ctx.fillStyle = phase === 'night' ? '#ffd98a' : '#ffe6b0';
         ctx.fillRect(SHACK_HIT.cx - 5, deckY - 13 - 12, 10, 6);
+    }
+}
+
+/**
+ * 中景:大坝往远处延伸的那一段。
+ *
+ * 原来画面只有三层 —— 天、水、脚下的栈桥,中间是空的,所以看着像三条平铺的带子。
+ * 大坝本身是长的,让它拐一道弯伸进远处,是最省事也最真实的一层中景:
+ * 不用新素材,一条带子加几根越来越小的灯柱就够了。
+ *
+ * 颜色一律走 P.far —— 远处的东西必须往天空色靠,这是空气透视,
+ * 用原色画出来的话它会跳到前面来,纵深反而更糟。
+ */
+export function paintFarDam(ctx, weather, horizon, phase = 'day') {
+    const P = pal(weather, phase);
+    const y = horizon + 10;
+
+    // 堤身:右边高左边低,做出一点透视的斜度。
+    // 比 far 再暗一档 —— 纯 far 色和天太近,远堤会糊在水天线里看不见
+    const body = mix(P.far, '#000000', 0.18);
+    for (let x = 168; x < VW; x++) {
+        const h = Math.round(3 + (x - 168) / 34);
+        ctx.fillStyle = body;
+        ctx.fillRect(x, y - h, 1, h + 3);
+    }
+    // 顶面受光,压一条亮线,不然是一坨剪影
+    ctx.fillStyle = P.crest;
+    for (let x = 172; x < VW; x += 2) {
+        ctx.fillRect(x, y - Math.round(2 + (x - 168) / 46), 1, 1);
+    }
+    // 灯柱:越远越矮越密,这是纵深最直接的读法
+    ctx.fillStyle = P.far;
+    let x = VW - 8, gap = 26, hh = 13;
+    while (x > 178 && hh > 2) {
+        ctx.fillRect(x, y - hh, 1, hh);
+        ctx.fillRect(x - 1, y - hh - 1, 3, 1);
+        x -= gap;
+        gap = Math.max(7, Math.round(gap * 0.78));
+        hh = Math.max(2, Math.round(hh * 0.82));
+    }
+}
+
+/**
+ * 近景:压在画面最前的芦苇。
+ *
+ * 一张画只要最前面有一样东西被裁掉一部分,眼睛立刻就认定「我在这个空间里面」。
+ * 所以它故意画到出画,而且只用深色 —— 近景不需要细节,需要的是遮挡。
+ */
+export function drawReeds(ctx, weather, t, phase = 'day') {
+    const P = pal(weather, phase);
+    const dark = P.night ? '#0f1626' : mix(P.far, '#000000', 0.62);
+    const mid = mix(dark, P.far, 0.28);
+
+    // 两丛,分别咬住左下和右下角。每丛几根,高矮错开
+    for (const [bx, n, dir] of [[6, 9, 1], [VW - 8, 8, -1]]) {
+        for (let i = 0; i < n; i++) {
+            const x0 = bx + dir * i * 6;
+            const h = 52 + (i * 17) % 34;
+            const lean = dir * (5 + (i % 4) * 3);
+            const sway = Math.sin(t * 0.0008 + i * 1.7) * 2.5;
+            // 秆:从画面底边往上,越往上越往一边倒
+            for (let k = 0; k <= h; k++) {
+                const f = k / h;
+                const x = Math.round(x0 + lean * f * f + sway * f);
+                ctx.fillStyle = (i % 3 === 0) ? mid : dark;
+                ctx.fillRect(x, VH - k, k < h * 0.55 ? 2 : 1, 1);
+            }
+            // 叶片:秆中段甩出去两片,光是竖线的话像栅栏不像草
+            for (const at of [0.45, 0.72]) {
+                const k0 = Math.round(h * at);
+                const bx0 = Math.round(x0 + lean * at * at + sway * at);
+                const len = 7 + (i % 3) * 4;
+                for (let j = 0; j < len; j++) {
+                    ctx.fillStyle = dark;
+                    ctx.fillRect(bx0 + dir * j, VH - k0 - Math.round(j * j / 9), 1, 1);
+                }
+            }
+        }
+    }
+}
+
+/**
+ * 摊位的升级件。**升级要看得见** —— 四条线原来只是数字变大,
+ * 玩家花掉几十万鸥币,画面上一格都没变,那笔钱花得毫无实感。
+ *
+ * 阈值都卡在 3 级(第二档再卡 6/7 级):太早的话新手第一次升级就看见变化,
+ * 反而分不清是哪条线的功劳。
+ *
+ * 摆在摊子**旁边**而不是摊子身上 —— 贴在摊子上要精确对准它内部的柜台、
+ * 篷顶,`stand` 那张图一改所有偏移全废。摆在旁边只依赖甲板那条线。
+ */
+function paintStallUpgrades(ctx, deckY, phase, up) {
+    if (!up) return;
+    const base = deckY - 13;
+
+    // 炉子:灶台,7 级起灶口透火光
+    if (up.stove >= 3) {
+        const hot = up.stove >= 7;
+        const grid = hot ? SCENERY.stove_hot : SCENERY.stove_s;
+        // 火光不跟着天色压暗,不然夜里灶是灭的
+        drawStanding(ctx, shadedSprite(hot ? 'stove_hot' : 'stove_s', grid, phase,
+            hot ? { X: '#ef7757', Y: '#ffd24a' } : {}), 58, base);
+    }
+    // 招牌:挂在摊子上方。7 级换成带灯的,夜里灯泡亮着
+    if (up.sign >= 3) {
+        const lit = up.sign >= 7;
+        const grid = lit ? SCENERY.sign_lit : SCENERY.sign_b;
+        drawStanding(ctx, shadedSprite(lit ? 'sign_lit' : 'sign_b', grid, phase,
+            lit && phase !== 'day' ? { y: '#fff3b0' } : {}), 88, base - 32);
+    }
+    // 货架:旁边码起来的箱子。直接复用 crate,不为这个再画一张
+    if (up.shelf >= 3) drawStanding(ctx, sprite('crate', SCENERY.crate), 116, base);
+    if (up.shelf >= 6) drawStanding(ctx, sprite('crate', SCENERY.crate), 116, base - 10);
+    // 保温箱
+    if (up.warmer >= 3) {
+        drawStanding(ctx, shadedSprite('warmbox', SCENERY.warmbox, phase), 134, base);
     }
 }
 
@@ -453,12 +611,14 @@ export function drawPerformance(ctx, x, baseY, t, shows = 1, fedNow = false, wea
     else if (p < 3400) { grid = SCENERY.waou_bow;     hop = 0; }
     else               { grid = ICON_GRIDS.waou;      hop = 0; }
 
-    // 围观的人。节目越多围的人越多,最多五个
+    // 围观的人。节目越多围的人越多,最多五个。
+    // 四种人轮着排,而且**不按 i 直接取模** —— 那样左右两边永远是同一个人,
+    // 一眼就看出是复制粘贴。错开一位,同侧相邻的两个才不一样。
     const crowd = Math.min(5, 1 + Math.floor(shows / 2));
     for (let i = 0; i < crowd; i++) {
         const side = i % 2 ? 1 : -1;
         const dx = side * (17 + Math.floor(i / 2) * 13);
-        const key = i % 2 ? 'onlooker_b' : 'onlooker_a';
+        const key = ONLOOKERS[(i * 3 + 1) % ONLOOKERS.length];
         const bob = Math.sin(t * 0.0016 + i * 1.7) > 0.6 ? 1 : 0;
         drawStanding(ctx, sprite(key, SCENERY[key]), x + dx, baseY + bob);
     }
@@ -479,6 +639,9 @@ export function drawPerformance(ctx, x, baseY, t, shows = 1, fedNow = false, wea
         drawSprite(ctx, sprite(f.key, ICON_GRIDS[f.key]), f.x, f.y - age * 0.014);
     }
 }
+
+/** 四个路人。素材在 tools/people.py。 */
+const ONLOOKERS = ['onlooker_a', 'onlooker_b', 'onlooker_c', 'onlooker_d'];
 
 const FEED_ICONS = ['erkuai', 'potato', 'rice', 'douhua', 'chili'];
 const feedPops = [];
