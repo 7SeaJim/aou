@@ -4,9 +4,20 @@
    引入顺序:pixel-tokens.css → pixel-base.css → pixel-ui.css
    ============================================================ */
 
-/* 缝合像素字体(Fusion Pixel,OFL 开源,含完整简体中文,约 600KB)
-   走本地 npm 包,不依赖网络。裸包名由 Vite 解析。 */
-@import '@fontsource/fusion-pixel-12px-proportional-sc';
+/* 缝合像素字体(Fusion Pixel,OFL 开源)。
+   用的是**裁过的子集**:完整包 31345 个码位 / 588 KB,游戏实际用到 1400 出头,
+   裁完 45 KB。剩下三万个字形是纯过路费,而且这笔钱是首屏付的。
+
+   子集由 tools/font.py 生成,源字体来自 @fontsource 那个 npm 包(留在
+   devDependencies 里就是给它当原料的)。**改了界面文案要重跑一次**:
+   漏掉的字不报错,只会悄悄掉回系统字体。`python3 tools/font.py --check` 能查。 */
+@font-face {
+    font-family: 'Fusion Pixel 12px Proportional SC';
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: url('./fonts/waou-pixel.woff2') format('woff2');
+}
 
 :root {
     /* ---- 色板:浮木大坝 × 滇池清新 ---- */

@@ -13,6 +13,17 @@
         .wrap { width: min(916px, 100%); margin-inline: auto; }
         .title { text-align: center; margin-bottom: 20px; }
         .title h1 { font-size: 32px; }
+
+        /* 窄屏:标题、HUD、内衬都收一收。
+           画面本身不用管 —— 真机 DPR 2~3 下 880 的位图落在 650~1060 个
+           设备像素上,是上采样或者很轻的下采样,看着是干净的。
+           (DPR 1 拉到 390 宽才会明显,那是把桌面窗口拉窄,不是手机。) */
+        @media (max-width: 560px) {
+            body { padding: 12px 8px 40px; }
+            .title { margin-bottom: 12px; }
+            .title h1 { font-size: 21px; }
+            #hud { gap: 6px; margin-bottom: 14px; }
+        }
         #hud {
             display: flex; gap: 12px; flex-wrap: wrap;
             align-items: center; margin-bottom: 22px;
@@ -22,6 +33,15 @@
         #flyOverlay { position: absolute; inset: 0; z-index: 20; display: none; }
         #flyOverlay.is-open { display: block; }
         #flyCanvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+        /* 手机上必须写这两行,否则飞行玩法根本没法玩:
+           哇鸥是靠 pointermove 拖着走的,而**默认情况下浏览器会把手指的
+           纵向拖动当成滚页面**,直接给你发一个 pointercancel 就没了。
+           touch-action:none 是告诉浏览器「这块的手势归我」。
+           overscroll-behavior 挡的是拖到边缘时触发的下拉刷新。 */
+        #flyOverlay, #flyCanvas {
+            touch-action: none;
+            overscroll-behavior: contain;
+        }
         .fly-hud {
             position: absolute; top: 12px; left: 12px; right: 12px; z-index: 25;
             display: flex; justify-content: space-between; gap: 12px; pointer-events: none;

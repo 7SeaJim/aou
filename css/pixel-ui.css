@@ -553,6 +553,30 @@
     .c4stone { width: 20px; height: 20px; }
 }
 
+/* ============ 窄屏 ============ */
+/* 九个页签在 360 宽的屏上要占三行,差不多是六分之一个屏幕。
+   收窄内衬 + 缩字号能压回两行;再窄就只能砍页签了,那是另一件事。 */
+@media (max-width: 560px) {
+    /* 九个页签在 360 宽上要占三行(4+4+1),最后一行孤零零一个「存档」。
+       与其换行,不如摊成一条横着滑 —— 手机上这是标准做法,
+       而且不管以后加到几个页签都还是一行。选中的那个由 renderTabs 滚进视野。 */
+    .px-tabs {
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        scrollbar-width: none;
+        padding-left: 8px;
+        gap: 3px;
+    }
+    .px-tabs::-webkit-scrollbar { display: none; }
+    .px-tab { flex: none; }
+    .px-tab { font-size: 13px; padding: 6px 8px 8px; gap: 5px; }
+    .px-tab[aria-selected="true"] { padding-top: 10px; padding-bottom: 10px; }
+    .px-stage { padding: 8px; }
+    .px-ach { gap: 10px; padding: 8px 10px; }
+    .px-wear-item { width: 56px; height: 38px; }
+    .px-wear-preview { width: 108px; height: 108px; }
+}
+
 /* ============ 成就 / 装扮的条目 ============ */
 /* 成就和装扮都是「一行一条、左图右字、右端一个动作」,共用一个条目样式。
    原来成就是拿 .px-panel 当行用的 —— 一条一个 18px 的贴图边框,

@@ -7,9 +7,11 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
     "preview": "vite preview",
-    "icons": "python3 tools/emit.py"
+    "icons": "python3 tools/emit.py",
+    "font": "python3 tools/font.py",
+    "font:check": "python3 tools/font.py --check",
+    "build": "python3 tools/font.py --check && vite build"
   },
   "devDependencies": {
     "vite": "^8.2.2"

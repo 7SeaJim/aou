@@ -389,6 +389,20 @@ export class UI {
         this.$tabs.innerHTML = tabs.map(([id, name, ico]) =>
             `<button class="px-tab" data-screen="${id}" aria-selected="${this.screen === id}">
                 ${icon(ico)} ${name}</button>`).join('');
+
+        // 窄屏上页签是横着滑的一条,选中的那个可能在屏幕外。
+        //
+        // 自己算 scrollLeft,不用 scrollIntoView:后者会把**所有**祖先容器
+        // 一起滚,在手机上表现为页面莫名其妙往下跳一截;而且它的 'nearest'
+        // 只保证「露出来」,选中项会贴在屏幕边上,看着像被切掉了。
+        //
+        // 要等一帧 —— 刚塞完 innerHTML 时浏览器还没排版,这会儿问位置全是 0。
+        requestAnimationFrame(() => {
+            const box = this.$tabs;
+            const sel = box.querySelector('[aria-selected="true"]');
+            if (!sel || box.scrollWidth <= box.clientWidth) return;
+            box.scrollLeft = sel.offsetLeft - (box.clientWidth - sel.offsetWidth) / 2;
+        });
     }
 
     viewDock() {
