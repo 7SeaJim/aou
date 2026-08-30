@@ -8,6 +8,7 @@
 
 from people import PEOPLE
 from stallparts import STALL_PARTS
+from stall import STALLS
 
 # ---------- 哇鸥 32×32 ----------
 # 主角。原型是红嘴鸥 —— 每年冬天从西伯利亚飞到滇池越冬的那种,
@@ -187,40 +188,8 @@ KITE = [
 # ---------- 码头道具 ----------
 
 # 小吃摊 46×36:中式路边摊。招牌 + 红布围裙 + 铁板上烤着的饵块 + 一摞蒸笼。
-# 原来那个是西式条纹雨棚,和滇池对不上。
-STAND = [
-"................KKKKKKKKKKKKKK................",     # 招牌
-"................KSSSSSSSSSSSSK................",
-"................KSKKSSKKSSKKSK................",
-"................KSKKSSKKSSKKSK................",
-"................KSSSSSSSSSSSSK................",
-"................KKKKKKKKKKKKKK................",
-"..................K......K....................",     # 吊绳
-"KKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKK",     # 棚顶
-"KDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDK",
-"KdddddddddddddddddddddddddddddddddddddddddddK.",
-"KKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKK",
-".K.........................................K..",     # 立柱
-".K...KKKKKK.....KKKKKKKKKKKK.....KKKK......K..",     # 蒸笼 / 铁板
-".K...KLLLLK.....KAAAAAAAAAAK.....KEEK......K..",
-".K...KKKKKK.....KAtTTTTTTtAK.....KKKK......K..",
-".K...KLLLLK.....KAAAAAAAAAAK.....KEEK......K..",
-".K...KKKKKK.....KKKKKKKKKKKK.....KKKK......K..",
-".K.........................................K..",
-"KKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKK",     # 台面
-"KLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLK",
-"KDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDK",
-"KKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKK",
-"KXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXK",     # 红布围裙
-"KXXwwXXXXXXXXwwXXXXXXXXXwwXXXXXXXXwwXXXXXXXXK",
-"KXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXK",
-"KrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrK",
-"KKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKK",
-"..KDDK..............................KDDK.....",     # 腿
-"..KDDK..............................KDDK.....",
-"..KddK..............................KddK.....",
-"..KKKK..............................KKKK.....",
-]
+# 旧的固定摊子(STAND)删了 —— 摊子现在分四个阶段,见 tools/stall.py
+
 
 # 木桶 14×16
 BARREL = [
@@ -961,14 +930,14 @@ SCENERY = {
     'waou_wing':  WAOU_WING,
     'waou_bow':   WAOU_BOW,
     **PEOPLE,          # 四个围观路人,见 tools/people.py
-    **STALL_PARTS,     # 摊位的升级件,见 tools/stallparts.py
+    **STALL_PARTS,     # 摊位的零碎升级件,见 tools/stallparts.py
+    **STALLS,          # 摊子本体的四个阶段,见 tools/stall.py
     'storm':      STORM,
     'boat':       BOAT,
     'cloud_a':    CLOUD_A,
     'cloud_b':    CLOUD_B,
     'balloon':    BALLOON,
     'kite':       KITE,
-    'stand':      STAND,
     'barrel':     BARREL,
     'crate':      CRATE,
     'lamp':       LAMP,

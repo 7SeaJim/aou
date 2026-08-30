@@ -58,18 +58,6 @@ SIGN = [
     "KKKKKKKKKKKKK",
 ]
 
-# 带灯的招牌:上沿多一排灯泡,夜里亮
-SIGN_LIT = [
-    "..K.......K..",
-    "..K.......K..",
-    "KKKKKKKKKKKKK",
-    "KyKyKyKyKyKyK",
-    "KDDDDDDDDDDDK",
-    "KDdDdDDDdDdDK",
-    "KDDDDDDDDDDDK",
-    "KDdDDdDDdDDDK",
-    "KKKKKKKKKKKKK",
-]
 
 # 保温箱:带扣子的方箱
 WARMBOX = [
@@ -89,7 +77,6 @@ STALL_PARTS = {
     'stove_s':  STOVE,
     'stove_hot': STOVE_HOT,
     'sign_b':   SIGN,
-    'sign_lit': SIGN_LIT,
     'warmbox':  WARMBOX,
 }
 
@@ -105,27 +92,6 @@ SIGN_S = [
 ]
 
 # 正经货架:三层板,顶上还码着东西。货架线最后一档,
-# 前面几档是「箱子越堆越多」,到这儿变成「有家具了」
-RACK = [
-    "KKKKKKKKKKKKKKK",
-    "KDDDDDDDDDDDDDK",
-    "KKKKKKKKKKKKKKK",
-    "K.RRK.BBK.YYK.K",
-    "K.RRK.BBK.YYK.K",
-    "KKKKKKKKKKKKKKK",
-    "KDDDDDDDDDDDDDK",
-    "KKKKKKKKKKKKKKK",
-    "K.GGK.CCK.ppK.K",
-    "K.GGK.CCK.ppK.K",
-    "KKKKKKKKKKKKKKK",
-    "KDDDDDDDDDDDDDK",
-    "KKKKKKKKKKKKKKK",
-    "K.ssK.eeK.LLK.K",
-    "K.ssK.eeK.LLK.K",
-    "KKKKKKKKKKKKKKK",
-    "KdDDDDDDDDDDDdK",
-    "KKKKKKKKKKKKKKK",
-]
 
 # 小彩旗:满级招牌上头挂的一串。纯装饰,但它是「这摊子到顶了」的记号
 FLAGS = [
@@ -138,7 +104,6 @@ FLAGS = [
 
 STALL_PARTS.update({
     'sign_s': SIGN_S,
-    'rack':   RACK,
     'flags':  FLAGS,
 })
 

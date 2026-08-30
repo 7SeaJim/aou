@@ -419,9 +419,7 @@ export function paintPier(ctx, deckY, bottom, weather = 'sunny', phase = 'day',
     drawStanding(ctx, farSprite('bollard', SCENERY.bollard, weather, 0.34, {}, phase), 66, back);
     drawStanding(ctx, farSprite('barrel', SCENERY.barrel, weather, 0.34, {}, phase), 356, back);
 
-    shadow(ctx, 88, deckY - 13, 44);
-    drawStanding(ctx, shadedSprite('stand', SCENERY.stand, phase), 88, deckY - 13);
-    paintStallUpgrades(ctx, deckY, phase, upgrades);
+    paintStall(ctx, deckY, phase, upgrades);
     for (const bx of [300, 396]) {
         shadow(ctx, bx, deckY - 13, 8);
         drawStanding(ctx, shadedSprite('bollard', SCENERY.bollard, phase), bx, deckY - 13);
@@ -545,79 +543,98 @@ export function shadow(ctx, cx, baseY, w, k = 0.22) {
 }
 
 /**
- * 摊位的升级件。**升级要看得见**,而且要**一直看得见**。
+ * 摊子的四个阶段。**关键是轮廓变,不是往旁边堆东西。**
  *
- * 第一版只在 3 级和 6/7 级各变一次,结果是:
+ * 第一版是摊子本体固定不动,升级就在旁边多摆一个箱子、多摆一个灶 ——
+ * 堆到满级是一排叠叠乐,而且「多一个箱子」根本不像「生意做大了」。
  *
- *     炉子   1-6 级一共花 9726 鸥币,7 级以后花 943909
- *     招牌   1-6 级一共花 14589,7 级以后花 1415864
+ * 现在按**四条线的总级数**(4 到 44)换整张摊子:
+ * 路边摊 → 支起棚子 → 木屋铺面 → 街边专卖店。
+ * 用总级数不用某一条:铺面是整体投入的结果,只升炉子不该让门面变成专卖店。
  *
- * —— **99% 的钱花在画面完全没变化的那一段。** 玩家掏出去几十万,
- * 摊子一格不动,那笔钱花得跟没花一样。
- *
- * 现在每条线在 1 到满级之间分四到五档,越贵的那几级也照样有东西看。
- * 摆在摊子**旁边**而不是身上:贴在摊子上要精确对准它内部的柜台和篷顶,
- * `stand` 那张图一改所有偏移全废。
+ * 每一段自带锚点,因为四张图大小不一样:烟囱在哪、招牌在哪,
+ * 只有这张表知道 —— 写死在画的地方,换一段图就得满文件找偏移。
+ *   smoke  烟从哪儿冒(相对图左上角)
+ *   sign   招牌灯箱的范围,夜里点亮用
+ *   side   旁边还摆不摆零碎(前两段摆,后两段东西都进店里了)
  */
-function paintStallUpgrades(ctx, deckY, phase, up) {
-    if (!up) return;
+const STALL_STAGES = [
+    { key: 'stall1', min: 0,  smoke: [17, 7],  sign: null,             side: true },
+    { key: 'stall2', min: 10, smoke: [24, 15], sign: null,             side: true },
+    { key: 'stall3', min: 20, smoke: [49, -1], sign: [16, 12, 32, 5],  side: false },
+    { key: 'stall4', min: 32, smoke: [60, 1],  sign: [8, 18, 60, 9],   side: false },
+];
+
+const STALL_X = 76;      // 摊子的水平中心。四段都按它居中,所以只有一个数
+
+export function stallStage(up) {
+    const total = up ? up.stove + up.sign + up.shelf + up.warmer : 0;
+    let st = STALL_STAGES[0];
+    for (const s of STALL_STAGES) if (total >= s.min) st = s;
+    return st;
+}
+
+/**
+ * 画摊子本体 + 长在它身上的升级件。
+ *
+ * 单条线的等级不再靠「旁边多一个箱子」表示,而是**长进这栋房子里**:
+ * 炉子高 → 烟囱冒得更凶;招牌高 → 灯箱夜里亮起来、满级挂彩旗;
+ * 货架高 → 橱窗里码得更满。信息一样多,但看着是一家店在变好,不是一堆杂物。
+ */
+function paintStall(ctx, deckY, phase, up) {
     const base = deckY - 13;
-    const put = (name, grid, x, y, over) =>
-        drawStanding(ctx, shadedSprite(name, grid, phase, over), x, y);
+    const st = stallStage(up);
+    const grid = SCENERY[st.key];
+    const w = grid[0].length;
+    const h = grid.length;
 
-    /* ---- 炉子:小灶 → 带火 → 双灶 → 双灶冒烟 ---- */
-    if (up.stove >= 3) {
-        const hot = up.stove >= 6;
-        const twin = up.stove >= 9;
-        const grid = hot ? SCENERY.stove_hot : SCENERY.stove_s;
-        const name = hot ? 'stove_hot' : 'stove_s';
-        // 火光不跟着天色压暗,不然夜里灶是灭的
-        const over = hot ? { X: '#ef7757', Y: '#ffd24a' } : {};
-        shadow(ctx, 58, base, 14);
-        put(name, grid, 58, base, over);
-        if (twin) {
-            shadow(ctx, 42, base, 14);
-            put(name, grid, 42, base, over);
+    shadow(ctx, STALL_X, base, w - 8);
+    drawStanding(ctx, shadedSprite(st.key, grid, phase), STALL_X, base);
+
+    const left = Math.round(STALL_X - w / 2);
+    const top = base - h;
+
+    // 招牌:等级够了夜里点亮。**只亮招牌那一块**,整栋楼一起亮就成灯笼了
+    if (st.sign && up.sign >= 9 && phase !== 'day') {
+        const [sx, sy, sw, sh] = st.sign;
+        ctx.fillStyle = phase === 'night' ? 'rgba(255, 224, 138, 0.34)'
+                                          : 'rgba(255, 230, 176, 0.22)';
+        ctx.fillRect(left + sx, top + sy, sw, sh);
+    }
+    // 满级挂一串彩旗
+    if (up.sign >= 12) {
+        drawStanding(ctx, shadedSprite('flags', SCENERY.flags, phase), STALL_X, top + 2);
+    }
+
+    // 前两段摊子小,旁边还摆得下零碎;后两段东西都收进店里了,
+    // 再往旁边堆就又回到叠叠乐
+    if (st.side) {
+        const sx = Math.round(STALL_X + w / 2) + 10;
+        if (up.stove >= 3) {
+            const hot = up.stove >= 6;
+            shadow(ctx, sx, base, 14);
+            drawStanding(ctx, shadedSprite(hot ? 'stove_hot' : 'stove_s',
+                hot ? SCENERY.stove_hot : SCENERY.stove_s, phase,
+                hot ? { X: '#ef7757', Y: '#ffd24a' } : {}), sx, base);
+        }
+        if (up.shelf >= 3) {
+            shadow(ctx, sx + 18, base, 12);
+            drawStanding(ctx, shadedSprite('crate', SCENERY.crate, phase), sx + 18, base);
+            if (up.shelf >= 6) {
+                drawStanding(ctx, shadedSprite('crate', SCENERY.crate, phase), sx + 18, base - 10);
+            }
+        }
+        if (up.warmer >= 3) {
+            shadow(ctx, sx + 34, base, 12);
+            drawStanding(ctx, shadedSprite('warmbox', SCENERY.warmbox, phase), sx + 34, base);
+        }
+        // 招牌:前两段还没有铺面,只能挂一块牌子。三段起招牌就是店面的一部分了
+        if (up.sign >= 3) {
+            const k = up.sign >= 6 ? 'sign_b' : 'sign_s';
+            drawStanding(ctx, shadedSprite(k, SCENERY[k], phase), STALL_X, top - 2);
         }
     }
-
-    /* ---- 招牌:小牌 → 大牌 → 带灯 → 挂彩旗 ---- */
-    if (up.sign >= 3) {
-        const lit = up.sign >= 9;
-        const big = up.sign >= 6;
-        const grid = lit ? SCENERY.sign_lit : big ? SCENERY.sign_b : SCENERY.sign_s;
-        const name = lit ? 'sign_lit' : big ? 'sign_b' : 'sign_s';
-        put(name, grid, 88, base - 32, lit && phase !== 'day' ? { y: '#fff3b0' } : {});
-        if (up.sign >= 12) put('flags', SCENERY.flags, 88, base - 44);
-    }
-
-    /* ---- 货架:一个箱 → 两个 → 三个 → 一整排货架 ---- */
-    if (up.shelf >= 9) {
-        shadow(ctx, 120, base, 16);
-        put('rack', SCENERY.rack, 120, base);
-    } else {
-        const n = up.shelf >= 7 ? 3 : up.shelf >= 5 ? 2 : up.shelf >= 3 ? 1 : 0;
-        if (n) shadow(ctx, 116, base, 12);
-        // 第三个摞在旁边不摞在顶上 —— 三个叠起来比摊子还高,喧宾夺主
-        if (n >= 1) put('crate', SCENERY.crate, 116, base);
-        if (n >= 2) put('crate', SCENERY.crate, 116, base - 10);
-        if (n >= 3) { shadow(ctx, 132, base, 12); put('crate', SCENERY.crate, 132, base); }
-    }
-
-    /* ---- 保温箱:一个 → 两个 → 两个加盖布 ---- */
-    if (up.warmer >= 3) {
-        const x = up.shelf >= 9 ? 142 : 150;      // 换成大货架之后往边上让一让
-        shadow(ctx, x, base, 12);
-        put('warmbox', SCENERY.warmbox, x, base);
-        if (up.warmer >= 6) put('warmbox', SCENERY.warmbox, x, base - 10);
-        if (up.warmer >= 9) {                     // 盖布:说明它真在保温
-            const P = pal('sunny', phase).wood;
-            ctx.fillStyle = P.dark;
-            ctx.fillRect(x - 7, base - 10 - 11, 14, 3);
-            ctx.fillStyle = P.light;
-            ctx.fillRect(x - 7, base - 10 - 11, 14, 1);
-        }
-    }
+    return { st, left, top };
 }
 
 /**
@@ -636,7 +653,7 @@ export function drawUpgradePop(ctx, deckY, age) {
         const t0 = i * 0.09;
         if (p < t0) continue;
         const q = Math.min(1, (p - t0) / (1 - t0));
-        const x = Math.round(88 + Math.sin(i * 2.1) * 26);
+        const x = Math.round(STALL_X + Math.sin(i * 2.1) * 26);
         const y = Math.round(deckY - 20 - q * 34);
         const a = (1 - q) * 0.95;
         ctx.fillStyle = `rgba(255, 224, 138, ${a.toFixed(2)})`;
@@ -651,19 +668,21 @@ export function drawUpgradePop(ctx, deckY, age) {
  * 只有它在说「这摊子正在开火」。所以它不烤进静态图层,每帧现画。
  */
 export function drawStallSteam(ctx, deckY, t, up) {
-    if (!up || up.stove < 6) return;
-    const base = deckY - 13 - 12;              // 灶台顶
-    const cols = up.stove >= 9 ? [42, 58] : [58];
-    for (const cx of cols) {
-        for (let i = 0; i < 3; i++) {
-            const p = ((t * 0.00055) + i * 0.33) % 1;
-            const y = Math.round(base - p * 22);
-            const x = Math.round(cx + Math.sin(p * 5 + i * 2) * 4);
-            const a = 0.5 * (1 - p);
-            ctx.fillStyle = `rgba(255, 253, 244, ${a.toFixed(2)})`;
-            const w = 2 + Math.round(p * 3);
-            ctx.fillRect(x - (w >> 1), y, w, 2);
-        }
+    if (!up || up.stove < 3) return;
+    const st = stallStage(up);
+    const grid = SCENERY[st.key];
+    const left = Math.round(STALL_X - grid[0].length / 2);
+    const top = deckY - 13 - grid.length;
+    const [sx, sy] = st.smoke;
+    const puffs = up.stove >= 9 ? 5 : up.stove >= 6 ? 4 : 2;
+    for (let i = 0; i < puffs; i++) {
+        const p = ((t * 0.00055) + i / puffs) % 1;
+        const y = Math.round(top + sy - p * 26);
+        const x = Math.round(left + sx + Math.sin(p * 5 + i * 2) * 5);
+        const a = 0.55 * (1 - p);
+        ctx.fillStyle = `rgba(255, 253, 244, ${a.toFixed(2)})`;
+        const w = 2 + Math.round(p * 4);
+        ctx.fillRect(x - (w >> 1), y, w, 2);
     }
 }
 

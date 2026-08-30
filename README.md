@@ -469,7 +469,8 @@ AOU1.C.RZBPa8MwDMW_yzvrkGQr63Qb27mDbbcRimMrialjB9vpH0q_-3Ba2EnSk5DeT1ccJSYbPLgm6
 | 图标 | `tools/icons.py` 后跑 `npm run icons` | 不用 |
 | 游客(四个人 × 三种姿势) | `tools/people.py`,跑 `npm run icons` | 不用 |
 | 时段调色 | `js/game/tint.js` —— `scene.js` 和 `wear.js` 共用,别再各写一份 | 不用 |
-| 摊位升级件 | `tools/stallparts.py` + `scene.js` 的 `paintStallUpgrades` | 不用 |
+| 摊子的四个阶段 | `tools/stall.py`,阈值在 `scene.js` 的 `STALL_STAGES` | 不用 |
+| 摊位的零碎升级件 | `tools/stallparts.py` + `scene.js` 的 `paintStall` | 不用 |
 | 装扮 | `tools/wear.py` + `js/data.js` 的 `COSMETICS`,跑 `npm run icons` | 不用 |
 | 大坝事件 | `js/data.js` 的 `EVENTS` | 不用 |
 | 市场进货的价格/限量 | `js/data.js` 的 `MARKET` | 不用 |
