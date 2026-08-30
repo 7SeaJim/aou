@@ -5,7 +5,7 @@
  * 好处:改目录不用写迁移,存档也更小(存档码是要玩家复制的)。
  */
 
-export const SAVE_VERSION = 6;
+export const SAVE_VERSION = 7;
 
 // 食材的键。改这里要同步 data.js 的 FOODS,并且 SAVE_VERSION +1 补一条迁移 ——
 // 这些键是 backpack 的字段名,直接进存档。
@@ -14,6 +14,13 @@ export const FOOD_KEYS = [
 ];
 export const ITEM_KEYS = ['shield', 'magnet', 'double'];
 export const UPGRADE_KEYS = ['stove', 'sign', 'shelf', 'warmer'];
+/** 装扮的槽位。一个槽只能戴一件,换着戴不叠加。 */
+export const SLOT_KEYS = ['hat', 'neck'];
+/**
+ * 累计计数器。成就靠它判定 —— **不能拿背包 / 图鉴反推**:
+ * 花掉的、送出去的都该算数,反推只会越玩越少。
+ */
+export const STAT_KEYS = ['flights', 'served', 'fed', 'drinks', 'c4win', 'events', 'offlineMs'];
 
 export const DAILY_TRIES = 5;
 
@@ -66,6 +73,25 @@ export function createInitialState() {
         crew: [],
         /** 图鉴:每样食材**累计**见过多少个。花掉了也不减 —— 图鉴记的是见闻,不是库存。 */
         codex: {},
+
+        // ---- 长线(P4) ----
+        /** 羽毛:装扮的唯一货币,只从成就来。和欧币分开,装扮才不会去和摊位升级抢钱。 */
+        feathers: 0,
+        /** 已拥有的装扮 id */
+        cosmetics: [],
+        /** 正戴着的。每个槽位一件,null 表示空着。 */
+        wearing: { hat: null, neck: null },
+        /** 见过的占卜结果 id。八种签集齐是一条成就。 */
+        fortuneSeen: [],
+        /** 大坝事件攒了多久还没触发。和 showMs 一样,留余数才不会每 tick 丢时间。 */
+        eventMs: 0,
+        /** 累计计数器,见 STAT_KEYS */
+        stats: { flights: 0, served: 0, fed: 0, drinks: 0, c4win: 0, events: 0, offlineMs: 0 },
+        /**
+         * 大坝事件日志。只留最近 20 条 —— 存档码是要玩家复制的,
+         * 日志无限长会把存档码撑成一大坨。
+         */
+        log: [],
     };
 }
 
@@ -77,6 +103,31 @@ export function createInitialState() {
  * 那种 falsy 判断 —— 字段真值为 0 或 '' 时会被误判成缺失。
  */
 const migrations = {
+    // v6 -> v7:加装扮、羽毛、随机事件和累计计数器。
+    //
+    // 计数器补不出历史 —— 老档挂机过多久、被投喂过多少次,存档里根本没记。
+    // 只有两处能诚实地开个底:四子棋战绩本来就在 c4 里,今日占卜结果在 fortune 里。
+    // 其余从 0 起,老玩家的成就会比新档慢一点,但**不会凭空多算**。
+    6(old) {
+        const c4 = old.c4 ?? {};
+        const seen = Number.isInteger(old.fortune) ? [old.fortune] : [];
+        return {
+            ...old,
+            version: 7,
+            feathers: 0,
+            cosmetics: [],
+            wearing: { hat: null, neck: null },
+            fortuneSeen: seen,
+            eventMs: 0,
+            stats: {
+                flights: 0, served: 0, fed: 0, drinks: 0,
+                c4win: Number.isFinite(c4.win) ? c4.win : 0,
+                events: 0, offlineMs: 0,
+            },
+            log: [],
+        };
+    },
+
     // v5 -> v6:加伙计鸥和食材图鉴。只添字段。
     5(old) {
         // 图鉴按背包里现有的东西开个底 —— 手上有的,显然是见过的。
@@ -273,6 +324,31 @@ function normalize(s) {
         for (const k of FOOD_KEYS) c[k] = clampInt(out.codex?.[k], 0, 9_999_999);
         return c;
     })();
+
+    // ---- 长线字段 ----
+    out.feathers = clampInt(out.feathers, 0, 9_999_999);
+    out.cosmetics = uniq(asArray(out.cosmetics).filter(x => typeof x === 'string')).slice(0, 50);
+    out.wearing = (() => {
+        const w = {};
+        for (const k of SLOT_KEYS) {
+            const v = out.wearing?.[k];
+            // 只认真的拥有的 —— 存档码改一个没买过的进来,不该穿得上
+            w[k] = typeof v === 'string' && out.cosmetics.includes(v) ? v : null;
+        }
+        return w;
+    })();
+    out.fortuneSeen = uniq(asArray(out.fortuneSeen)
+        .filter(n => Number.isInteger(n) && n >= 0 && n < 8));
+    out.eventMs = clampInt(out.eventMs, 0, 60 * 60_000);
+    out.stats = (() => {
+        const t = {};
+        for (const k of STAT_KEYS) t[k] = clampInt(out.stats?.[k], 0, 9_999_999_999);
+        return t;
+    })();
+    out.log = asArray(out.log)
+        .filter(e => e && typeof e === 'object' && typeof e.text === 'string')
+        .slice(-20)
+        .map(e => ({ text: String(e.text).slice(0, 120), at: clampInt(e.at, 0, 9_999_999_999_999) }));
 
     out.c4 = {
         win: clampInt(out.c4?.win, 0, 99999),

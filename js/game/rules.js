@@ -7,11 +7,12 @@
  */
 
 import {
-    RECIPES, ACHIEVEMENTS, ORDER_TEMPLATES, WEATHER,
+    RECIPES, ACHIEVEMENTS, FEATHER, ORDER_TEMPLATES, WEATHER,
     UPGRADES, upgradeCost, slotsAt, SERVE_MS,
     SHOWS, SHOW_MS, SHOW_WEATHER, POSTCARDS,
     DRINKS, DRINK_KEYS, SHELL_MARKS, divine, hourSlot, onDam,
     CREW, crewBonus, SEASONS, seasonOf,
+    COSMETICS, EVENTS, ITEMS,
 } from '../data.js';
 import { DAILY_TRIES } from '../state.js';
 import { now as clockNow } from '../clock.js';
@@ -72,13 +73,21 @@ export function addExp(state, amount) {
 
 /* ---------- 成就 ---------- */
 
+/**
+ * 逐条判定成就。**每 tick 都会被调用**,所以 check 必须是纯读取、够快。
+ *
+ * 达成即发羽毛(装扮的唯一货币)。发放写在这里而不是 UI 层 ——
+ * 离线结算也会走这里,UI 那时还没渲染。
+ */
 export function checkAchievements(state) {
     const events = [];
     for (const a of ACHIEVEMENTS) {
         if (state.achievements.includes(a.id)) continue;
         if (!a.check(state)) continue;
         state.achievements.push(a.id);
-        events.push({ type: 'achievement', achievement: a });
+        const feathers = FEATHER[a.tier] ?? 1;
+        state.feathers += feathers;
+        events.push({ type: 'achievement', achievement: a, feathers });
     }
     return events;
 }
@@ -222,6 +231,7 @@ export function produce(state, ms, rate = 1) {
             state.coins += gain;
             out.served += n;
             out.coins += gain;
+            state.stats.served += n;
             out.byRecipe[recipe.id] = (out.byRecipe[recipe.id] ?? 0) + n;
         }
         st.ms -= n * info.serveMs;
@@ -255,10 +265,19 @@ export function tickStalls(state, now = Date.now()) {
     if (dt >= OFFLINE_MIN_MS) return { offline: settleOffline(state, now) };
 
     state.lastSeen = now;
+    // 事件放在最前:它可能把表演进度或摊位计时清零,
+    // 先跑产出再清零的话,这一秒的产出等于凭空多给了。
+    const events = rollEvents(state, dt, 1);
     const r = produce(state, dt, 1);
     const p = perform(state, dt, 1);
     if (p.fed) r.show = p;
-    return r.served > 0 || r.starved.length || p.fed ? r : null;
+
+    // 成就在这里也判一遍。以前只在「做菜 / 交订单 / 离线结算」时判,
+    // 于是纯挂机涨上来的等级、钱、投喂次数一直不算数 ——
+    // 玩家眼睁睁看着条件早就满足了,成就页还是灰的。
+    const got = checkAchievements(state);
+    if (events.length || got.length) r.events = [...events, ...got];
+    return r.served > 0 || r.starved.length || p.fed || r.events ? r : null;
 }
 
 /**
@@ -274,10 +293,14 @@ export function settleOffline(state, now = Date.now()) {
 
     if (away < OFFLINE_MIN_MS) return [];         // 不到一分钟不当离线
     const ms = Math.min(away, info.offlineCapMs);
-    // 表演先跑:路人投喂来的食材,摊位这一轮就能用上
+    state.stats.offlineMs += ms;
+    // 顺序和在线那条一样:事件 -> 表演 -> 摊位。
+    // 事件会清掉表演/摊位的计时,放在后面跑等于让这一轮凭空多产。
+    const events = rollEvents(state, ms, info.offlineRate, Math.random,
+                              clockNow(), EVENT_OFFLINE_CAP);
     const show = perform(state, ms, info.offlineRate);
     const r = produce(state, ms, info.offlineRate);
-    if (r.served === 0 && r.starved.length === 0 && show.fed === 0) return [];
+    if (r.served === 0 && r.starved.length === 0 && show.fed === 0 && !events.length) return [];
 
     return [{
         type: 'offline',
@@ -285,6 +308,7 @@ export function settleOffline(state, now = Date.now()) {
         countedMs: ms,
         capped: away > info.offlineCapMs,
         show,
+        events,
         ...r,
     }, ...checkAchievements(state)];
 }
@@ -402,6 +426,7 @@ export function perform(state, ms, rate = 1, rnd = Math.random, endAt = clockNow
         out.got[k] = (out.got[k] ?? 0) + info.per;
         out.fed++;
     }
+    state.stats.fed += out.fed;
     return out;
 }
 
@@ -428,7 +453,9 @@ export function castFortune(state, when = clockNow(), rnd = Math.random) {
     state.fortune = fortune.id;
     state.fortuneMark = markName;
     state.fortuneDate = today;
-    return { ok: true, fortune, mark: markName, events: [] };
+    // 八种签集齐是一条成就,所以记的是「见过哪几种」,不是转过几次
+    if (!state.fortuneSeen.includes(fortune.id)) state.fortuneSeen.push(fortune.id);
+    return { ok: true, fortune, mark: markName, events: checkAchievements(state) };
 }
 
 /** 把手上那杯给哇鸥 */
@@ -439,6 +466,7 @@ export function giveDrink(state) {
 
     state.drink = null;
     state.affinity += d.affinity;
+    state.stats.drinks++;
     return {
         ok: true, drink: d,
         events: [{ type: 'affinity', by: d.affinity, text: d.give }, ...checkAchievements(state)],
@@ -449,6 +477,7 @@ export function giveDrink(state) {
 export function recordC4(state, who) {
     const key = who === 'w' ? 'win' : who === 'b' ? 'lose' : 'draw';
     state.c4[key]++;
+    if (who === 'w') state.stats.c4win++;
     const gain = who === 'w' ? 2 : 1;      // 赢了它会不服气,但还是高兴有人陪着下
     state.affinity += gain;
     return { ok: true, events: [{ type: 'affinity', by: gain }, ...checkAchievements(state)] };
@@ -491,6 +520,153 @@ export function hireCrew(state, id, when = clockNow()) {
     return { ok: true, crew: c, events: [{ type: 'crew', crew: c }, ...checkAchievements(state)] };
 }
 
+/* ---------- 大坝上的随机事件 ---------- */
+
+/** 平均多久撞上一件事。按**大坝时间**算,它在小屋里的时候不计。 */
+export const EVENT_MS = 9 * 60_000;
+/**
+ * 离线一次最多补几件。
+ * 不封顶的话出门一天回来是三十条日志,一条都不会有人看 ——
+ * 而且事件里有坏事,攒一堆坏事一起结算,玩家只会觉得被坑了。
+ */
+export const EVENT_OFFLINE_CAP = 6;
+
+/** 这件事现在能不能发生。when 里的条件是「与」关系。 */
+function eventOpen(state, ev, when) {
+    const c = ev.when;
+    if (!c) return true;
+    if (c.weather && state.weather !== c.weather) return false;
+    if (c.season && seasonOf(when) !== c.season) return false;
+    if (c.minLevel && state.level < c.minLevel) return false;
+    return true;
+}
+
+/** 按权重抽一件。当下一件都不满足条件时返回 null(不该发生,但别让它炸)。 */
+function pickEvent(state, rnd, when) {
+    const pool = EVENTS.filter(e => eventOpen(state, e, when));
+    const total = pool.reduce((n, e) => n + e.w, 0);
+    if (!total) return null;
+    let r = rnd() * total;
+    for (const e of pool) { r -= e.w; if (r < 0) return e; }
+    return pool[pool.length - 1];
+}
+
+/**
+ * 结算一件事。
+ *
+ * 给的量跟等级走 —— 固定量的话,前期一把辣椒是惊喜,后期是四舍五入的零。
+ * 但只跟到能看出差别为止:事件是调味,不该长成第二条主收入。
+ */
+export function applyEvent(state, ev, rnd = Math.random) {
+    const e = ev.effect ?? {};
+    const mul = 1 + Math.floor(state.level / 4);
+    const got = { food: {}, coins: 0, affinity: 0, feathers: 0, item: null, postcard: null };
+
+    for (const [k, n] of Object.entries(e.food ?? {})) {
+        const v = n * mul;
+        gain(state, k, v);
+        got.food[k] = v;
+    }
+    if (e.coins) {
+        got.coins = Math.round(e.coins * (1 + state.level / 3));
+        state.coins += got.coins;
+    }
+    if (e.affinity) { got.affinity = e.affinity; state.affinity += e.affinity; }
+    if (e.feathers) { got.feathers = e.feathers; state.feathers += e.feathers; }
+    if (e.item) {
+        const keys = Object.keys(ITEMS);
+        got.item = keys[Math.floor(rnd() * keys.length)];
+        state.items[got.item] = (state.items[got.item] ?? 0) + 1;
+    }
+    if (e.postcard) {
+        const locked = POSTCARDS.map(p => p.id).filter(id => !state.postcards.includes(id));
+        if (locked.length) {
+            got.postcard = locked[Math.floor(rnd() * locked.length)];
+            state.postcards.push(got.postcard);
+        } else {
+            // 明信片已经集齐了,退成钱 —— 白给一件「什么都没发生」最扫兴
+            got.coins = 30;
+            state.coins += 30;
+        }
+    }
+    // 今天的卦作废,可以再转一次
+    if (e.resetFortune) state.fortuneDate = '';
+    // 围观的人散了:攒着的投喂进度清零
+    if (e.stopShow) state.showMs = 0;
+    // 摊子停了一阵:每格的计时清零(已经出的餐不收回)
+    if (e.stopStall) for (const st of state.stalls) st.ms = 0;
+
+    state.stats.events++;
+    state.log.push({ text: ev.text, at: Date.now() });
+    if (state.log.length > 20) state.log = state.log.slice(-20);
+
+    return { type: 'event', ev, got };
+}
+
+/**
+ * 推进事件。和 produce() / perform() 一样,在线离线共用一份逻辑。
+ *
+ * @param {number} cap 这一轮最多结算几件。在线不限,离线用 EVENT_OFFLINE_CAP。
+ */
+export function rollEvents(state, ms, rate = 1, rnd = Math.random,
+                           endAt = clockNow(), cap = Infinity) {
+    const out = [];
+    if (ms <= 0) return out;
+
+    const onStage = damMsIn(endAt.getTime() - ms, endAt.getTime());
+    if (onStage <= 0) return out;
+
+    state.eventMs += onStage;
+    const times = Math.floor(state.eventMs / EVENT_MS);
+    if (times <= 0) return out;
+    state.eventMs -= times * EVENT_MS;
+
+    const n = Math.min(cap, Math.round(times * rate));
+    for (let i = 0; i < n; i++) {
+        const ev = pickEvent(state, rnd, endAt);
+        if (ev) out.push(applyEvent(state, ev, rnd));
+    }
+    return out;
+}
+
+
+/* ---------- 装扮 ---------- */
+
+/** 这件装扮解锁了没。条件是「与」关系,空对象一开始就开着。 */
+export function cosmeticOpen(state, c) {
+    const n = c.need ?? {};
+    if (n.postcard !== undefined && !state.postcards.includes(n.postcard)) return false;
+    if (n.achievement && !state.achievements.includes(n.achievement)) return false;
+    if (n.affinity && state.affinity < n.affinity) return false;
+    return true;
+}
+
+/** 买一件。花羽毛,不花欧币 —— 两条线分开的理由见 data.js 的 COSMETICS。 */
+export function buyCosmetic(state, id) {
+    const c = COSMETICS.find(x => x.id === id);
+    if (!c) return { ok: false, reason: '没有这件' };
+    if (state.cosmetics.includes(id)) return { ok: false, reason: '已经有了' };
+    if (!cosmeticOpen(state, c)) return { ok: false, reason: '还没解锁' };
+    if (state.feathers < c.cost) {
+        return { ok: false, reason: `还差 ${c.cost - state.feathers} 根羽毛 —— 去达成几个成就` };
+    }
+    state.feathers -= c.cost;
+    state.cosmetics.push(id);
+    // 买了就直接戴上。买完还要再点一次「戴」是纯粹的多余一步。
+    state.wearing[c.slot] = id;
+    return { ok: true, cosmetic: c, events: [{ type: 'cosmetic', cosmetic: c }, ...checkAchievements(state)] };
+}
+
+/** 戴上 / 脱下。再点一次正戴着的那件就是脱下来。 */
+export function wearCosmetic(state, id) {
+    const c = COSMETICS.find(x => x.id === id);
+    if (!c) return { ok: false, reason: '没有这件' };
+    if (!state.cosmetics.includes(id)) return { ok: false, reason: '还没有这件' };
+    state.wearing[c.slot] = state.wearing[c.slot] === id ? null : id;
+    return { ok: true, cosmetic: c, worn: state.wearing[c.slot] === id, events: [] };
+}
+
+
 /* ---------- 觅食结算 ---------- */
 
 /**
@@ -506,6 +682,7 @@ export const haulPerPickup = (level, crew = []) =>
 
 export function settleFlight(state, result) {
     const events = [];
+    state.stats.flights++;
 
     const haul = haulPerPickup(state.level, state.crew);
     // 稀有食材吃季节和伙计的加成 —— 雨季的菌子是真的多

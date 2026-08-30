@@ -218,7 +218,11 @@ wa.lv(5)           // 直接跳到 5 级,食谱跟着解锁
 wa.tries(99)       // 觅食次数管够
 wa.fill()          // 背包装满
 wa.weather('rainy')
-wa.unlockAll()     // 食谱 / 明信片 / 成就全开
+wa.unlockAll()     // 食谱 / 明信片 / 成就 / 装扮全开
+wa.wear('douli')   // 直接戴上某件装扮;wa.wear() 列出全部 id
+wa.feathers(99)    // 设羽毛数 —— 装扮只能用羽毛买
+wa.event('roll')   // 随机触发一件大坝事件;wa.event() 列出全部
+wa.eventSoon()     // 把事件计时推到临界点,等它自己冒出来
 wa.restore()       // 把切场景之前那份存档换回来
 ```
 
@@ -231,7 +235,13 @@ wa.restore()       // 把切场景之前那份存档换回来
 /?time=night         待机界面钉住时段(day / dusk / night)
 /?hour=20            把游戏时钟拨到 20 点(小屋)
 /?season=winter      拨季节(winter / spring / summer / autumn)
+/?enter              跳过待机界面直接进游戏
+/?tab=wear           进去停在哪一页(dock/hut/bag/cook/postcard/achievement/wear/chat/save)
 ```
+
+`?enter&tab=` 是给截图和「反复看同一页」用的:手点还好,脚本截图每次都要
+先点开始再点页签,多跑两轮就够烦了。`?scene=dressed` 是专门调装扮的预设 ——
+羽毛管够、五件全在手上、已经戴了一身。
 
 **要重复跑同一局,用 `?seed=`。** 飞行的食材和障碍生成走的是注入进去的随机源
 (`js/game/rng.js`),同一个种子每次跑出同一串东西 —— 不然「刚才那下是难度问题

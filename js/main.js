@@ -123,7 +123,8 @@ async function boot() {
         getFlight: () => flight,
     });
 
-    showTitle();
+    if (import.meta.env.DEV && dev?.devTab()) ui.go(dev.devTab());
+    showTitle(import.meta.env.DEV && dev?.devEnter());
     console.log(`存档已载入(${storage.adapterName})`);
 }
 
@@ -134,7 +135,7 @@ async function boot() {
  * 这样点下去是立刻开始,而不是等一轮加载。离线结算的吐司也先记着,
  * 等玩家真的进来了再弹,不然它会寂寞地在标题画面后面自己弹完。
  */
-function showTitle() {
+function showTitle(skip = false) {
     const el = document.getElementById('title');
     const title = new TitleScreen(document.getElementById('titleCanvas'));
     title.start();
@@ -145,6 +146,7 @@ function showTitle() {
         if (pendingEvents.length) { ui.showEvents(pendingEvents); pendingEvents = []; }
     };
     document.getElementById('startBtn').addEventListener('click', enter, { once: true });
+    if (skip) enter();      // ?enter —— 只在 dev 构建里传得进来
 }
 
 /**
@@ -167,6 +169,13 @@ function startStallLoop() {
             storage.save(state);
             ui.render();
             if (r.offline.length) ui.showEvents(r.offline);
+            return;
+        }
+        // 事件可能给东西、也可能把摊位计时清零,不管出没出餐都得存盘 + 弹一下
+        if (r.events?.length) {
+            storage.save(state);
+            ui.render();
+            ui.showEvents(r.events);
             return;
         }
         if (r.served) {

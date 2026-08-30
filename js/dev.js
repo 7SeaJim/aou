@@ -10,7 +10,7 @@
  */
 
 import { createInitialState, FOOD_KEYS, ITEM_KEYS } from './state.js';
-import { RECIPES, POSTCARDS, ACHIEVEMENTS, UPGRADES, DRINK_KEYS } from './data.js';
+import { RECIPES, POSTCARDS, ACHIEVEMENTS, UPGRADES, DRINK_KEYS, COSMETICS, EVENTS } from './data.js';
 import { seeded } from './game/rng.js';
 import { setClock } from './clock.js';
 
@@ -50,6 +50,17 @@ export const SCENES = {
         backpack: Object.fromEntries(FOOD_KEYS.map(k => [k, 99])),
         items: { shield: 20, magnet: 20, double: 20 },
         totalScore: 5000, maxCombo: 30, completedOrders: 60,
+    },
+
+    /** 调装扮:羽毛管够、五件全在手上,已经戴了一身,直接看渲染对不对 */
+    dressed: {
+        level: 6, coins: 2000, affinity: 40,
+        postcards: [0, 1, 2, 3, 4, 5, 6],
+        crew: ['huihui', 'apang', 'xiaobai'],
+        feathers: 99,
+        cosmetics: ['douli', 'weijin', 'huahuan', 'lanhua', 'tongling'],
+        wearing: { hat: 'douli', neck: 'weijin' },
+        backpack: Object.fromEntries(FOOD_KEYS.map(k => [k, 40])),
     },
 
     /** 只想反复打飞行:次数管够,别的不管 */
@@ -172,14 +183,75 @@ export function installDev({ getState, mutate, storage, fly, getFlight, rules })
             return `Lv.${this.s.level}`;
         },
 
-        /** 食谱 / 明信片 / 成就全开 */
+        /** 食谱 / 明信片 / 成就 / 装扮全开 */
         unlockAll() {
             mutate(s => {
                 s.unlockedRecipes = RECIPES.map(r => r.id);
                 s.postcards = POSTCARDS.map(p => p.id);
                 s.achievements = ACHIEVEMENTS.map(a => a.id);
+                s.cosmetics = COSMETICS.map(c => c.id);
             });
             return '全解锁';
+        },
+
+        /** 羽毛 +n(不填给 99)。买装扮用的。 */
+        feathers(n = 99) {
+            mutate(s => { s.feathers = n; });
+            return `羽毛 ${this.s.feathers}`;
+        },
+
+        /**
+         * 直接戴上,跳过购买。传 null 脱下这个槽。
+         * 不传参数列出所有装扮 id。
+         */
+        wear(id) {
+            if (id === undefined) return COSMETICS.map(c => `${c.id}(${c.slot}) ${c.name}`);
+            const c = COSMETICS.find(x => x.id === id);
+            if (!c) return `没有 ${id};可选:` + COSMETICS.map(x => x.id).join(' / ');
+            mutate(s => {
+                if (!s.cosmetics.includes(id)) s.cosmetics.push(id);
+                s.wearing[c.slot] = id;
+            });
+            return `戴上 ${c.name}`;
+        },
+
+        /**
+         * 立刻触发一件大坝事件,跳过计时和条件。
+         * 不传参数列出全部 id;传 'roll' 按权重随机抽一件。
+         */
+        event(id) {
+            if (!id) return EVENTS.map(e => `${e.id}  ${e.name}`);
+            const ev = id === 'roll'
+                ? EVENTS[Math.floor(Math.random() * EVENTS.length)]
+                : EVENTS.find(e => e.id === id);
+            if (!ev) return `没有 ${id};wa.event() 看全部`;
+            const r = mutate(s => rules.applyEvent(s, ev));
+            const g = r.got;
+            const bits = Object.entries(g.food).map(([k, n]) => `${k}×${n}`);
+            if (g.coins) bits.push(`${g.coins} 欧币`);
+            if (g.affinity) bits.push(`好感度 +${g.affinity}`);
+            if (g.feathers) bits.push(`羽毛 +${g.feathers}`);
+            if (g.item) bits.push(g.item);
+            if (g.postcard != null) bits.push(`明信片 #${g.postcard}`);
+            return `${ev.name} —— ${ev.text}` + (bits.length ? `  [${bits.join(' ')}]` : '');
+        },
+
+        /** 把事件计时推到下一次触发的边上,好看它自己冒出来 */
+        eventSoon() {
+            mutate(s => { s.eventMs = rules.EVENT_MS - 2000; });
+            return '再过两秒左右就该撞上一件事了(得是大坝时间)';
+        },
+
+        /** 清空事件日志 */
+        clearLog() {
+            mutate(s => { s.log = []; });
+            return '日志清空';
+        },
+
+        /** 脱光 */
+        bare() {
+            mutate(s => { s.wearing = { hat: null, neck: null }; });
+            return '脱下了';
         },
 
         /** 切到预设存档并重载。场景定义在 dev.js 顶部的 SCENES,想加就加 */
@@ -343,7 +415,13 @@ export function installDev({ getState, mutate, storage, fly, getFlight, rules })
                 'wa.fill(n)':      '背包装满',
                 'wa.tries(n)':     '设觅食次数(默认 99)',
                 'wa.weather(w)':   "天气 — 'sunny' / 'rainy' / 'foggy'",
-                'wa.unlockAll()':  '食谱/明信片/成就全开',
+                'wa.unlockAll()':  '食谱/明信片/成就/装扮全开',
+                'wa.feathers(n)':  '设羽毛数(默认 99)',
+                'wa.wear(id)':     '直接戴上某件装扮;不传参数列出全部 id',
+                'wa.bare()':       '把装扮全脱了',
+                'wa.event(id)':    "触发一件大坝事件;不传列出全部,传 'roll' 随机",
+                'wa.eventSoon()':  '把事件计时推到临界点,等它自己冒出来',
+                'wa.clearLog()':   '清空大坝事件日志',
                 'wa.seed(n)':      '固定飞行随机序列,同一局可重放',
                 'wa.fly()':        '直接开一局',
                 'wa.away(h)':      '假装离线 h 小时后重载,看离线结算',
@@ -411,6 +489,16 @@ export function devRng() {
  * 所以单独一个函数,不塞进 installDev。
  * @returns {object|null} 要用的存档;null 表示照常读档
  */
+/**
+ * 调试导航。截图和反复看某一页时,每次都要先点「开始游戏」再点页签,
+ * 手点还好,脚本截图就得多跑两轮。
+ *
+ *   ?enter      跳过待机界面直接进游戏
+ *   ?tab=wear   进去之后停在哪一页(dock/hut/bag/cook/postcard/achievement/wear/chat/save)
+ */
+export const devEnter = () => new URLSearchParams(location.search).has('enter');
+export const devTab = () => new URLSearchParams(location.search).get('tab');
+
 export function devScene() {
     const name = new URLSearchParams(location.search).get('scene');
     if (!name) return null;

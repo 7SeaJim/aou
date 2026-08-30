@@ -458,8 +458,9 @@
    接缝处出现一道竖直断口。 */
 .px-tabs {
     display: flex;
+    flex-wrap: wrap;            /* 页签排不下就换行,别横向溢出把面板挤歪 */
     align-items: flex-end;      /* 选中的那个更高,矮的贴着底对齐 */
-    gap: 6px;
+    gap: 4px;
     padding-left: 18px;
     position: relative;
     z-index: 1;
@@ -470,7 +471,7 @@
     gap: 8px;
     font-family: var(--font-pixel);
     font-size: 15px;
-    padding: 8px 18px 10px;
+    padding: 8px 12px 10px;
     color: var(--ink);
     background: var(--wood);
     border: none;
@@ -550,4 +551,36 @@
 @media (max-width: 520px) {
     .c4cell { width: 26px; height: 26px; }
     .c4stone { width: 20px; height: 20px; }
+}
+
+/* ============ 成就 / 装扮的条目 ============ */
+/* 成就和装扮都是「一行一条、左图右字、右端一个动作」,共用一个条目样式。
+   原来成就是拿 .px-panel 当行用的 —— 一条一个 18px 的贴图边框,
+   二十几条排下来整页全是框,反而看不见内容。 */
+.px-ach {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 10px 14px;
+    margin-bottom: 8px;
+    background: var(--sand-2);
+    box-shadow: inset 0 0 0 3px var(--ink);
+}
+.px-ach--got {
+    background: var(--gold-l);
+    box-shadow: inset 0 0 0 3px var(--ink), inset 0 4px 0 var(--foam);
+}
+.px-ach p { margin: 2px 0 0; font-size: 13px; }
+
+/* 装扮的画布。像素图必须关掉插值,不然浏览器会给它抹一层糊。 */
+.px-wear-item,
+.px-wear-preview {
+    image-rendering: pixelated;
+    display: block;
+}
+.px-wear-item { width: 72px; height: 48px; flex: none; }
+.px-wear-preview {
+    width: 144px; height: 144px; flex: none;
+    background: var(--sea);
+    box-shadow: inset 0 0 0 3px var(--ink);
 }

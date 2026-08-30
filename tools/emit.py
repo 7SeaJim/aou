@@ -4,6 +4,7 @@ OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'css', '')
 from pal import PAL, to_svg, to_uri
 from icons import ICONS
 from scenery import SCENERY, waou_frames
+from wear import WEAR
 import frames
 from urllib.parse import quote
 
@@ -115,7 +116,7 @@ JS = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'js', 'game'
 def js_grid(grid):
     return "[" + ",".join('"%s"' % r for r in grid) + "]"
 
-js = ["""// 由 tools/emit.py 生成,别手改 —— 改素材去 tools/icons.py / tools/scenery.py。
+js = ["""// 由 tools/emit.py 生成,别手改 —— 改素材去 tools/icons.py / tools/scenery.py / tools/wear.py。
 // 字符网格 + 调色板,运行时由 pixmap.js 烤成离屏 canvas。
 """]
 js.append("export const PAL = {")
@@ -134,6 +135,15 @@ js.append("/** 画面道具:障碍、码头陈设 */")
 js.append("export const SCENERY = {")
 for name, grid in SCENERY.items():
     js.append("    %s: %s," % (name, js_grid(grid)))
+js.append("};")
+js.append("")
+js.append("""/** 装扮。每件两套图:big 给小屋近景,small 给大坝上那只小的。
+ *  bigY / smallY 是网格顶行落在精灵图坐标系里的 y,水平方向按中心对齐。
+ *  为什么要两套见 tools/wear.py —— 一套图缩放到另一个尺度会糊掉。 */""")
+js.append("export const WEAR = {")
+for name, v in WEAR.items():
+    js.append("    %s: { big: %s, bigY: %d, small: %s, smallY: %d }," % (
+        name, js_grid(v['big']), v['big_y'], js_grid(v['small']), v['small_y']))
 js.append("};")
 js.append("")
 js.append("/** 哇鸥飞行四帧:身体不动只换翅膀,重心恒定,播起来不抖 */")

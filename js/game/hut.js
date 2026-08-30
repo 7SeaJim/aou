@@ -11,6 +11,7 @@
 import { PixelScreen, sprite, drawStanding } from './pixmap.js';
 import { SCENERY } from './pixels.js';
 import { VW, VH } from './scene.js';
+import { drawWear } from './wear.js';
 
 /** 三个时段各自的光。中午亮、晚上暖、深夜冷。 */
 const LIGHT = {
@@ -87,7 +88,7 @@ export class Hut {
 
         const { ctx } = this.screen;
         ctx.drawImage(this.baked.cv, 0, 0);
-        drawWaou(ctx, slot, this.t);
+        drawWaou(ctx, slot, this.t, this.getState().wearing);
         const L = LIGHT[slot] ?? LIGHT.noon;
         if (L.air) { ctx.fillStyle = L.air; ctx.fillRect(0, 0, VW, VH); }
         this.screen.present();
@@ -192,11 +193,15 @@ function paintBedding(c, L) {
  * 它多数时候是窝着的一团;每隔一阵伸出两条细腿站起来,在棚里走两步再窝回去。
  * 腿是画上去的,不做成精灵图 —— 走路时腿的角度一直在变,做成帧图要画一大堆。
  */
-function drawWaou(ctx, slot, t) {
+function drawWaou(ctx, slot, t, wearing = null) {
+    // 近景这套图 99 高,装扮的锚点是从**顶行**算的,所以传的是顶边不是底边
+    const top = base => base - 99;
+
     if (slot === 'night') {
         const cv = sprite('hut_sleep', SCENERY.hut_sleep);
         const breathe = Math.sin(t * 0.0012) > 0 ? 0 : 1;
         drawStanding(ctx, cv, GULL_X, GROUND + 22 + breathe);
+        drawWear(ctx, wearing, 'big', GULL_X, top(GROUND + 22 + breathe));
         drawZzz(ctx, GULL_X + 72, GROUND - 62, t);
         return;
     }
@@ -208,6 +213,7 @@ function drawWaou(ctx, slot, t) {
     if (p < 5200) {                                  // 窝着,轻轻起伏
         const breathe = Math.sin(t * 0.0022) > 0 ? 0 : 1;
         drawStanding(ctx, cv, GULL_X, GROUND + 22 + breathe);
+        drawWear(ctx, wearing, 'big', GULL_X, top(GROUND + 22 + breathe));
         return;
     }
 
@@ -221,6 +227,7 @@ function drawWaou(ctx, slot, t) {
 
     drawLegs(ctx, x, GROUND + 22, lift, step);
     drawStanding(ctx, cv, x, GROUND + 22 - lift);
+    drawWear(ctx, wearing, 'big', x, top(GROUND + 22 - lift));
 }
 
 /** 两条细长腿。抬起来多少由 lift 定,迈步靠 step 让两条腿反相。 */

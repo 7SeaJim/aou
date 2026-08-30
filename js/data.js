@@ -46,14 +46,132 @@ export const POSTCARDS = [
     { id: 9, name: '石林',         icon: 'mushroom', note: '飞了很久才到。石头长得像菌子。' },
 ];
 
+/**
+ * 成就。P4 重做:原来七条全是飞行玩法的遗物,P2 的放置、P3 的表演/小屋/伙计
+ * 一条都没有 —— 玩家把放置内核玩通了,成就页还是空的。
+ *
+ * 现在按**玩法分组**、每组内分档,并且每条给羽毛(见 FEATHER)。
+ * 羽毛是装扮的唯一货币:成就不再只是一个弹窗,它是装扮的进度条。
+ *
+ *   group  归到哪一栏,见 ACH_GROUPS
+ *   tier   1/2/3,档次越高羽毛越多
+ *   check  只读 state,不能有副作用 —— 它每 tick 都会被跑一遍
+ *
+ * check 里用到的计数器都在 state.stats 里(存档 v7 加的)。
+ * 用计数器而不是拿背包/图鉴反推,是因为花掉的、送出去的都该算数。
+ */
+export const ACH_GROUPS = {
+    forage: '觅食',
+    stall:  '摊子',
+    dam:    '大坝',
+    hut:    '小屋',
+    roam:   '见闻',
+};
+
+/** 档次 → 羽毛。三档的差距要够大,不然玩家不会为了高档去绕远路。 */
+export const FEATHER = { 1: 1, 2: 3, 3: 8 };
+
 export const ACHIEVEMENTS = [
-    { id: 'first_fly',   name: '初次觅食',     desc: '完成第一次觅食',   check: s => s.totalScore >= 5 },
-    { id: 'collect_50',  name: '会捡了',       desc: '累计得分 50',      check: s => s.totalScore >= 50 },
-    { id: 'cook_5',      name: '小摊主',       desc: '完成 5 个订单',    check: s => s.completedOrders >= 5 },
-    { id: 'rich_100',    name: '攒下第一笔',   desc: '拥有 100 欧币',    check: s => s.coins >= 100 },
-    { id: 'postcard_3',  name: '到此一游',     desc: '收集 3 张明信片',  check: s => s.postcards.length >= 3 },
-    { id: 'level_5',     name: '滇池老鸥',     desc: '达到 5 级',        check: s => s.level >= 5 },
-    { id: 'combo_20',    name: '手不抖',       desc: '达成 20 连击',     check: s => s.maxCombo >= 20 },
+    // ---- 觅食 ----
+    { id: 'first_fly',   group: 'forage', tier: 1, name: '初次觅食',   desc: '完成第一次觅食',
+      check: s => s.totalScore >= 5 },
+    { id: 'collect_50',  group: 'forage', tier: 1, name: '会捡了',     desc: '累计得分 50',
+      check: s => s.totalScore >= 50 },
+    { id: 'combo_20',    group: 'forage', tier: 2, name: '手不抖',     desc: '达成 20 连击',
+      check: s => s.maxCombo >= 20 },
+    { id: 'fly_50',      group: 'forage', tier: 2, name: '天天下水',   desc: '累计出去觅食 50 次',
+      check: s => s.stats.flights >= 50 },
+    { id: 'collect_500', group: 'forage', tier: 3, name: '眼疾嘴快',   desc: '累计得分 500',
+      check: s => s.totalScore >= 500 },
+    { id: 'combo_50',    group: 'forage', tier: 3, name: '一气呵成',   desc: '达成 50 连击',
+      check: s => s.maxCombo >= 50 },
+
+    // ---- 摊子 ----
+    { id: 'rich_100',    group: 'stall',  tier: 1, name: '攒下第一笔', desc: '拥有 100 欧币',
+      check: s => s.coins >= 100 },
+    { id: 'cook_5',      group: 'stall',  tier: 1, name: '小摊主',     desc: '完成 5 个订单',
+      check: s => s.completedOrders >= 5 },
+    { id: 'served_200',  group: 'stall',  tier: 2, name: '出餐两百份', desc: '摊子累计出餐 200 份',
+      check: s => s.stats.served >= 200 },
+    { id: 'offline_1d',  group: 'stall',  tier: 2, name: '托付给它',   desc: '累计离线挂机 24 小时',
+      check: s => s.stats.offlineMs >= 24 * 3600_000 },
+    { id: 'stove_5',     group: 'stall',  tier: 2, name: '炉火纯青',   desc: '炉子升到 5 级',
+      check: s => s.upgrades.stove >= 5 },
+    { id: 'rich_5000',   group: 'stall',  tier: 3, name: '有点家底了', desc: '拥有 5000 欧币',
+      check: s => s.coins >= 5000 },
+
+    // ---- 大坝 ----
+    { id: 'fed_100',     group: 'dam',    tier: 2, name: '有人捧场',   desc: '表演累计被投喂 100 次',
+      check: s => s.stats.fed >= 100 },
+    { id: 'show_all',    group: 'dam',    tier: 3, name: '全套节目',   desc: '解锁全部节目',
+      check: s => s.level >= 6 && s.postcards.length >= 6
+                  && s.achievements.includes('cook_5') && s.achievements.includes('combo_20') },
+    { id: 'event_20',    group: 'dam',    tier: 2, name: '什么都撞见过', desc: '遇上 20 次大坝上的事',
+      check: s => s.stats.events >= 20 },
+    { id: 'crew_3',      group: 'dam',    tier: 2, name: '有帮手了',   desc: '招到 3 只伙计鸥',
+      check: s => s.crew.length >= 3 },
+    { id: 'crew_6',      group: 'dam',    tier: 3, name: '一整队',     desc: '招齐 6 只伙计鸥',
+      check: s => s.crew.length >= 6 },
+
+    // ---- 小屋 ----
+    { id: 'drink_1',     group: 'hut',    tier: 1, name: '请你喝一杯', desc: '第一次请哇鸥喝东西',
+      check: s => s.stats.drinks >= 1 },
+    { id: 'c4_win_5',    group: 'hut',    tier: 2, name: '棋逢对手',   desc: '四子棋赢 5 局',
+      check: s => s.stats.c4win >= 5 },
+    { id: 'fortune_all', group: 'hut',    tier: 3, name: '八签见全',   desc: '八种占卜结果都见过',
+      check: s => s.fortuneSeen.length >= 8 },
+    { id: 'affinity_30', group: 'hut',    tier: 2, name: '处熟了',     desc: '好感度到 30',
+      check: s => s.affinity >= 30 },
+    { id: 'drink_30',    group: 'hut',    tier: 3, name: '老交情',     desc: '累计请哇鸥喝 30 杯',
+      check: s => s.stats.drinks >= 30 },
+
+    // ---- 见闻 ----
+    { id: 'level_5',     group: 'roam',   tier: 1, name: '滇池老鸥',   desc: '达到 5 级',
+      check: s => s.level >= 5 },
+    { id: 'postcard_3',  group: 'roam',   tier: 1, name: '到此一游',   desc: '收集 3 张明信片',
+      check: s => s.postcards.length >= 3 },
+    { id: 'dress_3',     group: 'roam',   tier: 2, name: '会打扮了',   desc: '拥有 3 件装扮',
+      check: s => s.cosmetics.length >= 3 },
+    { id: 'codex_all',   group: 'roam',   tier: 3, name: '图鉴集齐',   desc: '九种食材全见过',
+      check: s => Object.keys(FOODS).every(k => (s.codex[k] ?? 0) > 0) },
+    { id: 'level_10',    group: 'roam',   tier: 3, name: '大坝名鸥',   desc: '达到 10 级',
+      check: s => s.level >= 10 },
+    { id: 'postcard_all',group: 'roam',   tier: 3, name: '走遍昆明',   desc: '集齐全部明信片',
+      check: s => s.postcards.length >= POSTCARDS.length },
+];
+
+/** 全部羽毛加起来有多少。装扮定价拿它当分母,别定到玩家永远买不齐。 */
+export const TOTAL_FEATHERS = ACHIEVEMENTS.reduce((n, a) => n + FEATHER[a.tier], 0);
+
+/* ============================================================
+   装扮:哇鸥戴的东西
+   ============================================================ */
+
+/**
+ * 装扮。用羽毛买,不用欧币 —— 欧币要留给摊位升级,两条线抢一个钱包的话,
+ * 玩家买了帽子就升不了炉子,装扮会变成「明知道该忍住的浪费」。
+ * 羽毛只从成就来,于是「打扮」这件事的进度条就是成就本身。
+ *
+ * 两个槽位,一个槽只戴一件。做多了每件都被摊薄,不如少而认得出。
+ * 素材和锚点在 tools/wear.py,五件各有两套图(小屋近景 / 大坝小图)。
+ *
+ * need 里的条件是「与」关系,空对象表示一开始就能买。
+ * 门槛都挂在别的玩法上:花环要去过斗南花市、头巾要招够伙计、
+ * 铃铛要和哇鸥处熟 —— 逼着玩家把三条线都碰一遍。
+ */
+export const SLOTS = { hat: '头上', neck: '脖子' };
+
+export const COSMETICS = [
+    { id: 'douli',    slot: 'hat',  name: '竹斗笠',   cost: 5,  need: {},
+      note: '滇池边渔家戴的那种。下雨天真的挡雨,虽然它本来也不怕淋。' },
+    { id: 'weijin',   slot: 'neck', name: '红围巾',   cost: 8,  need: {},
+      note: '冬天鸥群回来的时候戴最应景。它自己说这叫「入乡随俗」。' },
+    { id: 'huahuan',  slot: 'hat',  name: '鲜花环',   cost: 12, need: { postcard: 6 },
+      note: '斗南花市凌晨扔下的碎花,它捡回来自己编的。戴一天就蔫。' },
+    { id: 'lanhua',   slot: 'hat',  name: '蓝花头巾', cost: 18, need: { achievement: 'crew_3' },
+      note: '扎染的靛蓝布,白点是扎起来没上到色的地方。伙计鸥送的。' },
+    { id: 'tongling', slot: 'neck', name: '小铜铃',   cost: 25, need: { affinity: 30 },
+      note: '它在屋里走动的时候会响。哇鸥说这样你就知道它没跑远。' },
 ];
 
 /**
@@ -283,6 +401,90 @@ export const FOOD_SOURCE = {
     chili:    '觅食 · 表演',
     sugar:    '觅食 · 表演',
 };
+
+/* ============================================================
+   大坝上的随机事件
+   ============================================================ */
+
+/**
+ * 随机事件。哇鸥站在大坝上的时候,每隔一阵会撞上一件事。
+ *
+ * **只在大坝时间走**,和表演共用同一条判据(rules.js 的 damMsIn)——
+ * 它人在小屋里,大坝上发生什么都跟它没关系。
+ *
+ * 三条约束,是为了让事件是「调味」而不是「主收入」:
+ *   1. 一次的量都不大,抵不上一趟觅食
+ *   2. 有好有坏。全是好事的话,事件就只是个慢速的自动奖励
+ *   3. 离线也照常发生,但要打折并且封顶(见 rules.js 的 EVENT_OFFLINE_CAP),
+ *      不然出门一趟回来是三十条日志
+ *
+ * when 是触发条件,全是「与」关系:
+ *   weather 只在这种天气   season 只在这个季节   minLevel 等级门槛
+ * effect 见 rules.js 的 applyEvent。
+ */
+export const EVENTS = [
+    // ---- 常见:补点普通食材 ----
+    { id: 'bread',  w: 10, name: '整包面包',
+      text: '有人把一整包面包撕了往下撒,鸥群炸了锅。哇鸥抢到几块。',
+      effect: { food: { erkuai: 2, potato: 1 } } },
+    { id: 'boatrice', w: 8, name: '渔船靠岸',
+      text: '渔船靠上来卸货,筐底漏下来一小把米。',
+      effect: { food: { rice: 2 } } },
+    { id: 'market', w: 7, name: '篆新的阿姨',
+      text: '篆新市场收摊的阿姨路过,顺手把一把干辣椒撂在栏杆上。',
+      effect: { food: { chili: 2 } } },
+    { id: 'sugar',  w: 6, name: '甩掉的糖水',
+      text: '有人喝剩半杯木瓜水倒在地上,红糖沉在底下,被它舔走了。',
+      effect: { food: { sugar: 2 } } },
+
+    // ---- 天气 / 季节限定 ----
+    { id: 'mushroom', w: 7, name: '雨后一片菌子',
+      text: '雨停了,堤边草里冒出一小片菌子。它挑了个看起来最不像有毒的。',
+      when: { season: 'summer' }, effect: { food: { mushroom: 2 } } },
+    { id: 'fog', w: 5, name: '大雾里的乳扇',
+      text: '雾大得看不见对岸。有人摸黑把一袋乳扇落在长椅上了。',
+      when: { weather: 'foggy' }, effect: { food: { rusan: 1 } } },
+    { id: 'flowers', w: 5, name: '花车漏的',
+      text: '斗南来的花车过坝,颠下来一小捧,还是新鲜的。',
+      when: { season: 'winter' }, effect: { food: { flower: 3 } } },
+    { id: 'kinfolk', w: 6, name: '老乡鸥',
+      text: '一只从西伯利亚一起飞来的老乡落在旁边,叽咕了半天才走。',
+      when: { season: 'winter' }, effect: { affinity: 2 } },
+
+    // ---- 给钱 / 给别的 ----
+    { id: 'photo', w: 8, name: '蹲了一下午的摄影师',
+      text: '有人举着长镜头蹲了一下午,临走往罐子里塞了几块钱。',
+      when: { weather: 'sunny' }, effect: { coins: 12 } },
+    { id: 'student', w: 6, name: '来写生的学生',
+      text: '云大的学生支着画板画它,画完把画举给它看。它假装看懂了。',
+      effect: { coins: 8, affinity: 1 } },
+    { id: 'moult', w: 3, name: '换羽',
+      text: '它抖了抖翅膀,掉下来一根还算完整的羽毛。',
+      effect: { feathers: 1 } },
+    { id: 'shell', w: 4, name: '奇怪的贝壳',
+      text: '浪打上来一枚花纹没见过的贝壳。「这个……可以再算一卦。」',
+      effect: { resetFortune: true } },
+    { id: 'card', w: 3, name: '吹来的明信片',
+      text: '风把一张明信片贴到它脚边,边角还带着水印。',
+      when: { minLevel: 3 }, effect: { postcard: true } },
+    { id: 'toolbox', w: 4, name: '游客落下的东西',
+      text: '长椅上落了个塑料袋,里面装着些说不上用处的小玩意。',
+      effect: { item: true } },
+
+    // ---- 坏事 ----
+    { id: 'kid', w: 7, name: '追鸥的小孩',
+      text: '一个小孩举着面包追着鸥群跑,围观的人一哄而散,节目演不下去了。',
+      effect: { stopShow: true } },
+    { id: 'patrol', w: 5, name: '来巡的人',
+      text: '有人来查摊子,它把锅一盖装作没营业。等人走了,汤都凉了。',
+      effect: { stopStall: true } },
+    { id: 'storm', w: 5, name: '说下就下',
+      text: '雷阵雨说来就来,坝上一下子空了。它躲在栏杆底下等雨停。',
+      when: { weather: 'rainy' }, effect: { stopShow: true } },
+    { id: 'quiet', w: 6, name: '没什么人',
+      text: '大坝上空荡荡的,它对着水面站了很久。',
+      when: { season: 'summer' }, effect: {} },
+];
 
 export const ITEMS = {
     shield: { name: '护盾', icon: 'shield', desc: '挡下一次撞击' },

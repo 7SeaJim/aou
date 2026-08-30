@@ -95,7 +95,8 @@ export class Background {
             const showMs = this.getState().showMs ?? 0;
             const fedNow = showMs < this.lastShowMs;
             this.lastShowMs = showMs;
-            drawPerformance(ctx, 336, DECK_Y - 13, t, unlockedShows(this.getState()).length, fedNow);
+            drawPerformance(ctx, 336, DECK_Y - 13, t,
+                unlockedShows(this.getState()).length, fedNow, this.getState().wearing);
         }
 
         if (weather === 'rainy') drawRain(ctx, t);

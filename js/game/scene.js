@@ -9,6 +9,7 @@
  */
 
 import { sprite, drawSprite, drawStanding, bands, dither } from './pixmap.js';
+import { drawWear } from './wear.js';
 import { PAL, SCENERY, ICON_GRIDS } from './pixels.js';
 
 /** 虚拟分辨率。880×620 的显示画布正好放大 2 倍。 */
@@ -438,8 +439,9 @@ export function drawPierFoam(ctx, weather, deckY, t, phase = 'day') {
  *
  * @param {number} shows   解锁了几个节目,决定围观人数
  * @param {boolean} fedNow 这一帧是否刚好有人投喂,有就冒个食材出来
+ * @param {object} wearing 戴着的装扮,state.wearing
  */
-export function drawPerformance(ctx, x, baseY, t, shows = 1, fedNow = false) {
+export function drawPerformance(ctx, x, baseY, t, shows = 1, fedNow = false, wearing = null) {
     const CYCLE = 4000;
     const p = t % CYCLE;
 
@@ -460,8 +462,12 @@ export function drawPerformance(ctx, x, baseY, t, shows = 1, fedNow = false) {
         drawStanding(ctx, sprite(key, SCENERY[key]), x + dx, baseY + bob);
     }
 
+    const bowing = grid === SCENERY.waou_bow;
     drawStanding(ctx, sprite('perf:' + (grid === ICON_GRIDS.waou ? 'idle'
         : grid === SCENERY.waou_wing ? 'wing' : 'bow'), grid), x, baseY + hop);
+    // 装扮的锚点按 16×16 那张图的框算。鞠躬帧被裁短了 3 格、头也确实低了,
+    // 所以框要跟着往下挪 —— 按精灵图底边对齐的话帽子会浮在脑袋上方。
+    drawWear(ctx, wearing, 'small', x, baseY + hop - (bowing ? 13 : 16));
 
     // 有人投喂:冒一个食材出来,飘一下
     if (fedNow) feedPops.push({ x, y: baseY - 20, t0: t, key: FEED_ICONS[(t / 97 | 0) % FEED_ICONS.length] });

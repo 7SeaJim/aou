@@ -6,11 +6,15 @@
  */
 
 import {
-    FOODS, ITEMS, RECIPES, POSTCARDS, ACHIEVEMENTS, CHAT_NODES, WEATHER,
+    FOODS, ITEMS, RECIPES, POSTCARDS, ACHIEVEMENTS, ACH_GROUPS, FEATHER,
+    EVENTS,
+    TOTAL_FEATHERS, CHAT_NODES, WEATHER,
     UPGRADES, upgradeCost, SHOWS,
     DRINKS, FORTUNES, HOURS, hourSlot,
-    CREW, FOOD_SOURCE,
+    CREW, FOOD_SOURCE, COSMETICS, SLOTS,
 } from './data.js';
+import { paintWearPreview, paintWearItem } from './game/wear.js';
+import { ICON_GRIDS } from './game/pixels.js';
 import * as c4 from './game/connect4.js';
 import { now } from './clock.js';
 import { FOOD_KEYS, DAILY_TRIES } from './state.js';
@@ -126,6 +130,20 @@ export class UI {
                 break;
             }
 
+            case 'buywear': {
+                const r = this.mutate(st => rules.buyCosmetic(st, data.id));
+                if (!r.ok) return this.toast(r.reason, 'feather');
+                this.toast(`${r.cosmetic.name} —— 戴上了`, 'feather');
+                this.showEvents(r.events.slice(1));
+                break;
+            }
+
+            case 'wear': {
+                const r = this.mutate(st => rules.wearCosmetic(st, data.id));
+                if (!r.ok) return this.toast(r.reason, 'feather');
+                break;
+            }
+
             case 'hire': {
                 const r = this.mutate(st => rules.hireCrew(st, data.id));
                 if (!r.ok) return this.toast(r.reason, 'coin');
@@ -196,7 +214,9 @@ export class UI {
         const fed = e.show?.fed
             ? ` 表演收到 ${Object.entries(e.show.got).map(([k, n]) => `${FOODS[k].name}×${n}`).join('、')}。`
             : '';
-        this.toast(`你走了 ${away},摊子卖出 ${what},赚了 ${e.coins} 欧币${capped}。${fed}`, 'coin');
+        // 事件只报个数,细节在大坝页的日志里 —— 一条吐司塞六件事没人读得完
+        const ev = e.events?.length ? ` 坝上还发生了 ${e.events.length} 件事。` : '';
+        this.toast(`你走了 ${away},摊子卖出 ${what},赚了 ${e.coins} 欧币${capped}。${fed}${ev}`, 'coin');
     }
 
     /**
@@ -209,16 +229,30 @@ export class UI {
         const off = events.find(e => e.type === 'offline');
         if (off) this.offlineToast(off);
 
-        const queue = events.filter(e => e.type !== 'cook' && e.type !== 'order' && e.type !== 'offline');
+        let queue = events.filter(e => e.type !== 'cook' && e.type !== 'order' && e.type !== 'offline');
+
+        // 一次冒出一大串就并成一条。挂机久了、老档补判成就,能一口气来十几个 ——
+        // 一条 2.6 秒排下去要刷半分钟,而且前面的还没看完就被顶掉了。
+        const ach = queue.filter(e => e.type === 'achievement');
+        if (ach.length > 3) {
+            const f = ach.reduce((n, e) => n + e.feathers, 0);
+            queue = queue.filter(e => e.type !== 'achievement');
+            queue.unshift({ type: 'many', text: `一口气达成 ${ach.length} 个成就 · 羽毛 +${f}` });
+        }
+
         const start = off ? TOAST_MS + 200 : 400;      // 离线那条先让它读完
         queue.forEach((e, i) => setTimeout(() => {
             if (e.type === 'levelup')     this.toast(`升级!你现在是 Lv.${e.level}`, 'star');
             if (e.type === 'recipe')      this.toast(`解锁新食谱:${e.recipe.name}`, e.recipe.icon);
-            if (e.type === 'achievement') this.toast(`达成成就:${e.achievement.name}`, 'trophy');
+            if (e.type === 'achievement') {
+                this.toast(`达成成就:${e.achievement.name} · 羽毛 +${e.feathers}`, 'trophy');
+            }
             if (e.type === 'postcard')    this.toast(`获得明信片「${POSTCARDS[e.id].name}」`, 'postcard');
             if (e.type === 'upgrade')     this.toast(`${UPGRADES[e.key].name} 升到 ${e.level} 级`, UPGRADES[e.key].icon);
             if (e.type === 'affinity')    this.toast(`好感度 +${e.by}`, 'waou');
+            if (e.type === 'event')       this.toast(this.eventLine(e), 'map');
             if (e.type === 'crew')        this.toast(`${e.crew.name} 加入了摊子`, 'waou');
+            if (e.type === 'many')        this.toast(e.text, 'trophy');
         }, start + i * (TOAST_MS + 200)));
     }
 
@@ -321,9 +355,11 @@ export class UI {
             cook: () => this.viewCook(),
             postcard: () => this.viewPostcards(),
             achievement: () => this.viewAchievements(),
+            wear: () => this.viewWear(),
             chat: () => this.viewChat(),
             save: () => this.viewSave(),
         }[this.screen] ?? (() => ''))();
+        this.paintCanvases();
     }
 
     renderHud() {
@@ -334,6 +370,7 @@ export class UI {
             <span class="px-chip">${icon('coin')} <strong>${s.coins}</strong> 欧币</span>
             <span class="px-chip">${icon(w.icon)} ${w.name}</span>
             <span class="px-chip">${icon('star')} Lv.<strong>${s.level}</strong></span>
+            <span class="px-chip">${icon('feather')} <strong>${s.feathers}</strong> 羽毛</span>
             <span class="px-chip">${icon('waou')} 觅食 <strong>${s.dailyTries}</strong>/${DAILY_TRIES}</span>
             <div class="px-bar px-bar--exp" style="flex:1;min-width:160px">
                 <div class="px-bar__fill" style="width:${pct}%"></div>
@@ -346,6 +383,7 @@ export class UI {
             ['dock', '大坝', 'map'], ['hut', '小屋', 'waou'],
             ['bag', '背包', 'backpack'], ['cook', '摊子', 'shop'],
             ['postcard', '明信片', 'postcard'], ['achievement', '成就', 'trophy'],
+            ['wear', '装扮', 'feather'],
             ['chat', '聊天', 'waou'], ['save', '存档', 'coin'],
         ];
         this.$tabs.innerHTML = tabs.map(([id, name, ico]) =>
@@ -371,6 +409,7 @@ export class UI {
         </div>
         ${this.hutHint()}
         ${this.showPanel()}
+        ${this.eventLog()}
         ${this.stallSummary()}
         ${order ? `
         <div class="px-panel px-panel--sea">
@@ -382,6 +421,40 @@ export class UI {
                 <button class="px-btn px-btn--sm" data-act="deliver" data-id="${order.id}">交付</button>
             </div>
         </div>` : `<p class="px-muted">暂时没有订单。${s.level < 2 ? '到 2 级后游客会开始点单。' : '出去转一圈看看?'}</p>`}`;
+    }
+
+    /** 一条事件的一句话总结,吐司用。日志里显示的是事件本身的叙述。 */
+    eventLine(e) {
+        const g = e.got ?? {};
+        const bits = [];
+        for (const [k, n] of Object.entries(g.food ?? {})) bits.push(`${FOODS[k].name}×${n}`);
+        if (g.coins)     bits.push(`${g.coins} 欧币`);
+        if (g.affinity)  bits.push(`好感度 +${g.affinity}`);
+        if (g.feathers)  bits.push(`羽毛 +${g.feathers}`);
+        if (g.item)      bits.push(ITEMS[g.item].name);
+        if (g.postcard !== null && g.postcard !== undefined) {
+            bits.push(`明信片「${POSTCARDS.find(p => p.id === g.postcard)?.name}」`);
+        }
+        return bits.length ? `${e.ev.name} —— ${bits.join('、')}` : e.ev.name;
+    }
+
+    /**
+     * 大坝上最近发生的事。
+     *
+     * 存的是事件当时的原话而不是 id:事件表以后会改,改完拿 id 反查
+     * 会让老日志对不上号。日志是「发生过什么」的记录,不是索引。
+     */
+    eventLog() {
+        const log = this.getState().log;
+        if (!log.length) {
+            return `<p class="px-muted" style="margin-bottom:24px">
+                它在坝上待着的时候,时不时会撞上点事。回来就记在这儿。</p>`;
+        }
+        const rows = [...log].reverse().slice(0, 6).map(e =>
+            `<li style="margin-bottom:6px">${e.text}</li>`).join('');
+        return `
+        <h3 style="margin-bottom:10px">坝上最近发生的事</h3>
+        <ul class="px-muted" style="margin:0 0 24px;padding-left:20px;line-height:1.8">${rows}</ul>`;
     }
 
     /**
@@ -741,23 +814,112 @@ export class UI {
         <div style="display:flex;gap:16px;flex-wrap:wrap">${cards}</div>`;
     }
 
+    /**
+     * 成就。按玩法分组显示 —— 平铺一长条的时候玩家看不出「还有哪块没碰过」,
+     * 分组之后空着的那一栏本身就是引导。
+     */
     viewAchievements() {
         const s = this.getState();
-        const rows = ACHIEVEMENTS.map(a => {
-            const got = s.achievements.includes(a.id);
-            return `
-            <div class="px-panel ${got ? 'px-panel--gold' : ''}" style="margin-bottom:14px">
-                <div style="display:flex;align-items:center;gap:14px">
-                    ${icon('trophy', 'lg')}
+        const groups = Object.entries(ACH_GROUPS).map(([g, label]) => {
+            const list = ACHIEVEMENTS.filter(a => a.group === g);
+            const got = list.filter(a => s.achievements.includes(a.id)).length;
+            const rows = list.map(a => {
+                const has = s.achievements.includes(a.id);
+                const f = FEATHER[a.tier];
+                return `
+                <div class="px-ach ${has ? 'px-ach--got' : ''}">
+                    ${icon(has ? 'trophy' : 'star')}
                     <div style="flex:1">
                         <strong>${a.name}</strong>
                         <p class="px-muted">${a.desc}</p>
                     </div>
-                    <span class="px-tag ${got ? 'px-tag--leaf' : ''}">${got ? '已达成' : '未达成'}</span>
-                </div>
-            </div>`;
+                    <span class="px-tag ${has ? 'px-tag--leaf' : ''}">${icon('feather')} ${f}</span>
+                </div>`;
+            }).join('');
+            return `
+            <section style="margin-bottom:22px">
+                <h3 style="margin-bottom:10px">${label}
+                    <span class="px-muted" style="font-weight:normal">${got} / ${list.length}</span></h3>
+                ${rows}
+            </section>`;
         }).join('');
-        return `<h2 style="margin-bottom:16px">成就 ${this.getState().achievements.length} / ${ACHIEVEMENTS.length}</h2>${rows}`;
+
+        return `
+        <h2 style="margin-bottom:6px">成就 ${s.achievements.length} / ${ACHIEVEMENTS.length}</h2>
+        <p class="px-muted" style="margin-bottom:18px">
+            每条成就给羽毛,羽毛在「装扮」里花掉。全部达成共 ${TOTAL_FEATHERS} 根,
+            现有 ${s.feathers} 根。
+        </p>
+        ${groups}`;
+    }
+
+    /**
+     * 装扮。列表里不放 16×16 图标,直接把素材原样放大 —— 每件再单画一张图标
+     * 就是第三套图,而且玩家真正想看的是「戴在它头上什么样」。
+     * 画布在 render() 之后统一补画,见 paintCanvases()。
+     */
+    viewWear() {
+        const s = this.getState();
+        const rows = Object.entries(SLOTS).map(([slot, label]) => {
+            const list = COSMETICS.filter(c => c.slot === slot);
+            const items = list.map(c => {
+                const owned = s.cosmetics.includes(c.id);
+                const worn = s.wearing[slot] === c.id;
+                const open = rules.cosmeticOpen(s, c);
+                const btn = owned
+                    ? `<button class="px-btn px-btn--sm ${worn ? 'px-btn--coral' : ''}"
+                               data-act="wear" data-id="${c.id}">${worn ? '脱下来' : '戴上'}</button>`
+                    : open
+                    ? `<button class="px-btn px-btn--sm" data-act="buywear" data-id="${c.id}"
+                               ${s.feathers >= c.cost ? '' : 'disabled'}>
+                           ${icon('feather')} ${c.cost}</button>`
+                    : `<span class="px-tag">${this.wearNeed(c)}</span>`;
+                return `
+                <div class="px-ach ${worn ? 'px-ach--got' : ''}">
+                    <canvas class="px-wear-item" width="72" height="48"
+                            data-wear-item="${owned || open ? c.id : ''}"></canvas>
+                    <div style="flex:1">
+                        <strong>${c.name}</strong>
+                        <p class="px-muted">${owned || open ? c.note : '还没解锁'}</p>
+                    </div>
+                    ${btn}
+                </div>`;
+            }).join('');
+            return `<section style="margin-bottom:22px">
+                <h3 style="margin-bottom:10px">${label}</h3>${items}</section>`;
+        }).join('');
+
+        return `
+        <h2 style="margin-bottom:6px">装扮</h2>
+        <p class="px-muted" style="margin-bottom:18px">
+            用羽毛买,不花欧币 —— 欧币留着升摊子。羽毛只从成就来,现有
+            <strong>${s.feathers}</strong> 根。戴上之后大坝和小屋里都看得见。</p>
+        <div style="display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap">
+            <canvas class="px-wear-preview" width="144" height="144" data-wear-preview></canvas>
+            <div style="flex:1;min-width:280px">${rows}</div>
+        </div>`;
+    }
+
+    /** 没解锁时显示的条件文案 */
+    wearNeed(c) {
+        const n = c.need ?? {};
+        if (n.postcard !== undefined) {
+            return `要先去过${POSTCARDS.find(p => p.id === n.postcard)?.name ?? '某处'}`;
+        }
+        if (n.achievement) {
+            return `要成就「${ACHIEVEMENTS.find(a => a.id === n.achievement)?.name}」`;
+        }
+        if (n.affinity) return `要好感度 ${n.affinity}`;
+        return '还没解锁';
+    }
+
+    /** innerHTML 铺完之后把画布补上。canvas 的内容不在 HTML 里,重绘一次就没了。 */
+    paintCanvases() {
+        const prev = this.$panel.querySelector('[data-wear-preview]');
+        if (prev) paintWearPreview(prev, this.getState().wearing, ICON_GRIDS);
+        for (const cv of this.$panel.querySelectorAll('[data-wear-item]')) {
+            if (cv.dataset.wearItem) paintWearItem(cv, cv.dataset.wearItem);
+        }
     }
 
     viewChat() {
