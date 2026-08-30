@@ -21,15 +21,15 @@ export const FOODS = {
 };
 
 export const RECIPES = [
-    { id: 'shao_erkuai', name: '烧饵块',   icon: 'erkuai',   cost: { erkuai: 2, chili: 1 },                reward: 10, levelReq: 1 },
-    { id: 'yangyu_baba', name: '洋芋粑粑', icon: 'potato',   cost: { potato: 3 },                          reward: 12, levelReq: 1 },
-    { id: 'liangxia',    name: '米凉虾',   icon: 'sugar',    cost: { rice: 2, sugar: 1 },                  reward: 18, levelReq: 2 },
-    { id: 'douhua_mx',   name: '豆花米线', icon: 'douhua',   cost: { rice: 2, douhua: 2 },                 reward: 22, levelReq: 2 },
-    { id: 'xiaoguo_mx',  name: '小锅米线', icon: 'chili',    cost: { rice: 3, chili: 2 },                  reward: 28, levelReq: 3 },
-    { id: 'xianhua_bing',name: '鲜花饼',   icon: 'flower',   cost: { flower: 3, erkuai: 1 },               reward: 32, levelReq: 3 },
-    { id: 'kao_rusan',   name: '烤乳扇',   icon: 'rusan',    cost: { rusan: 2, flower: 1 },                reward: 38, levelReq: 4 },
-    { id: 'jianshouqing',name: '见手青',   icon: 'mushroom', cost: { mushroom: 3 },                        reward: 60, levelReq: 4 },
-    { id: 'qiguoji',     name: '汽锅鸡',   icon: 'mushroom', cost: { mushroom: 2, chili: 2, potato: 2 },   reward: 70, levelReq: 5 },
+    { id: 'shao_erkuai', name: '烧饵块',   icon: 'shao_erkuai', cost: { erkuai: 2, chili: 1 },                reward: 10, levelReq: 1 },
+    { id: 'yangyu_baba', name: '洋芋粑粑', icon: 'yangyu_baba', cost: { potato: 3 },                          reward: 12, levelReq: 1 },
+    { id: 'liangxia',    name: '米凉虾',   icon: 'liangxia', cost: { rice: 2, sugar: 1 },                  reward: 18, levelReq: 2 },
+    { id: 'douhua_mx',   name: '豆花米线', icon: 'douhua_mx', cost: { rice: 2, douhua: 2 },                 reward: 22, levelReq: 2 },
+    { id: 'xiaoguo_mx',  name: '小锅米线', icon: 'xiaoguo_mx', cost: { rice: 3, chili: 2 },                  reward: 28, levelReq: 3 },
+    { id: 'xianhua_bing',name: '鲜花饼',   icon: 'xianhua_bing', cost: { flower: 3, erkuai: 1 },               reward: 32, levelReq: 3 },
+    { id: 'kao_rusan',   name: '烤乳扇',   icon: 'kao_rusan', cost: { rusan: 2, flower: 1 },                reward: 38, levelReq: 4 },
+    { id: 'jianshouqing',name: '见手青',   icon: 'jianshouqing', cost: { mushroom: 3 },                        reward: 60, levelReq: 4 },
+    { id: 'qiguoji',     name: '汽锅鸡',   icon: 'qiguoji',  cost: { mushroom: 2, chili: 2, potato: 2 },   reward: 70, levelReq: 5 },
 ];
 
 /** 明信片:昆明地标。从近到远,顺序就是收集顺序。 */

@@ -768,22 +768,48 @@ export class UI {
 
     viewBag() {
         const s = this.getState();
-        const slots = FOOD_KEYS.map(k => `
-            <div class="px-slot" title="${FOODS[k].name}">
-                ${icon(FOODS[k].icon, 'xl')}
-                <span class="px-slot__count">${s.backpack[k] ?? 0}</span>
-            </div>`).join('');
-        const items = Object.entries(ITEMS).map(([k, it]) => `
-            <div class="px-slot ${(s.items[k] ?? 0) ? '' : 'px-slot--locked'}" title="${it.desc}">
-                ${icon(it.icon, 'xl')}
-                <span class="px-slot__count">${s.items[k] ?? 0}</span>
-            </div>`).join('');
+
+        // 这样材料用在哪几道菜。**只列已解锁的** —— 列上没解锁的等于剧透,
+        // 而且玩家会去翻一道他根本做不出来的菜。
+        const usedIn = k => RECIPES
+            .filter(r => r.cost[k] && s.unlockedRecipes.includes(r.id))
+            .map(r => r.name);
+
+        const foods = FOOD_KEYS.map(k => {
+            const n = s.backpack[k] ?? 0;
+            const use = usedIn(k);
+            return `
+            <div class="px-bagitem ${n ? '' : 'px-bagitem--empty'}">
+                ${icon(FOODS[k].icon, 'lg')}
+                <div style="flex:1;min-width:0">
+                    <strong>${FOODS[k].name}</strong> <span class="px-tag">${n}</span>
+                    <p class="px-muted">${use.length
+                        ? '用在 ' + use.slice(0, 3).join('、') + (use.length > 3 ? ' 等' : '')
+                        : '还没有用得上它的菜'}</p>
+                </div>
+            </div>`;
+        }).join('');
+
+        const items = Object.entries(ITEMS).map(([k, it]) => {
+            const n = s.items[k] ?? 0;
+            return `
+            <div class="px-bagitem ${n ? '' : 'px-bagitem--empty'}">
+                ${icon(it.icon, 'lg')}
+                <div style="flex:1;min-width:0">
+                    <strong>${it.name}</strong> <span class="px-tag">${n}</span>
+                    <p class="px-muted">${it.desc}</p>
+                </div>
+            </div>`;
+        }).join('');
+
         return `
-        <h2 style="margin-bottom:16px">背包</h2>
+        <h2 style="margin-bottom:6px">背包</h2>
+        <p class="px-muted" style="margin-bottom:16px">
+            每样材料下面写着它能做什么。上限每样 ${rules.BAG_MAX} 个。</p>
         <p class="px-muted" style="margin-bottom:10px">食材</p>
-        <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:24px">${slots}</div>
+        <div class="px-grid" style="--min:190px;margin-bottom:24px">${foods}</div>
         <p class="px-muted" style="margin-bottom:10px">道具 · 下次觅食自动使用</p>
-        <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:28px">${items}</div>
+        <div class="px-grid" style="--min:190px;margin-bottom:28px">${items}</div>
         ${this.codexView()}`;
     }
 

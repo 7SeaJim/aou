@@ -677,3 +677,23 @@
 @media (max-width: 560px) {
     .px-card { width: 180px; height: 240px; }
 }
+
+/* ============ 背包条目 ============ */
+/* 原来背包只有图标 + 数字,说明挂在 title 属性上 ——
+   **title 是鼠标悬停才出现的,手机上根本没有悬停**,
+   于是移动端玩家看到的是九个不认识的图标。文字必须画在页面上。 */
+.px-bagitem {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    background: var(--sand-2);
+    box-shadow: inset 0 0 0 3px var(--ink);
+}
+.px-bagitem--empty { opacity: .5; }
+.px-bagitem p {
+    margin: 3px 0 0;
+    font-size: 12px;
+    line-height: 1.5;
+}
+.px-bagitem strong { font-size: 14px; }
