@@ -686,7 +686,10 @@ export function settleFlight(state, result) {
 
     const haul = haulPerPickup(state.level, state.crew);
     // 稀有食材吃季节和伙计的加成 —— 雨季的菌子是真的多
-    const rare = SEASONS[seasonOf()].rare * (1 + crewBonus(state.crew).rare);
+    // seasonOf() 要传时间。不传的话它用的是**真实**系统时间,
+    // 而全游戏其它地方都走 clock.js —— wa.season('summer') 拨了季节,
+    // 偏偏这里(雨季稀有食材翻倍,季节最要紧的一处)拨不动。
+    const rare = SEASONS[seasonOf(clockNow())].rare * (1 + crewBonus(state.crew).rare);
     for (const [k, n] of Object.entries(result.collected)) {
         const isRare = k === 'mushroom' || k === 'rusan';
         gain(state, k, Math.round(n * haul * (isRare ? rare : 1)));
