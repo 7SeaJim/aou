@@ -234,6 +234,13 @@ function startFlight(sprites) {
     const overlay = document.getElementById('flyOverlay');
     const canvas = document.getElementById('flyCanvas');
     canvas.width = W; canvas.height = H;
+    // HUD 那几个元素查一次存着 —— onTick 每帧都叫(距离是连续涨的),
+    // 一秒六十次 getElementById 谈不上贵,但没必要
+    const H_ = id => document.getElementById(id);
+    const flyHud = {
+        score: H_('flyScore'), lives: H_('flyLives'), combo: H_('flyCombo'),
+        wave: H_('flyWave'), dist: H_('flyDist'), hungry: H_('flyHungry'),
+    };
 
     // 道具在开局扣除
     mutate(s => {
@@ -254,14 +261,13 @@ function startFlight(sprites) {
         // 只有开发时设过 wa.seed(n) 才不是 undefined;Flight 默认用 Math.random
         rng: devRng?.(),
         onTick: hud => {
-            document.getElementById('flyScore').textContent = hud.score;
-            document.getElementById('flyLives').textContent = hud.lives;
-            document.getElementById('flyCombo').textContent =
-                hud.combo >= 5 ? `${hud.combo} 连击!` : '';
-            document.getElementById('flyWave').textContent = hud.wave;
-            document.getElementById('flyDist').textContent = hud.dist;
+            flyHud.score.textContent = hud.score;
+            flyHud.lives.textContent = hud.lives;
+            flyHud.combo.textContent = hud.combo >= 5 ? `${hud.combo} 连击!` : '';
+            flyHud.wave.textContent = hud.wave;
+            flyHud.dist.textContent = hud.dist;
             // 肚子条画在画布上,这儿只负责把「饿了」这个词摆出来
-            document.getElementById('flyHungry').hidden = !hud.hungry;
+            flyHud.hungry.hidden = !hud.hungry;
         },
         onEnd: result => {
             overlay.classList.remove('is-open');

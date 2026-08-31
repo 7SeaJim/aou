@@ -238,7 +238,6 @@ export class Flight {
                 if (f.double) gain *= 2;      // 只在这里翻倍,结算时不再翻
                 f.score += gain;
                 f.hunger = Math.min(1, f.hunger + HUNGRY_FEED);
-                this._emit();
             }
         }
 
@@ -253,14 +252,12 @@ export class Flight {
             if (f.shield) {
                 sfx.play('event');      // 护盾挡下:响一下但不是挨打那声
                 f.shield = false;
-                this._emit();
                 continue;
             }
             sfx.play('hit');
             f.lives--;
             f.combo = 0;
             f.hurtUntil = f.elapsed + 450;      // 闪一下,给个挨打的反馈
-            this._emit();
             if (f.lives <= 0) { this._finish('crash'); return; }
         }
 
@@ -272,11 +269,17 @@ export class Flight {
             if (!hit(o)) continue;
             f.powerups.splice(i, 1);
             f[o.type] = true;
-            this._emit();
         }
 
         this._difficulty();
         this._hunger(dt);
+
+        // **每帧都报一次。** 距离是按时间涨的,而 HUD 只在 _emit() 的时候刷 ——
+        // 原来 _emit 只在「捡到东西 / 挨了一下 / 上一档」的时候叫,
+        // 于是屏幕上的米数是一跳一跳的:碰到道具才蹦一下,平时纹丝不动。
+        // 玩家一眼就能看出来那不是在飞,是在数捡了几个。
+        // 一帧只是改几个 textContent,不重建任何结构,这个代价可以忽略。
+        this._emit();
     }
 
     /**
@@ -309,7 +312,6 @@ export class Flight {
         if (f.hungryFlash === 0) {           // 刚饿的那一下要报一声
             f.hungryFlash = f.elapsed + 1600;
             sfx.play('hit');
-            this._emit();
         }
         f.hunger -= dt / HUNGRY_MS;
         if (f.hunger <= 0) { f.hunger = 0; this._finish('hungry'); }
@@ -329,7 +331,6 @@ export class Flight {
             f.wave = wave;
             sfx.play('event');
             f.waveFlashUntil = f.elapsed + 900;
-            this._emit();
         }
     }
 
