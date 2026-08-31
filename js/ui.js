@@ -621,15 +621,51 @@ export class UI {
                      aria-selected="${this.screen === id}">
                 ${icon(ico, 'lg')}<span>${name}</span></button>`;
 
+        // 左边这条底下接摊子的实时状态。**按钮底下空着的那截不是靠拉长按钮填的** ——
+        // 拉长只是把空白摊薄。这儿放的是玩家每隔一会儿就要瞄一眼的三件事:
+        // 下一份还有多久、一份卖多少、哇鸥人在哪。
+        const info = rules.stallInfo(s);
+        const ms = Math.max(...s.stalls.map(st => st?.ms ?? 0), 0);
+        const slot = hourSlot(now());
+        const where = slot === 'night' ? '睡了' : slot ? '草棚' : '大坝';
         this.$rails[0].innerHTML = [
             ['dock', '大坝', 'map'], ['service', '出摊', 'shao_erkuai'],
             ['cook', '摊子', 'shop'], ['hut', '小屋', 'waou'],
-        ].map(btn).join('');
+        ].map(btn).join('') + `
+        <div class="px-railfoot">
+            <div class="px-railstat">
+                ${icon('shop')}
+                <div class="px-railstat__bar">
+                    <i style="width:${Math.min(100, ms / info.serveMs * 100)}%"></i></div>
+                <small>出餐中</small>
+            </div>
+            <div class="px-railstat">
+                ${icon('coin')}<small>×${info.priceMul.toFixed(2)}</small><small>客单价</small>
+            </div>
+            <div class="px-railstat">
+                ${icon('waou')}<small>${where}</small><small>哇鸥</small>
+            </div>
+        </div>`;
 
+        // 右边这条底下接收集进度。三条线各自的完成度 ——
+        // 按钮点进去才看得到数字的话,玩家不会主动去点
+        const bar = (ico, name, have, total) => `
+            <div class="px-railstat">
+                ${icon(ico)}
+                <div class="px-railstat__bar">
+                    <i style="width:${total ? have / total * 100 : 0}%"></i></div>
+                <small>${have}/${total}</small>
+                <small>${name}</small>
+            </div>`;
         this.$rails[1].innerHTML = [
             ['bag', '背包', 'backpack'], ['codex', '图鉴', 'erkuai'],
             ['postcard', '明信片', 'postcard'], ['achievement', '成就', 'trophy'],
-        ].map(btn).join('');
+        ].map(btn).join('') + `
+        <div class="px-railfoot">
+            ${bar('erkuai', '图鉴', s.unlockedRecipes.length, RECIPES.length)}
+            ${bar('postcard', '明信片', s.postcards.length, POSTCARDS.length)}
+            ${bar('trophy', '成就', s.achievements.length, ACHIEVEMENTS.length)}
+        </div>`;
 
         // 底下这条原来只有几个按钮挤在正中,右边空着大半条。
         // **空着的地方该放的是「现在什么情况」** —— 几点了、摊子开没开、什么季节。

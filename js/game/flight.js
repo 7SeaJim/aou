@@ -34,6 +34,17 @@ const OBSTACLES = ['cloud', 'balloon', 'kite'];
 const POWERUPS = ['shield', 'magnet', 'double'];
 const OBSTACLE_GRID = { cloud: 'storm', balloon: 'balloon', kite: 'kite' };
 
+/** 障碍占生成的比例:开局 22%,一路涨到 55% */
+const HAZARD_0 = 0.22;
+const HAZARD_MAX = 0.55;
+/** 多久算一波。到点报一次,让玩家知道是游戏变难了不是自己变菜了 */
+const WAVE_MS = 20_000;
+/**
+ * 可飞的高度切成几条道。**一簇障碍必留一条空的** ——
+ * 密度上去之后如果不留道,就成了随机送死,那不叫难,叫不讲理。
+ */
+const LANES = 5;
+
 /** 切角方块。像素画里的「圆」,比正方形软,又不用画 arc() */
 function plate(ctx, x, y, r, color) {
     const cx = Math.round(x), cy = Math.round(y), d = r * 2;
@@ -87,10 +98,14 @@ export class Flight {
             hurtUntil: 0,
             foods: [], obstacles: [], powerups: [],
             spawnTimer: 0,
+            // 开局的节奏和速度。往后都是从这两个数按飞行时长推的,见 _difficulty()
+            baseInterval: Math.max(700, 1100 - lv * 50),
+            baseSpeed: (1.25 + (lv - 1) * 0.2) * w.speed,
             spawnInterval: Math.max(700, 1100 - lv * 50),
             speed: (1.25 + (lv - 1) * 0.2) * w.speed,
+            hazard: HAZARD_0,
             elapsed: 0,
-            ramp: 0,          // 提速计时,和 elapsed 分开:elapsed 还兼着动画时钟
+            wave: 0,          // 第几波。每 20 秒一波,HUD 上要报
             combo: 0,
             maxCombo: 0,
             collected: {},
@@ -136,6 +151,7 @@ export class Flight {
     _emit() {
         this.onTick?.({
             score: this.f.score, lives: this.f.lives, combo: this.f.combo,
+            wave: this.f.wave + 1,
             shield: this.f.shield, magnet: this.f.magnet, double: this.f.double,
         });
     }
@@ -234,33 +250,85 @@ export class Flight {
             this._emit();
         }
 
-        // 每 5 秒提速一档
-        const cap = this.state.level >= 3 ? 3 : 2.5;
-        f.ramp += dt;
-        if (f.ramp > 5000 && f.speed < cap) {
-            f.ramp -= 5000;
-            f.speed += 0.06;
-            f.spawnInterval = Math.max(500, f.spawnInterval - 20);
+        this._difficulty();
+    }
+
+    /**
+     * 难度只跟着**飞了多久**走,不跟分数、不跟等级(等级只定开局那一档)。
+     *
+     * 原来是「每 5 秒 +0.06,封顶 2.5」—— 一分四十秒就摸到顶,之后再飞十分钟
+     * 也是同一个速度、同一个障碍密度。**一局的终点应该是撞死了,不是不再变难了。**
+     *
+     * 现在三样一起涨,而且**不封顶**:
+     *   speed     线性涨,一分钟大约快一倍
+     *   interval  越来越密,底线 260ms —— 再密就成了一堵墙
+     *   hazard    障碍占生成的比例,22% 一路涨到 55%
+     *
+     * 涨到后面必死,这是故意的:活得越久分越高,但没有「安全地刷」这条路。
+     */
+    _difficulty() {
+        const f = this.f;
+        const mins = f.elapsed / 60000;
+        f.speed = f.baseSpeed * (1 + mins * 0.9);
+        f.spawnInterval = Math.max(260, f.baseInterval - mins * 280);
+        f.hazard = Math.min(HAZARD_MAX, HAZARD_0 + mins * 0.12);
+
+        // 每 20 秒报一波。**得让玩家听见、看见它变难了** ——
+        // 悄悄变难只会让人觉得「我怎么突然打不过了」,而不是「又上了一档」
+        const wave = Math.floor(f.elapsed / WAVE_MS);
+        if (wave > f.wave) {
+            f.wave = wave;
+            sfx.play('event');
+            f.waveFlashUntil = f.elapsed + 900;
+            this._emit();
         }
     }
 
     _spawn() {
         const f = this.f;
         const rnd = this.rng;
-        const y = () => 30 + rnd() * (HORIZON - 60);
+        const top = 30, span = HORIZON - 60;
+        const y = () => top + rnd() * span;
+        /** 第 i 条道的中间高度 */
+        const laneY = i => top + span * (i + 0.5) / LANES;
         const pick = a => a[Math.floor(rnd() * a.length)];
         const r = rnd();
 
-        if (r < 0.7)       f.foods.push({ x: VW + 16, y: y(), type: pick(FOOD_TYPES) });
-        else if (r < 0.95) f.obstacles.push({ x: VW + 16, y: y(), type: pick(OBSTACLES) });
-        else               f.powerups.push({ x: VW + 16, y: y(), type: pick(POWERUPS) });
+        if (r < 0.05) {
+            f.powerups.push({ x: VW + 16, y: y(), type: pick(POWERUPS) });
+        } else if (r < 0.05 + f.hazard) {
+            this._hazard(1 + Math.floor(f.wave / 4), laneY);
+        } else {
+            f.foods.push({ x: VW + 16, y: y(), type: pick(FOOD_TYPES) });
+        }
 
         // 天气影响额外生成
-        if (this.state.weather === 'rainy' && rnd() < 0.3) {
-            f.obstacles.push({ x: VW + 16, y: y(), type: pick(OBSTACLES) });
-        }
+        if (this.state.weather === 'rainy' && rnd() < 0.3) this._hazard(1, laneY);
         if (this.state.weather === 'foggy' && rnd() < 0.25) {
             f.foods.push({ x: VW + 16, y: y(), type: pick(FOOD_TYPES) });
+        }
+    }
+
+    /**
+     * 放一簇障碍,**留一条空道**。
+     *
+     * 密度是这一局越来越难的主要来源,但「难」和「不讲理」只隔一层:
+     * 满屏障碍没有缝,玩家学不到任何东西,只会觉得游戏在耍他。
+     * 留的那条道随机,所以还是得看、得躲,只是保证躲得掉。
+     */
+    _hazard(n, laneY) {
+        const f = this.f, rnd = this.rng;
+        const pick = a => a[Math.floor(rnd() * a.length)];
+        const gap = Math.floor(rnd() * LANES);
+        const lanes = [];
+        for (let i = 0; i < LANES; i++) if (i !== gap) lanes.push(i);
+        // 洗牌后取前 n 条 —— 直接随机取会重复,重复了等于少放一个
+        for (let i = lanes.length - 1; i > 0; i--) {
+            const j = Math.floor(rnd() * (i + 1));
+            [lanes[i], lanes[j]] = [lanes[j], lanes[i]];
+        }
+        for (const i of lanes.slice(0, Math.min(n, LANES - 1))) {
+            f.obstacles.push({ x: VW + 16, y: laneY(i), type: pick(OBSTACLES) });
         }
     }
 
@@ -302,8 +370,32 @@ export class Flight {
 
         if (weather === 'rainy') drawRain(ctx, t, HORIZON);
         if (weather === 'foggy') drawFog(ctx, t, HORIZON);
+        this._drawWave(ctx, f);
 
         this.screen.present();
+    }
+
+    /**
+     * 上一档的时候横过屏幕的那道光。**升档必须看得见** ——
+     * 悄悄提速只会让人觉得「我怎么突然打不过了」,而不是「又上了一档」。
+     * 只有一道横带,不写字:画布上没有像素字体,写字会糊。
+     */
+    _drawWave(ctx, f) {
+        const left = (f.waveFlashUntil ?? 0) - f.elapsed;
+        if (left <= 0) return;
+        const p = left / 900;                       // 1 → 0
+        const y = 40 + (1 - p) * 36;
+        ctx.fillStyle = `rgba(245, 184, 61, ${(p * 0.75).toFixed(3)})`;
+        ctx.fillRect(0, y, VW, 3);
+        ctx.fillStyle = `rgba(255, 253, 244, ${(p * 0.9).toFixed(3)})`;
+        ctx.fillRect(0, y + 1, VW, 1);
+        // 波数用短竖条数出来 —— 一根一波,十根并成一根长的
+        const n = f.wave + 1;
+        ctx.fillStyle = `rgba(245, 184, 61, ${(p * 0.9).toFixed(3)})`;
+        for (let i = 0; i < Math.min(n, 10); i++) {
+            ctx.fillRect(VW / 2 - Math.min(n, 10) * 5 + i * 10, y - 9, 4, 7);
+        }
+        if (n > 10) ctx.fillRect(VW / 2 - 60, y - 9, 3, 7);
     }
 
     /** 天空是静态的,天气不变就不用重画 */

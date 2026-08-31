@@ -251,6 +251,7 @@ function startFlight(sprites) {
             document.getElementById('flyLives').textContent = hud.lives;
             document.getElementById('flyCombo').textContent =
                 hud.combo >= 5 ? `${hud.combo} 连击!` : '';
+            document.getElementById('flyWave').textContent = hud.wave;
         },
         onEnd: result => {
             overlay.classList.remove('is-open');
