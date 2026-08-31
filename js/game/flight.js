@@ -52,8 +52,17 @@ const HUNGRY_AT = 300_000;
 const HUNGRY_MS = 13_000;
 /** 吃到一样补多少。0.17 → 大约每两秒得吃到一个 */
 const HUNGRY_FEED = 0.17;
-/** 一个虚拟像素算多少米。纯粹为了让数字读起来像个距离 */
-const PX_PER_M = 8;
+/**
+ * 飞一秒算多少米。**距离就是活着的时间换算过来的,不累加实际位移。**
+ *
+ * 原来是每帧把移动量加起来 —— 后期速度是开局的三四倍,同样撑一秒
+ * 记的距离就差三四倍,「飞了多远」变成了「后期占多大便宜」。
+ * 而这个玩法真正考的是撑了多久,那就直接按时间算:
+ * 数字匀速往上走,读起来也踏实。
+ *
+ * 40:2000 米(第一档成就)约 50 秒,8000 米(第二档)约 3 分半。
+ */
+const M_PER_SEC = 40;
 
 /** 切角方块。像素画里的「圆」,比正方形软,又不用画 arc() */
 function plate(ctx, x, y, r, color) {
@@ -115,7 +124,6 @@ export class Flight {
             speed: (1.25 + (lv - 1) * 0.2) * w.speed,
             hazard: HAZARD_0,
             elapsed: 0,
-            dist: 0,          // 飞了多远(虚拟像素),结算时换成米
             hunger: 1,        // 肚子。五分钟之后才开始掉,掉光就回巢
             hungryFlash: 0,
             wave: 0,          // 第几波。每 20 秒一波,HUD 上要报
@@ -165,7 +173,7 @@ export class Flight {
         this.onTick?.({
             score: this.f.score, lives: this.f.lives, combo: this.f.combo,
             wave: this.f.wave + 1,
-            dist: Math.round(this.f.dist / PX_PER_M),
+            dist: Math.round(this.f.elapsed / 1000 * M_PER_SEC),
             hungry: this.f.elapsed >= HUNGRY_AT,
             hunger: this.f.hunger,
             shield: this.f.shield, magnet: this.f.magnet, double: this.f.double,
@@ -201,7 +209,6 @@ export class Flight {
         }
 
         const move = f.speed * k;
-        f.dist += move;
         const hit = (o) => Math.abs(BIRD_X - o.x) < HIT_R && Math.abs(f.birdY - o.y) < HIT_R;
 
         // 食材
@@ -382,7 +389,7 @@ export class Flight {
             reason,                                    // 'quit' | 'crash' | 'hungry'
             // 饿回去的算飞完了一趟,不是摔了 —— 它是自己决定回巢的
             survived: reason !== 'crash',
-            dist: Math.round(f.dist / PX_PER_M),
+            dist: Math.round(f.elapsed / 1000 * M_PER_SEC),
             wave: f.wave + 1,
             score: f.score,
             collected: f.collected,

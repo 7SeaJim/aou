@@ -9,6 +9,16 @@
     box-sizing: border-box;
 }
 
+/**
+ * hidden 必须真的能藏住东西。
+ *
+ * 浏览器自带的是 `[hidden] { display: none }`,**一条随便什么
+ * `display: flex/inline-flex/grid` 的类就把它盖掉了** —— 这个坑踩过三次:
+ * 抽屉「收起」之后空着不走、飞行里「饿了!快吃」从第一秒就挂在那儿。
+ * 每次都要回来给某个类补一条 `[hidden]`,那还不如在这儿一次说死。
+ */
+[hidden] { display: none !important; }
+
 html {
     /* 像素字体不做平滑,保持颗粒感 */
     -webkit-font-smoothing: none;
