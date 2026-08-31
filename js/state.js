@@ -5,7 +5,7 @@
  * 好处:改目录不用写迁移,存档也更小(存档码是要玩家复制的)。
  */
 
-export const SAVE_VERSION = 11;
+export const SAVE_VERSION = 12;
 
 // 食材的键。改这里要同步 data.js 的 FOODS,并且 SAVE_VERSION +1 补一条迁移 ——
 // 这些键是 backpack 的字段名,直接进存档。
@@ -23,7 +23,12 @@ export const SLOT_KEYS = ['hat', 'neck'];
  * 累计计数器。成就靠它判定 —— **不能拿背包 / 图鉴反推**:
  * 花掉的、送出去的都该算数,反推只会越玩越少。
  */
-export const STAT_KEYS = ['flights', 'served', 'fed', 'drinks', 'c4win', 'events', 'offlineMs'];
+export const STAT_KEYS = [
+    'flights', 'served', 'fed', 'drinks', 'c4win', 'events', 'offlineMs',
+    // 觅食的个人最好成绩。**加到这儿的键要同时进 normalize 的夹紧循环**,
+    // 而迁移函数里那几份字段清单是当年那一版的快照,不要动
+    'bestDist', 'bestWave',
+];
 
 export const DAILY_TRIES = 5;
 
@@ -106,7 +111,12 @@ export function createInitialState() {
         /** 开场引导走到第几步。TUTORIAL_DONE 表示走完或跳过了。 */
         tutorial: 0,
         /** 累计计数器,见 STAT_KEYS */
-        stats: { flights: 0, served: 0, fed: 0, drinks: 0, c4win: 0, events: 0, offlineMs: 0 },
+        stats: {
+            flights: 0, served: 0, fed: 0, drinks: 0, c4win: 0, events: 0, offlineMs: 0,
+            // 觅食的个人最好成绩。**只记最好的一次**,累计值另有 totalScore ——
+            // 「最远飞过多少」和「一共飞了多少」是两件事,成就要看的是前者
+            bestDist: 0, bestWave: 0,
+        },
         /**
          * 大坝事件日志。只留最近 20 条 —— 存档码是要玩家复制的,
          * 日志无限长会把存档码撑成一大坨。
@@ -326,6 +336,16 @@ const migrations = {
 
         s.version = 1;
         return s;
+    },
+
+    // v11 -> v12:觅食记了个人最好成绩(最远多少米、撑到第几波)。
+    // 老档没有这两个数,一律从 0 起 —— 不去拿 totalScore 反推,
+    // 那是累计分,和「最远一次」不是一回事,反推出来的记录是假的。
+    11(old) {
+        return {
+            ...old, version: 12,
+            stats: { ...(old.stats ?? {}), bestDist: 0, bestWave: 0 },
+        };
     },
 };
 

@@ -9,7 +9,7 @@ import {
     FOODS, ITEMS, RECIPES, POSTCARDS, ACHIEVEMENTS, ACH_GROUPS, CAP_VALUE,
     EVENTS,
     TOTAL_CAPS, CHAT_NODES, WEATHER,
-    UPGRADES, upgradeCost, SHOWS,
+    UPGRADES, upgradeCost, upgradeCaps, SHOWS,
     DRINKS, FORTUNES, HOURS, hourSlot,
     CREW, FOOD_SOURCE, COSMETICS, SLOTS, dayPhase,
     TUTORIAL, TUTORIAL_GIFT, MARKET, MARKET_LEVEL,
@@ -372,6 +372,12 @@ export class UI {
             if (e.type === 'event')       { sfx.play('event'); this.toast(this.eventLine(e), 'map'); }
             if (e.type === 'crew')        this.toast(`${e.crew.name} 加入了摊子`, 'waou');
             if (e.type === 'many')        { sfx.play('achieve'); this.toast(e.text, 'trophy'); }
+            if (e.type === 'record')      {
+                sfx.play('achieve');
+                this.toast(e.kind === 'dist'
+                    ? `新纪录:一趟飞了 ${e.value} 米`
+                    : `新纪录:撑到第 ${e.value} 波`, 'star');
+            }
         }, start + i * (TOAST_MS + 200)));
     }
 
@@ -1470,9 +1476,15 @@ export class UI {
 
         return `
         <h2 style="margin-bottom:6px">成就 ${s.achievements.length} / ${ACHIEVEMENTS.length}</h2>
+        <div class="px-panel" style="padding:10px 14px;margin-bottom:14px;display:flex;gap:22px;flex-wrap:wrap">
+            <span>${icon('map')} 最远一趟 <strong>${s.stats.bestDist ?? 0}</strong> 米</span>
+            <span>${icon('star')} 最多撑到 <strong>第 ${s.stats.bestWave ?? 0} 波</strong></span>
+            <span>${icon('erkuai')} 最高连击 <strong>${s.maxCombo}</strong></span>
+        </div>
         <p class="px-muted" style="margin-bottom:18px">
-            每条成就给瓶盖,瓶盖在「装扮」里花掉。全部达成共 ${TOTAL_CAPS} 根,
-            现有 ${s.caps} 根。
+            每条成就给一个瓶盖。瓶盖买装扮,<strong>也是四条摊位升级线最后三级的门槛</strong> ——
+            前面几级鸥币堆得出来,最后三级堆不出来。<br>
+            全部达成共 ${TOTAL_CAPS} 个,现有 ${s.caps} 个。
         </p>
         ${groups}`;
     }

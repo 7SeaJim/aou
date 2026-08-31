@@ -85,6 +85,14 @@ export const ACHIEVEMENTS = [
       check: s => s.totalScore >= 500 },
     { id: 'combo_50',    group: 'forage', tier: 3, name: '一气呵成',   desc: '达成 50 连击',
       check: s => s.maxCombo >= 50 },
+    { id: 'dist_2k',     group: 'forage', tier: 1, name: '飞出去了',   desc: '一趟飞出 2000 米',
+      check: s => (s.stats.bestDist ?? 0) >= 2000 },
+    { id: 'dist_8k',     group: 'forage', tier: 2, name: '越飞越远',   desc: '一趟飞出 8000 米',
+      check: s => (s.stats.bestDist ?? 0) >= 8000 },
+    { id: 'wave_10',     group: 'forage', tier: 2, name: '扛住十波',   desc: '一趟撑到第 10 波',
+      check: s => (s.stats.bestWave ?? 0) >= 10 },
+    { id: 'wave_16',     group: 'forage', tier: 3, name: '饿着也飞',   desc: '一趟撑过第 5 分钟',
+      check: s => (s.stats.bestWave ?? 0) >= 16 },
 
     // ---- 摊子 ----
     { id: 'rich_100',    group: 'stall',  tier: 1, name: '攒下第一笔', desc: '拥有 100 鸥币',
@@ -210,6 +218,28 @@ export function upgradeCost(key, level) {
     const u = UPGRADES[key];
     if (!u || level >= u.max) return null;
     return Math.round(u.base * Math.pow(2.5, level - 1));
+}
+
+/**
+ * 升到下一级还要几个瓶盖。**只有每条线最后三级要。**
+ *
+ * 瓶盖原来只有装扮一个去处 —— 一样只能换帽子的货币,拿到手也就那样。
+ * 现在它管的是**每条升级线的最后三级**:前面九级鸥币能堆出来,
+ * 最后三级堆不出来,得拿成就换。
+ *
+ * 「钱买不到的那一段」比「又一个数字」有意思:它把成就从一张清单
+ * 变成了通往满级的必经之路,而且不用再往数值曲线上加一个无底洞。
+ *
+ * 供需要对得上:成就一共给 135 个瓶盖,装扮花掉 68,这四条线的
+ * 最后三级(2+4+6)×4 = 48。剩 19 个富余,外加「换羽」事件偶尔掉一个。
+ * **改这里之前先把这笔账重算一遍。**
+ */
+export function upgradeCaps(key, level) {
+    const u = UPGRADES[key];
+    if (!u || level >= u.max) return 0;
+    const target = level + 1;
+    const from = u.max - 2;                       // 最后三级从这级起
+    return target < from ? 0 : (target - from + 1) * 2;   // 2 / 4 / 6
 }
 
 /** 摊位格子按等级解锁:1 级 1 格,3 级 2 格,6 级 3 格 */

@@ -8,7 +8,7 @@
 
 import {
     RECIPES, ACHIEVEMENTS, CAP_VALUE, WEATHER,
-    UPGRADES, upgradeCost, slotsAt, SERVE_MS,
+    UPGRADES, upgradeCost, upgradeCaps, slotsAt, SERVE_MS,
     SHOWS, SHOW_MS, SHOW_WEATHER, POSTCARDS,
     DRINKS, DRINK_KEYS, SHELL_MARKS, divine, hourSlot, onDam,
     CREW, crewBonus, SEASONS, seasonOf,
@@ -410,9 +410,14 @@ export function buyUpgrade(state, key) {
     const lv = state.upgrades[key] ?? 1;
     const cost = upgradeCost(key, lv);
     if (cost === null) return { ok: false, reason: '已经满级了' };
+    const caps = upgradeCaps(key, lv);
     if (state.coins < cost) return { ok: false, reason: `还差 ${cost - state.coins} 鸥币` };
+    // 最后三级还要瓶盖。**先报瓶盖不够,别报鸥币不够** ——
+    // 玩家攒够了钱点下去却弹「还差鸥币」,只会以为是 bug
+    if (state.caps < caps) return { ok: false, reason: `还差 ${caps - state.caps} 个瓶盖` };
 
     state.coins -= cost;
+    state.caps -= caps;
     state.upgrades[key] = lv + 1;
     return { ok: true, events: [{ type: 'upgrade', key, level: lv + 1 }] };
 }
@@ -837,6 +842,18 @@ export function settleFlight(state, result) {
     }
     state.totalScore += result.score;
     if (result.maxCombo > state.maxCombo) state.maxCombo = result.maxCombo;
+    // 个人最好成绩。**破了才记事件** —— 每局都弹一条「本次 300 米」是噪音,
+    // 只有破纪录那一下值得响
+    const records = [];
+    if ((result.dist ?? 0) > (state.stats.bestDist ?? 0)) {
+        state.stats.bestDist = result.dist;
+        records.push({ type: 'record', kind: 'dist', value: result.dist });
+    }
+    if ((result.wave ?? 0) > (state.stats.bestWave ?? 0)) {
+        state.stats.bestWave = result.wave;
+        records.push({ type: 'record', kind: 'wave', value: result.wave });
+    }
+    events.push(...records);
 
     // 明信片:收集越多机会越大,但每局最多掉一张
     const chances = Math.floor(result.itemCount / 3);

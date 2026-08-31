@@ -252,6 +252,9 @@ function startFlight(sprites) {
             document.getElementById('flyCombo').textContent =
                 hud.combo >= 5 ? `${hud.combo} 连击!` : '';
             document.getElementById('flyWave').textContent = hud.wave;
+            document.getElementById('flyDist').textContent = hud.dist;
+            // 肚子条画在画布上,这儿只负责把「饿了」这个词摆出来
+            document.getElementById('flyHungry').hidden = !hud.hungry;
         },
         onEnd: result => {
             overlay.classList.remove('is-open');
@@ -270,10 +273,14 @@ function finishFlight(result) {
     const picked = Object.entries(result.collected)
         .map(([k, n]) => `${FOODS[k].name}×${n}`).join('、') || '什么都没捡到';
 
+    const far = `飞了 ${result.dist} 米`;
     if (result.reason === 'crash') {
-        ui.toast(`掉湖里了…这趟收获:${picked}`, 'rain');
+        ui.toast(`掉湖里了…${far},这趟收获:${picked}`, 'rain');
+    } else if (result.reason === 'hungry') {
+        // 饿回去的不是摔了 —— 它是自己决定回巢的,收获照拿
+        ui.toast(`飞饿了,回巢。${far},收获 ${picked}`, 'erkuai');
     } else {
-        ui.toast(`收获 ${picked},得分 ${result.score}`, 'erkuai');
+        ui.toast(`${far},收获 ${picked},得分 ${result.score}`, 'erkuai');
     }
     ui.showEvents(events);
 }

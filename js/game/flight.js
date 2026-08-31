@@ -45,6 +45,16 @@ const WAVE_MS = 20_000;
  */
 const LANES = 5;
 
+/* ---------- 五分钟之后:饿 ---------- */
+/** 从这一刻起开始饿。前五分钟只用管躲 */
+const HUNGRY_AT = 300_000;
+/** 一条满的肚子撑多久(毫秒)。什么都不吃的话 */
+const HUNGRY_MS = 13_000;
+/** 吃到一样补多少。0.17 → 大约每两秒得吃到一个 */
+const HUNGRY_FEED = 0.17;
+/** 一个虚拟像素算多少米。纯粹为了让数字读起来像个距离 */
+const PX_PER_M = 8;
+
 /** 切角方块。像素画里的「圆」,比正方形软,又不用画 arc() */
 function plate(ctx, x, y, r, color) {
     const cx = Math.round(x), cy = Math.round(y), d = r * 2;
@@ -105,6 +115,9 @@ export class Flight {
             speed: (1.25 + (lv - 1) * 0.2) * w.speed,
             hazard: HAZARD_0,
             elapsed: 0,
+            dist: 0,          // 飞了多远(虚拟像素),结算时换成米
+            hunger: 1,        // 肚子。五分钟之后才开始掉,掉光就回巢
+            hungryFlash: 0,
             wave: 0,          // 第几波。每 20 秒一波,HUD 上要报
             combo: 0,
             maxCombo: 0,
@@ -152,6 +165,9 @@ export class Flight {
         this.onTick?.({
             score: this.f.score, lives: this.f.lives, combo: this.f.combo,
             wave: this.f.wave + 1,
+            dist: Math.round(this.f.dist / PX_PER_M),
+            hungry: this.f.elapsed >= HUNGRY_AT,
+            hunger: this.f.hunger,
             shield: this.f.shield, magnet: this.f.magnet, double: this.f.double,
         });
     }
@@ -185,6 +201,7 @@ export class Flight {
         }
 
         const move = f.speed * k;
+        f.dist += move;
         const hit = (o) => Math.abs(BIRD_X - o.x) < HIT_R && Math.abs(f.birdY - o.y) < HIT_R;
 
         // 食材
@@ -213,6 +230,7 @@ export class Flight {
                 if (f.combo >= 10) gain += 5;
                 if (f.double) gain *= 2;      // 只在这里翻倍,结算时不再翻
                 f.score += gain;
+                f.hunger = Math.min(1, f.hunger + HUNGRY_FEED);
                 this._emit();
             }
         }
@@ -251,6 +269,7 @@ export class Flight {
         }
 
         this._difficulty();
+        this._hunger(dt);
     }
 
     /**
@@ -266,6 +285,29 @@ export class Flight {
      *
      * 涨到后面必死,这是故意的:活得越久分越高,但没有「安全地刷」这条路。
      */
+    /**
+     * 五分钟之后开始饿。
+     *
+     * 前五分钟这个玩法只考一件事:躲。躲到后来速度快了、障碍密了,
+     * 最省事的活法反而是**贴着一条空道一直飘,一口都不吃** ——
+     * 越往后越难的曲线,养出来的是最无聊的打法。
+     *
+     * 所以第五分钟起加一条一直在掉的肚子条:掉光就是飞饿了,回巢。
+     * 吃到一样补一截,大约每两秒得吃到一个。**从这一刻起,躲和吃得同时办**,
+     * 而这两件事是打架的 —— 食材和障碍在同一片天上。
+     */
+    _hunger(dt) {
+        const f = this.f;
+        if (f.elapsed < HUNGRY_AT) return;
+        if (f.hungryFlash === 0) {           // 刚饿的那一下要报一声
+            f.hungryFlash = f.elapsed + 1600;
+            sfx.play('hit');
+            this._emit();
+        }
+        f.hunger -= dt / HUNGRY_MS;
+        if (f.hunger <= 0) { f.hunger = 0; this._finish('hungry'); }
+    }
+
     _difficulty() {
         const f = this.f;
         const mins = f.elapsed / 60000;
@@ -337,8 +379,11 @@ export class Flight {
         this.destroy();
         const f = this.f;
         this.onEnd?.({
-            reason,                                    // 'quit' | 'crash'
+            reason,                                    // 'quit' | 'crash' | 'hungry'
+            // 饿回去的算飞完了一趟,不是摔了 —— 它是自己决定回巢的
             survived: reason !== 'crash',
+            dist: Math.round(f.dist / PX_PER_M),
+            wave: f.wave + 1,
             score: f.score,
             collected: f.collected,
             itemCount: f.itemCount,
@@ -371,8 +416,40 @@ export class Flight {
         if (weather === 'rainy') drawRain(ctx, t, HORIZON);
         if (weather === 'foggy') drawFog(ctx, t, HORIZON);
         this._drawWave(ctx, f);
+        this._drawHunger(ctx, f);
 
         this.screen.present();
+    }
+
+    /**
+     * 肚子条。**只有饿起来之后才画** —— 前五分钟画一条满的进度条在那儿,
+     * 玩家会一直盯着一个不动的东西。
+     *
+     * 画在画面正上方横贯一条:这时候它是唯一还会要人命的计时器,
+     * 得和分数、命数分开,不能挤在角落里当第三个小 chip。
+     */
+    _drawHunger(ctx, f) {
+        if (f.elapsed < HUNGRY_AT) return;
+        const y = 8, h = 7, pad = 30;
+        const w = VW - pad * 2;
+        ctx.fillStyle = '#241a13';
+        ctx.fillRect(pad - 2, y - 2, w + 4, h + 4);
+        ctx.fillStyle = '#5f6d78';
+        ctx.fillRect(pad, y, w, h);
+        // 快见底的时候整条闪 —— 到这一步玩家的眼睛全在障碍上,不闪根本看不见
+        const low = f.hunger < 0.3;
+        const blink = low && Math.floor(f.elapsed / 180) % 2 === 0;
+        ctx.fillStyle = blink ? '#f5b83d' : low ? '#e8384f' : f.hunger < 0.6 ? '#ef7757' : '#77b255';
+        ctx.fillRect(pad, y, Math.max(0, Math.round(w * f.hunger)), h);
+
+        const left = f.hungryFlash - f.elapsed;
+        if (left > 0) {
+            const p = left / 1600;
+            ctx.fillStyle = `rgba(232, 56, 79, ${(p * 0.8).toFixed(3)})`;
+            ctx.fillRect(0, y + h + 6, VW, 3);
+            ctx.fillStyle = `rgba(255, 253, 244, ${(p * 0.9).toFixed(3)})`;
+            ctx.fillRect(0, y + h + 7, VW, 1);
+        }
     }
 
     /**
