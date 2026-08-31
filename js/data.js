@@ -543,10 +543,10 @@ export const HELPER = {
  *               「游客不在时提前做」靠的就是它
  */
 export const TOOLS = {
-    board: { name: '砧板', icon: 'chili',       spot: 'mid',  window: 0.55 },
-    pan:   { name: '煎盘', icon: 'yangyu_baba', spot: 'mid',  window: 0.22 },
-    stove: { name: '灶台', icon: 'stove',       spot: 'mid',  window: 0.34 },
-    oven:  { name: '烤箱', icon: 'xianhua_bing', spot: 'left', window: 0.75 },
+    board: { name: '砧板', icon: 'board', spot: 'mid',  window: 0.55 },
+    pan:   { name: '煎盘', icon: 'pan',   spot: 'mid',  window: 0.22 },
+    stove: { name: '灶台', icon: 'wok',   spot: 'mid',  window: 0.34 },
+    oven:  { name: '烤箱', icon: 'oven',  spot: 'left', window: 0.75 },
 };
 
 /**

@@ -495,3 +495,9 @@ ICONS.update(DISHES)
 # **放在最后 update**,所以 chili 是覆盖上面那版(直的那根被认成胡萝卜)。
 from upgrades import UPGRADE_ICONS
 ICONS.update(UPGRADE_ICONS)
+
+# 厨房那四件家什,见 tools/kitchen.py。
+# 和升级线那四条分开:摊位的「炉子」管你不在时赚多少,厨房的「灶台」管你在时多快,
+# 是两条升级线,不能共用一个图标。
+from kitchen import KITCHEN_ICONS
+ICONS.update(KITCHEN_ICONS)

@@ -991,7 +991,7 @@
 }
 .px-slotbox--empty { cursor: default; }
 /* 空格子里那个淡淡的厨具影子:告诉玩家这儿是放东西的地方 */
-.px-slotbox__hint { opacity: .3; filter: grayscale(.6); }
+.px-slotbox__hint { opacity: .4; filter: grayscale(.35); }
 .px-slotbox--hot { box-shadow: inset 0 0 0 2px var(--gold); }
 .px-slotbox__bar { position: absolute; left: 3px; right: 3px; bottom: 3px; height: 5px; background: #4a3628; }
 .px-slotbox__fill { height: 100%; }

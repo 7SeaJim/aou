@@ -11,17 +11,30 @@ python3 tools/emit.py     # 或 npm run icons
 
 | 产物 | 内容 |
 |---|---|
-| `css/pixel-icons.css` | 22 个图标的内联 SVG + 尺寸类 |
+| `css/pixel-icons.css` | 42 个图标的内联 SVG + 尺寸类 |
 | `css/pixel-tokens.css` 里的 `--frame-*` | 三种边框 |
 | `js/game/pixels.js` | 图标 + 画面素材的字符网格,运行时由 `pixmap.js` 烤成离屏 canvas |
 
 | 文件 | 内容 |
 |---|---|
 | `pal.py` | 调色板(字符 → 颜色)+ SVG 输出(同色合并成 path,体积小 5 倍) |
-| `icons.py` | 22 个 16×16 图标,每个是 16 行 × 16 字符的网格 |
-| `scenery.py` | 游戏画面用的图:海鸥四帧、乌云/气球/风筝、薯条摊、木桶、灯塔、小船 |
+| `icons.py` | 16×16 图标的**总表**。自己有一批,再把下面几个分表 update 进来 |
+| `dishes.py` | 九道料理的图标 |
+| `upgrades.py` | 摊位那四条升级线(炉子/招牌/货架/保温箱)+ 重画的辣椒 |
+| `kitchen.py` | 厨房那四件家什(砧板/煎盘/灶台/烤箱) |
+| `scenery.py` | 游戏画面用的图:海鸥四帧、乌云/气球/风筝、木桶、灯塔、小船 |
+| `stall.py` `stallparts.py` | 小摊的四个阶段,和拼它的零件 |
+| `people.py` | 大坝上的游客,四个人 × 三个姿势 |
+| `cat.py` | 折耳根,上班的和睡着的两张 |
+| `wear.py` | 装扮(哇鸥戴的东西)。每件两套图:小屋近景的大图 + 大坝上的小图 |
 | `frames.py` | 28×28 边框,程序生成:45° 斜接倒角 + 转角铆钉 + 木板接缝 |
 | `emit.py` | 把上面几个编译成 CSS 和 JS |
+| `font.py` | 像素字体子集化(588KB → 50KB)。`--check` 挂在 `npm run build` 上 |
+| `sim.mjs` | 数值模拟,`node tools/sim.mjs` |
+
+分表的图最后都汇进 `icons.py` 的 `ICONS`,用法上没区别 ——
+分开只是为了一个文件不要滚到一千行。**新图放哪个表看它属于哪一类**,
+拿不准就放 `icons.py`。
 
 ## 两条会直接报错的规矩
 

@@ -750,7 +750,8 @@ export class UI {
         }
         if (this.screen === 'service') {
             const back = `<button class="px-btn px-btn--sm px-btn--wood" data-screen="">收摊回大坝</button>`;
-            const shop = `<button class="px-btn px-btn--sm" data-modal="kitchen">${icon('stove')} 后厨</button>`;
+            // 图标用灶台不用炉子:炉子是摊位那条升级线的,两条线共用一个图标最容易混
+            const shop = `<button class="px-btn px-btn--sm" data-modal="kitchen">${icon('wok')} 后厨</button>`;
             // 打烊时留一句说明和两个出口。**后厨照样进得去** ——
             // 摊子没开正好是升厨具的时候,一起关掉等于罚玩家来早了。
             if (!rules.serviceOpen()) {
@@ -812,7 +813,7 @@ export class UI {
             this.$kitchen.hidden = false;
             this.$kitchen.innerHTML = `
                 <div class="px-kclosed">
-                    <p class="px-kclosed__t">${icon('stove', 'lg')} 摊子这会儿没开</p>
+                    <p class="px-kclosed__t">${icon('shop', 'lg')} 摊子这会儿没开</p>
                     <p>出摊时间 <strong>${SERVICE.span}</strong><br>
                        哇鸥回草棚歇脚的时候,摊子跟着收。</p>
                     <p class="px-muted">折耳根这会儿正在坝上睡觉。<br>
