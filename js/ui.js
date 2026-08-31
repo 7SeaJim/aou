@@ -41,6 +41,13 @@ const DRAWER_TITLE = {
     wear: '装扮', chat: '聊天', save: '存档',
 };
 
+/**
+ * 走整页的场景。**它们本身就是一整个界面**,塞进右边 56% 的抽屉根本没法玩 ——
+ * 小屋里要下棋、出摊要摆一厨房的家什。按下按钮直接进去,
+ * 操作条压在画面底下,细节开成弹窗。
+ */
+const FULL_SCENES = new Set(['hut', 'service']);
+
 const icon = (name, size = '') =>
     `<i class="px-icon px-icon--${name}${size ? ' px-icon--' + size : ''}"></i>`;
 
@@ -73,6 +80,10 @@ export class UI {
         this.$toast = $('#toast');
         this.$drawer = $('#drawer');
         this.$drawerTitle = $('#drawerTitle');
+        this.$sceneBar = $('#sceneBar');
+        this.$modal = $('#modal');
+        this.$modalTitle = $('#modalTitle');
+        this.$modalBody = $('#modalBody');
         this.$rails = ['#railLeft', '#railRight', '#railBottom'].map($);
 
         for (const rail of this.$rails) {
@@ -84,6 +95,18 @@ export class UI {
             });
         }
         $('#drawerClose').addEventListener('click', () => { sfx.play('tab'); this.go(null); });
+        $('#modalClose').addEventListener('click', () => { sfx.play('tab'); this.openModal(null); });
+        // 场景条和弹窗里的按钮走同一套委托
+        for (const host of [this.$sceneBar, this.$modalBody]) {
+            host.addEventListener('click', e => {
+                const nav = e.target.closest('[data-screen]');
+                if (nav) { sfx.play('tab'); return this.go(nav.dataset.screen || null); }
+                const pop = e.target.closest('[data-modal]');
+                if (pop) { sfx.play('tab'); return this.openModal(pop.dataset.modal); }
+                const btn = e.target.closest('[data-act]');
+                if (btn) { sfx.play('click'); this.handle(btn.dataset.act, btn.dataset); }
+            });
+        }
         // HUD 里目前只有静音一个按钮,但也走委托 —— renderHud 每秒可能重绘
         this.$hud.addEventListener('click', e => {
             const btn = e.target.closest('[data-act]');
@@ -109,6 +132,7 @@ export class UI {
     go(screen) {
         const next = this.screen === screen ? null : screen;
         this.screen = next;
+        this.modal = null;            // 换页就把弹窗收了
         this.onScreen?.(next);        // 舞台那块画面跟着切
         this.render();
     }
@@ -465,15 +489,32 @@ export class UI {
 
     /* ---------- 渲染 ---------- */
 
+    /** 开 / 关场景里的弹窗。传 null 关掉 */
+    openModal(kind) {
+        this.modal = kind || null;
+        this.render();
+    }
+
     render() {
         this.advanceTutorial();
         this.renderHud();
         this.renderRails();
 
+        // 整页场景不走抽屉:画面铺满,操作条压在底下
+        const full = FULL_SCENES.has(this.screen);
+        this.$sceneBar.hidden = !full;
+        if (full) {
+            this.$sceneBar.innerHTML = this.sceneBar();
+            this.$drawer.hidden = true;
+            this.$panel.innerHTML = '';
+            this.renderModal();
+            this.paintCanvases();
+            return;
+        }
+        this.$modal.hidden = true;
+
         const view = {
             dock: () => this.viewDock(),
-            service: () => this.viewService(),
-            hut: () => this.viewHut(),
             bag: () => this.viewBag(),
             codex: () => this.viewCodex(),
             cook: () => this.viewCook(),
@@ -662,94 +703,87 @@ export class UI {
 
     /* ---------- 小屋 ---------- */
 
-    viewHut() {
+    /**
+     * 整页场景底下那条操作条。**画面铺满,操作压在底边** ——
+     * 小屋里要下棋、要看卦,这些塞进右边 56% 的抽屉是玩不了的。
+     */
+    sceneBar() {
         const s = this.getState();
-        const slot = hourSlot(now());
-
-        if (!slot) {
+        if (this.screen === 'hut') {
+            const slot = hourSlot(now());
+            const back = `<button class="px-btn px-btn--sm px-btn--wood" data-screen="">回大坝</button>`;
+            if (!slot) {
+                return `<span class="px-chip px-chip--dark">${icon('waou')} 它这会儿在大坝上 ·
+                        ${HOURS.noon.span} / ${HOURS.evening.span} 回来</span>
+                        ${this.fortuneCard() ? `<button class="px-btn px-btn--sm" data-modal="fortune">今日签</button>` : ''}
+                        ${back}`;
+            }
+            if (slot === 'night') {
+                return `<span class="px-chip px-chip--dark">${icon('waou')} 睡着了,别吵它</span>
+                        ${this.fortuneCard() ? `<button class="px-btn px-btn--sm" data-modal="fortune">今日签</button>` : ''}
+                        ${back}`;
+            }
+            const drink = DRINKS[s.drink];
             return `
-            <p class="px-muted" style="margin-bottom:18px">堤岸边的一个草棚,里面垫着草。</p>
-            <div class="px-panel px-panel--sea">
-                <p>${icon('waou')} 草棚空着,草垫上还留着一个窝。</p>
-                <p class="px-muted">它这个点在大坝上。
-                   <strong>${HOURS.noon.span}</strong> 回来歇脚,
-                   <strong>${HOURS.evening.span}</strong> 待在屋里,
-                   之后就睡了。</p>
-            </div>
-            ${this.fortuneCard()}`;
+            <span class="px-chip px-chip--dark">${icon('heart')} 好感度 ${s.affinity}</span>
+            <button class="px-btn px-btn--sm" data-modal="fortune">${icon('star')} 占卜</button>
+            <button class="px-btn px-btn--sm" data-modal="c4">${icon('shop')} 下棋</button>
+            <button class="px-btn px-btn--sm" data-modal="drink" ${drink ? '' : 'disabled'}>
+                ${icon(drink ? drink.icon : 'coin')} ${drink ? '请它喝' : '今天给过了'}</button>
+            ${back}`;
         }
-        if (slot === 'night') {
+        if (this.screen === 'service') {
+            const v = rules.serviceOpen() ? this.service?.snapshot() : null;
             return `
-            <p class="px-muted" style="margin-bottom:18px">
-                ${HOURS.night.name} · ${HOURS.night.note} · ${HOURS.night.span}</p>
-            <div class="px-panel px-panel--sea">
-                <p>${icon('waou')} 哇鸥缩成一团睡着了,呼吸把肚皮一起一伏地顶着。</p>
-                <p class="px-muted">别吵它。明天晌午再来吧。</p>
-            </div>
-            ${this.fortuneCard()}`;
+            ${v ? `<span class="px-chip px-chip--dark">${icon('coin')} 卖出 ${v.sold}</span>
+                   <span class="px-chip px-chip--dark">${icon('shop')} 出餐台 ${v.stockCount}</span>` : ''}
+            <button class="px-btn px-btn--sm" data-modal="kitchen">${icon('stove')} 后厨</button>
+            <button class="px-btn px-btn--sm px-btn--wood" data-screen="">收摊回大坝</button>`;
         }
-
-        const drink = DRINKS[s.drink];
-        const fortuneToday = s.fortuneDate === now().toDateString();
-        const f = fortuneToday && s.fortune !== null ? FORTUNES[s.fortune] : null;
-
-        return `
-        <p class="px-muted" style="margin-bottom:18px">
-            ${HOURS[slot].name} · ${HOURS[slot].note} · ${HOURS[slot].span} ·
-            好感度 <strong>${s.affinity}</strong></p>
-
-        <div class="px-grid" style="--min:250px;margin-bottom:24px">
-            <div class="px-panel px-panel--gold" style="padding:14px 16px">
-                <p style="margin-bottom:6px">${icon('shell' in FORTUNES ? 'star' : 'star', 'lg')} 占卜</p>
-                <p class="px-muted" style="font-size:13px;margin-bottom:10px">
-                    海鸥一族的老法子:看今天的天,再看捡来那枚贝壳上的纹。一天一次。</p>
-                ${f ? `<p><strong>${f.name}</strong> <span class="px-muted">· ${s.fortuneMark}</span></p>
-                       <p class="px-muted" style="font-size:13px">${f.text}</p>
-                       <p class="px-muted" style="font-size:12px;margin-top:6px">签在下面,可以存下来。</p>`
-                    : `<button class="px-btn px-btn--sm" data-act="divine">转一卦</button>`}
-            </div>
-
-            <div class="px-panel px-panel--gold" style="padding:14px 16px">
-                <p style="margin-bottom:6px">${icon(drink ? drink.icon : 'coin', 'lg')} 请它喝一杯</p>
-                <p class="px-muted" style="font-size:13px;margin-bottom:10px">
-                    ${drink ? `你今天带了一杯<strong>${drink.name}</strong>。`
-                            : '今天这杯已经给它了。明天上线会再拿到一杯。'}</p>
-                <button class="px-btn px-btn--sm" data-act="drink" ${drink ? '' : 'disabled'}>
-                    ${drink ? '递过去' : '没有了'}</button>
-            </div>
-        </div>
-
-        ${this.fortuneCard()}
-
-        <h3 style="margin:24px 0 10px">海鸥四子棋
-            <span class="px-muted" style="font-size:13px">
-                你执白,它执黑 · ${s.c4.win} 胜 ${s.c4.lose} 负 ${s.c4.draw} 平</span></h3>
-        ${this.c4View()}`;
+        return `<button class="px-btn px-btn--sm px-btn--wood" data-screen="">回大坝</button>`;
     }
 
-    /**
-     * 今日签的卡片。今天还没转就什么都不画。
-     *
-     * 图是 canvas 画完转成 data URL 塞进 <img> 的,不是直接摆一块 canvas ——
-     * **手机上长按 <img> 才有「保存图片」,长按 canvas 没有。**
-     * 而在国内的浏览器和 App 内置浏览器里,长按保存比 <a download> 靠谱得多。
-     */
-    fortuneCard() {
+    /** 场景里的弹窗。开着哪个由 this.modal 决定 */
+    renderModal() {
+        const kind = this.modal;
+        this.$modal.hidden = !kind;
+        if (!kind) return;
         const s = this.getState();
-        if (s.fortune === null || s.fortuneDate !== now().toDateString()) return '';
+        const map = {
+            fortune: ['今日签', () => this.modalFortune()],
+            c4: [`海鸥四子棋 · ${s.c4.win} 胜 ${s.c4.lose} 负 ${s.c4.draw} 平`, () => this.c4View()],
+            drink: ['请它喝一杯', () => this.modalDrink()],
+            kitchen: ['后厨', () => this.viewService()],
+        }[kind];
+        if (!map) { this.$modal.hidden = true; return; }
+        this.$modalTitle.textContent = map[0];
+        this.$modalBody.innerHTML = map[1]();
+        this.paintCanvases();
+    }
+
+    modalFortune() {
+        const s = this.getState();
+        const today = s.fortuneDate === now().toDateString();
+        const f = today && s.fortune !== null ? FORTUNES[s.fortune] : null;
+        if (!f) {
+            return `
+            <p class="px-muted" style="margin-bottom:14px">
+                海鸥一族的老法子:看今天的天,再看捡来那枚贝壳上的纹。一天一次。</p>
+            <button class="px-btn" data-act="divine">${icon('star', 'lg')} 转一卦</button>`;
+        }
         return `
-        <h3 style="margin:24px 0 10px">今日签</h3>
-        <div class="px-cardbox">
-            <img class="px-card" data-card alt="哇鸥今日运势">
-            <div>
-                <p class="px-muted" style="font-size:13px;line-height:1.8">
-                    一天一张,明天的签是另一张。<br>
-                    手机上<strong>长按图片</strong>就能存;电脑上点下面这个。
-                </p>
-                <button class="px-btn px-btn--sm" data-act="savecard"
-                        style="margin-top:10px">存成图片</button>
-            </div>
-        </div>`;
+        <p><strong>${f.name}</strong> <span class="px-muted">· ${s.fortuneMark}</span></p>
+        <p class="px-muted" style="margin:6px 0 14px">${f.text}</p>
+        ${this.fortuneCard()}`;
+    }
+
+    modalDrink() {
+        const drink = DRINKS[this.getState().drink];
+        if (!drink) return '<p class="px-muted">今天这杯已经给它了。明天上线会再拿到一杯。</p>';
+        return `
+        <p style="margin-bottom:12px">${icon(drink.icon, 'xl')}</p>
+        <p style="margin-bottom:14px">你今天带了一杯<strong>${drink.name}</strong>。</p>
+        <button class="px-btn" data-act="drink">递过去</button>`;
     }
 
     /** 四子棋的棋盘。没开局就显示一个开始按钮。 */

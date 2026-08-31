@@ -141,6 +141,20 @@
                 </div>
                 <div id="panel" class="px-drawer__body"></div>
             </div>
+
+            <!-- 整页场景的操作条(小屋 / 出摊)。压在画面底下,不占画面外的地方 -->
+            <div id="sceneBar" class="px-scenebar" hidden></div>
+
+            <!-- 场景里的弹窗:占卜、下棋、请喝都在这儿开 -->
+            <div id="modal" class="px-modal" hidden>
+                <div class="px-modal__box">
+                    <div class="px-modal__bar">
+                        <strong id="modalTitle"></strong>
+                        <button class="px-btn px-btn--sm px-btn--coral" id="modalClose">关掉</button>
+                    </div>
+                    <div id="modalBody" class="px-modal__body"></div>
+                </div>
+            </div>
         </div>
         </div>
 
