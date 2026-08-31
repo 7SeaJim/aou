@@ -10,9 +10,9 @@ import { PixelScreen } from './pixmap.js';
 import {
     VW, VH, paintSky, paintPier, drawSea, drawClouds, drawFarGulls,
     drawPierFoam, drawPerformance, drawBoat, drawRain, drawFog, hitShack,
-    paintFarDam, drawReeds, drawStrollers, drawStallSteam, drawUpgradePop,
+    paintFarDam, drawReeds, drawStrollers, drawStallSteam, drawUpgradePop, drawCat,
 } from './scene.js';
-import { unlockedShows } from './rules.js';
+import { unlockedShows, serviceOpen } from './rules.js';
 import { dayPhase, onDam } from '../data.js';
 import { now } from '../clock.js';
 
@@ -101,6 +101,8 @@ export class Background {
         ctx.drawImage(this.pier.cv, 0, 0);
         // 路过的人不看时段 —— 大坝上白天晚上都有人散步
         drawStrollers(ctx, DECK_Y, t, phase);
+        // 折耳根:不出摊的时候她就在坝上睡觉。出摊时她在柜台后面,这儿就不画了
+        if (!serviceOpen(when)) drawCat(ctx, DECK_Y, t, phase);
 
         const up = this.getState().upgrades;
         drawStallSteam(ctx, DECK_Y, t, up);

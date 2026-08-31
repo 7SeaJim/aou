@@ -1286,7 +1286,7 @@ export class UI {
      * 会拿系统字体先落下去,而且不会像 DOM 那样等字体到了自己回流重排。
      */
     paintCard() {
-        const img = this.$panel.querySelector('[data-card]');
+        const img = document.querySelector('[data-card]');
         if (!img) return;
         const s = this.getState();
         // 天光跟真实时段走,所以时段也得进 key —— 不然傍晚转的卦到了夜里

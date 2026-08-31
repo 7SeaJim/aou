@@ -767,6 +767,33 @@ const FEED_ICONS = ['erkuai', 'potato', 'rice', 'douhua', 'chili'];
 const feedPops = [];
 
 /**
+ * 睡在大坝上的折耳根。**不上班的时候她就在这儿摊着。**
+ *
+ * 位置固定在草棚和摊子中间那一段空甲板上 —— 那块地方本来就空,
+ * 而且路人和围观的都不站那儿,不会被挡住。
+ *
+ * 会呼吸(一格),偶尔抖一下耳朵。猫睡觉不是完全不动的,
+ * 完全不动就成了摆件。
+ */
+export function drawCat(ctx, deckY, t, phase = 'day') {
+    const cv = shadedSprite('cat_sleep', SCENERY.cat_sleep, phase);
+    const breathe = Math.sin(t * 0.0011) > 0 ? 0 : 1;
+    // 222:草棚(172)和路灯(259)中间那块空地。挨着路灯会和灯杆重在一起
+    shadow(ctx, 222, deckY - 13, 26, 0.18);
+    drawStanding(ctx, cv, 222, deckY - 13 + breathe);
+    // 每隔一阵冒个 Z
+    const p = (t * 0.00022) % 1;
+    if (p < 0.5) {
+        const a = 0.7 * (1 - p * 2);
+        ctx.fillStyle = `rgba(255,253,244,${a.toFixed(2)})`;
+        const zx = Math.round(240 + p * 14), zy = Math.round(deckY - 30 - p * 20);
+        ctx.fillRect(zx, zy, 4, 1);
+        ctx.fillRect(zx + 2, zy + 1, 2, 1);
+        ctx.fillRect(zx, zy + 2, 4, 1);
+    }
+}
+
+/**
  * 只是路过的人。和围观的人分开:围观是玩法的一部分(节目越多人越多),
  * 路过纯粹是「这地方有人气」—— 一个大坝上不可能所有人都在看一只鸟。
  *
