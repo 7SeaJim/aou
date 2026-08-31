@@ -11,6 +11,7 @@ import {
     VW, VH, paintSky, paintPier, drawSea, drawClouds, drawFarGulls,
     drawPierFoam, drawPerformance, drawBoat, drawRain, drawFog, hitShack,
     paintFarDam, drawReeds, drawStrollers, drawStallSteam, drawUpgradePop, drawCat,
+    paintShed, strollerCount,
 } from './scene.js';
 import { unlockedShows, serviceOpen } from './rules.js';
 import { dayPhase, onDam } from '../data.js';
@@ -99,10 +100,15 @@ export class Background {
         drawBoat(ctx, HORIZON + 24, t, weather);
         drawPierFoam(ctx, weather, DECK_Y, t, phase);
         ctx.drawImage(this.pier.cv, 0, 0);
-        // 路过的人不看时段 —— 大坝上白天晚上都有人散步
-        drawStrollers(ctx, DECK_Y, t, phase);
-        // 折耳根:不出摊的时候她就在坝上睡觉。出摊时她在柜台后面,这儿就不画了
-        if (!serviceOpen(when)) drawCat(ctx, DECK_Y, t, phase);
+        // 木棚先画:它在最后头,路人和猫都在它前面
+        const rainy = weather === 'rainy';
+        paintShed(ctx, DECK_Y, phase);
+        // 折耳根:不出摊的时候她就在坝上睡觉。出摊时她在柜台后面,这儿就不画了。
+        // **画在路人之前** —— 她那条道靠后,人从她前面过
+        if (!serviceOpen(when)) drawCat(ctx, DECK_Y, t, phase, rainy);
+        // 路过的人。几个人跟着钟点和天气走,下雨天各撑一把伞
+        drawStrollers(ctx, DECK_Y, t, phase,
+                      { count: strollerCount(when, weather), rainy });
 
         const up = this.getState().upgrades;
         drawStallSteam(ctx, DECK_Y, t, up);
@@ -118,7 +124,7 @@ export class Background {
             this.lastShowMs = showMs;
             drawPerformance(ctx, 336, DECK_Y - 13, t,
                 unlockedShows(this.getState()).length, fedNow,
-                this.getState().wearing, phase);
+                this.getState().wearing, phase, rainy);
         }
 
         // 近景压在所有东西之上,包括哇鸥 —— 被前景挡住一点才有纵深

@@ -707,9 +707,11 @@ export function drawPierFoam(ctx, weather, deckY, t, phase = 'day') {
  * @param {number} shows   解锁了几个节目,决定围观人数
  * @param {boolean} fedNow 这一帧是否刚好有人投喂,有就冒个食材出来
  * @param {object} wearing 戴着的装扮,state.wearing
+ * @param {boolean} rainy   下雨天。围观的和哇鸥都会撑一把伞 ——
+ *                          **一场雨里只有雨丝在动、人照旧站着淋,比不下雨还假**
  */
 export function drawPerformance(ctx, x, baseY, t, shows = 1, fedNow = false,
-                                wearing = null, phase = 'day') {
+                                wearing = null, phase = 'day', rainy = false) {
     const CYCLE = 4000;
     const p = t % CYCLE;
 
@@ -738,6 +740,7 @@ export function drawPerformance(ctx, x, baseY, t, shows = 1, fedNow = false,
         const bob = Math.sin(t * 0.0016 + i * 1.7) > 0.6 ? 1 : 0;
         shadow(ctx, x + dx, baseY + bob, 12, 0.18);
         drawStanding(ctx, shadedSprite(key, SCENERY[key], phase), x + dx, baseY + bob);
+        if (rainy) drawUmbrella(ctx, x + dx, baseY + bob - 20, i + 1, phase);
     }
 
     shadow(ctx, x, baseY, 14, 0.2);
@@ -749,6 +752,9 @@ export function drawPerformance(ctx, x, baseY, t, shows = 1, fedNow = false,
     // 装扮的锚点按 16×16 那张图的框算。鞠躬帧被裁短了 3 格、头也确实低了,
     // 所以框要跟着往下挪 —— 按精灵图底边对齐的话帽子会浮在脑袋上方。
     drawWear(ctx, wearing, 'small', x, baseY + hop - (bowing ? 13 : 16), phase);
+    // 哇鸥自己也撑一把。**伞画在装扮之后** —— 它得盖在帽子上头,
+    // 不然斗笠会从伞面里穿出来
+    if (rainy) drawUmbrella(ctx, x, baseY + hop - 13, 0, phase);
 
     // 有人投喂:冒一个食材出来,飘一下
     if (fedNow) feedPops.push({ x, y: baseY - 20, t0: t, key: FEED_ICONS[(t / 97 | 0) % FEED_ICONS.length] });
@@ -766,27 +772,56 @@ const ONLOOKERS = ['onlooker_a', 'onlooker_b', 'onlooker_c', 'onlooker_d'];
 const FEED_ICONS = ['erkuai', 'potato', 'rice', 'douhua', 'chili'];
 const feedPops = [];
 
+/** 小木棚站的位置。草棚(172)和路灯(259)之间那块空地 */
+const SHED_X = 222;
+/**
+ * 甲板上的三条道。**原来所有人都踩在同一条基线上** ——
+ * 路人经过猫的时候两个身子重在一起,分不出谁在前谁在后。
+ * 甲板一共只有 26 格深,分成三层刚好:
+ *
+ *     -22  木棚,贴着栏杆
+ *     -15  猫,晴天摊在棚门口
+ *      -4  路人走的道,压在甲板最前沿
+ *
+ * 三层拉到 11 格才够:人有 24 格高,间距太小的话即使前后关系对了,
+ * 看着还是糊在一起。
+ */
+const SHED_Y = -22;
+const CAT_Y = -15;
+
+/** 摊子旁边那间敞口的小木棚。不管什么天都在,下雨天猫躲进去 */
+export function paintShed(ctx, deckY, phase = 'day') {
+    drawStanding(ctx, shadedSprite('catshed', SCENERY.catshed, phase),
+                 SHED_X, deckY + SHED_Y);
+}
+
 /**
  * 睡在大坝上的折耳根。**不上班的时候她就在这儿摊着。**
  *
- * 位置固定在草棚和摊子中间那一段空甲板上 —— 那块地方本来就空,
- * 而且路人和围观的都不站那儿,不会被挡住。
+ * 晴天摊在木棚门口,下雨躲进棚里 —— 原来不管下雨打雷都直挺挺躺在露天,
+ * 天气改了一层雨丝,底下的猫一动不动,看着比没有雨还怪。
  *
- * 会呼吸(一格),偶尔抖一下耳朵。猫睡觉不是完全不动的,
+ * 位置比路人那条道靠后(SHED_Y):原来两边同一条基线,
+ * 路人经过的时候和猫重在一起,分不出谁在前谁在后。
+ *
+ * 会呼吸(一格),偶尔冒个 Z。猫睡觉不是完全不动的,
  * 完全不动就成了摆件。
  */
-export function drawCat(ctx, deckY, t, phase = 'day') {
+export function drawCat(ctx, deckY, t, phase = 'day', rainy = false) {
     const cv = shadedSprite('cat_sleep', SCENERY.cat_sleep, phase);
     const breathe = Math.sin(t * 0.0011) > 0 ? 0 : 1;
-    // 222:草棚(172)和路灯(259)中间那块空地。挨着路灯会和灯杆重在一起
-    shadow(ctx, 222, deckY - 13, 26, 0.18);
-    drawStanding(ctx, cv, 222, deckY - 13 + breathe);
+    // 躲雨的时候往棚里挪:靠里、靠上,踩在棚里那层干草上
+    // 下雨躲进棚里(靠里、靠上,踩在那层干草上),晴天摊在棚门口
+    const x = rainy ? SHED_X + 1 : SHED_X - 2;
+    const base = deckY + (rainy ? SHED_Y - 4 : CAT_Y);
+    if (!rainy) shadow(ctx, x, base, 26, 0.18);
+    drawStanding(ctx, cv, x, base + breathe);
     // 每隔一阵冒个 Z
     const p = (t * 0.00022) % 1;
     if (p < 0.5) {
         const a = 0.7 * (1 - p * 2);
         ctx.fillStyle = `rgba(255,253,244,${a.toFixed(2)})`;
-        const zx = Math.round(240 + p * 14), zy = Math.round(deckY - 30 - p * 20);
+        const zx = Math.round(x + 18 + p * 14), zy = Math.round(base - 24 - p * 20);
         ctx.fillRect(zx, zy, 4, 1);
         ctx.fillRect(zx + 2, zy + 1, 2, 1);
         ctx.fillRect(zx, zy + 2, 4, 1);
@@ -797,21 +832,61 @@ export function drawCat(ctx, deckY, t, phase = 'day') {
  * 只是路过的人。和围观的人分开:围观是玩法的一部分(节目越多人越多),
  * 路过纯粹是「这地方有人气」—— 一个大坝上不可能所有人都在看一只鸟。
  *
- * 走路就两帧:站姿(腿并着)和迈步(腿前后错开),来回换就是走。
- * 三帧以上在这个尺寸上看不出区别,纯浪费素材。
+ * **人数跟着钟点和天气走。** 原来永远是三个,半夜三点和早上八点一样热闹,
+ * 下暴雨也照样溜达 —— 天气和时段只改了调色和一层雨丝,底下「大家在干嘛」
+ * 一动不动,越看越假。海埂大坝真实的人流就是早晚多、正午晒、夜里没人。
+ *
+ * 走的这条道**比木棚和猫靠前一截**(见 STROLL_Y):原来大家踩在同一条
+ * 基线上,路人经过猫的时候两个人重在一起,分不出谁在前谁在后。
  */
-export function drawStrollers(ctx, deckY, t, phase = 'day') {
+export function drawStrollers(ctx, deckY, t, phase = 'day', opts = {}) {
+    const { count = 3, rainy = false } = opts;
     const SPAN = VW + 60;
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < count; i++) {
         const speed = 0.010 + i * 0.005;
         let x = (t * speed + i * 240) % SPAN - 30;
         if (i % 2) x = VW - x;                       // 一半往左走
         const who = ONLOOKERS[(i * 2 + 2) % ONLOOKERS.length];
         const step = Math.floor(t / 260 + i) % 2;    // 两帧来回换
         const key = step ? who + '_walk' : who;
-        shadow(ctx, x, deckY - 13, 12, 0.16);
-        drawStanding(ctx, shadedSprite(key, SCENERY[key], phase), Math.round(x), deckY - 13);
+        const base = deckY + STROLL_Y;
+        shadow(ctx, x, base, 12, 0.16);
+        drawStanding(ctx, shadedSprite(key, SCENERY[key], phase), Math.round(x), base);
+        if (rainy) drawUmbrella(ctx, Math.round(x), base - 20, i, phase);
     }
+}
+
+/** 路人走的那条道(相对甲板面)。比木棚和猫靠前,才分得出前后 */
+export const STROLL_Y = -4;
+
+/**
+ * 一把伞。**遮在头顶上方一点,不画柄** —— 柄画出来会从脸上穿过去,
+ * 而这个尺度上一根竖线的信息量还不如没有。
+ */
+export function drawUmbrella(ctx, x, y, seed, phase = 'day') {
+    const key = UMBRELLAS[seed % UMBRELLAS.length];
+    drawStanding(ctx, shadedSprite(key, SCENERY[key], phase), x, y);
+}
+
+const UMBRELLAS = ['umbrella_a', 'umbrella_b', 'umbrella_c'];
+
+/**
+ * 现在坝上该有几个路过的人。
+ * 早晚遛弯的最多,正午晒得躲开,夜里基本没人;下雨再减一个。
+ */
+export function strollerCount(when, weather) {
+    const h = when.getHours();
+    let n = h < 6 || h >= 23 ? 0
+          : h < 9  ? 3
+          : h < 11 ? 2
+          : h < 15 ? 1
+          : h < 19 ? 3
+          : h < 21 ? 2
+          : 1;
+    // 下雨少一个,但白天**至少留一个** —— 一个人都没有的大坝看着不是
+    // 「下雨了」,是「这游戏没做完」。深夜本来就是 0,那才该空着
+    if (weather === 'rainy') n = Math.max(n === 0 ? 0 : 1, n - 1);
+    return n;
 }
 
 /** 远处漂着的小船,慢慢横穿画面。淡淡退一点,让它待在水面那层 */

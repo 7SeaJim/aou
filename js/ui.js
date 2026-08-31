@@ -1300,8 +1300,8 @@ export class UI {
                 <p style="margin-bottom:2px">${icon(f.icon, 'lg')}
                    ${n ? f.name : '???'}
                    ${n ? `<span class="px-muted" style="font-size:12px">累计 ${n}</span>` : ''}</p>
-                <p class="px-muted" style="font-size:12px;line-height:1.6;margin:0">
-                    ${n ? FOOD_SOURCE[k] : '还没见过'}</p>
+                ${n ? `<p class="px-muted" style="font-size:12px;line-height:1.6;margin:0">
+                    ${FOOD_SOURCE[k]}</p>` : ''}
             </div>`;
         }).join('');
         /* ---- 菜谱 ----
