@@ -142,6 +142,10 @@
                 <div id="panel" class="px-drawer__body"></div>
             </div>
 
+            <!-- 出摊的厨房。**它是 DOM 不是画布** —— 核心动作是把食材拖到厨具上,
+                 拖拽、命中判定、拖影这些浏览器本来就有,没必要在 canvas 上重造一遍。 -->
+            <div id="kitchen" class="px-kitchen" hidden></div>
+
             <!-- 整页场景的操作条(小屋 / 出摊)。压在画面底下,不占画面外的地方 -->
             <div id="sceneBar" class="px-scenebar" hidden></div>
 

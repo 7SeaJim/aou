@@ -5,7 +5,7 @@
  * 好处:改目录不用写迁移,存档也更小(存档码是要玩家复制的)。
  */
 
-export const SAVE_VERSION = 10;
+export const SAVE_VERSION = 11;
 
 // 食材的键。改这里要同步 data.js 的 FOODS,并且 SAVE_VERSION +1 补一条迁移 ——
 // 这些键是 backpack 的字段名,直接进存档。
@@ -14,6 +14,9 @@ export const FOOD_KEYS = [
 ];
 export const ITEM_KEYS = ['shield', 'magnet', 'double'];
 export const UPGRADE_KEYS = ['stove', 'sign', 'shelf', 'warmer'];
+/** 厨具的四条线。和上面那四条是两回事:那四条管「你不在时赚多少」,
+    这四条管「你在的时候能多快」。 */
+export const TOOL_KEYS = ['board', 'pan', 'stove', 'oven'];
 /** 装扮的槽位。一个槽只能戴一件,换着戴不叠加。 */
 export const SLOT_KEYS = ['hat', 'neck'];
 /**
@@ -87,8 +90,11 @@ export function createInitialState() {
         /**
          * 出摊时预先做好、还没卖出去的成品。**必须存盘** ——
          * 「游客不在的时候可以提前做」这件事,只有跨会话留得住才成立。
+         * 形如 { shao_erkuai: { n: 2, q: 0.86 } } —— 记份数,也记平均品质。
          */
         stock: {},
+        /** 厨具等级 + 用哪个餐盘 */
+        kitchen: { board: 1, pan: 1, stove: 1, oven: 1, plate: 'plain', plates: ['plain'] },
         /** 已拥有的装扮 id */
         cosmetics: [],
         /** 正戴着的。每个槽位一件,null 表示空着。 */
@@ -117,6 +123,25 @@ export function createInitialState() {
  * 那种 falsy 判断 —— 字段真值为 0 或 '' 时会被误判成缺失。
  */
 const migrations = {
+    // v10 -> v11:厨房。加厨具等级和餐盘,出餐台的成品从「几份」变成「几份 + 品质」。
+    //
+    // 老档的 stock 是 { id: 数字 },新的是 { id: {n, q} }。**得搬,不能只加字段** ——
+    // 不搬的话老玩家出餐台上那几份会被当成对象读,拿到 undefined。
+    // 品质按「刚好」给,老档做的时候还没有火候这回事,不该判他不合格。
+    10(old) {
+        const stock = {};
+        for (const [k, v] of Object.entries(old.stock ?? {})) {
+            if (Number.isFinite(v) && v > 0) stock[k] = { n: v, q: 1 };
+            else if (v && Number.isFinite(v.n)) stock[k] = { n: v.n, q: v.q ?? 1 };
+        }
+        return {
+            ...old,
+            version: 11,
+            stock,
+            kitchen: { board: 1, pan: 1, stove: 1, oven: 1, plate: 'plain', plates: ['plain'] },
+        };
+    },
+
     // v9 -> v10:出摊玩法。加成品暂存,**去掉订单**。
     //
     // 订单和出摊是同一件事的两种写法(都是「有人要一道菜,你给他」),
@@ -350,9 +375,20 @@ function normalize(s) {
     out.stock = (() => {
         const st = {};
         for (const [k, v] of Object.entries(out.stock ?? {})) {
-            if (typeof k === 'string') st[k] = clampInt(v, 0, 99);
+            if (typeof k !== 'string' || !v) continue;
+            const n = clampInt(v.n, 0, 99);
+            if (n > 0) st[k] = { n, q: Math.min(1, Math.max(0, Number(v.q) || 1)) };
         }
         return st;
+    })();
+    out.kitchen = (() => {
+        const k = { ...base.kitchen, ...(out.kitchen || {}) };
+        for (const t of TOOL_KEYS) k[t] = clampInt(k[t], 1, 5);
+        k.plates = uniq(asArray(k.plates).filter(x => typeof x === 'string'));
+        if (!k.plates.includes('plain')) k.plates.unshift('plain');
+        // 只认真的买过的盘子 —— 存档码改一个没买过的进来,不该用得上
+        if (!k.plates.includes(k.plate)) k.plate = 'plain';
+        return k;
     })();
 
     // ---- 放置字段 ----

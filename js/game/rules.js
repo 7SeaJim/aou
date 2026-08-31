@@ -14,6 +14,7 @@ import {
     CREW, crewBonus, SEASONS, seasonOf,
     COSMETICS, EVENTS, ITEMS, MARKET, MARKET_LEVEL, FOODS,
     RECIPE_STEPS, SERVICE, dayPhase,
+    KITCHEN, kitchenCost, toolSlots, toolPower, PLATES,
 } from '../data.js';
 import { DAILY_TRIES } from '../state.js';
 import { now as clockNow } from '../clock.js';
@@ -133,16 +134,24 @@ export function cook(state, recipeId) {
  */
 export const serviceOpen = (when = clockNow()) => onDam(when) && dayPhase(when) === 'day';
 
-/** 亲手做的一份能卖多少。比自动出餐贵 —— 主动玩法总得有回报 */
-export function servicePrice(state, recipeId) {
-    const r = RECIPES.find(x => x.id === recipeId);
-    if (!r) return 0;
-    return Math.round(r.reward * stallInfo(state).priceMul * SERVICE.priceMul);
-}
-
 /** 出餐台上一共放了几份 */
 export const stockCount = state =>
-    Object.values(state.stock).reduce((a, b) => a + b, 0);
+    Object.values(state.stock).reduce((a, v) => a + (v?.n ?? 0), 0);
+
+/**
+ * 亲手做的一份能卖多少。
+ * 底价 × 摊位的招牌系数 × 出摊加成 × **火候** × 餐盘。
+ *
+ * 火候是唯一由手上功夫决定的那一项 —— 别的都能靠花钱堆上去,
+ * 只有它得你自己练。
+ */
+export function servicePrice(state, recipeId, quality = 1) {
+    const r = RECIPES.find(x => x.id === recipeId);
+    if (!r) return 0;
+    const plate = PLATES[state.kitchen?.plate] ?? PLATES.plain;
+    return Math.max(1, Math.round(
+        r.reward * stallInfo(state).priceMul * SERVICE.priceMul * quality * (1 + plate.bonus)));
+}
 
 /**
  * 开始做一道菜。**材料在这里就扣掉。**
@@ -163,30 +172,70 @@ export function startDish(state, recipeId) {
         return { ok: false, reason: '材料不够', missing: missingFor(state, r.cost) };
     }
     spend(state, r.cost);
-    return { ok: true, recipe: r, plan: RECIPE_STEPS[recipeId] };
+    return { ok: true, recipe: r, steps: RECIPE_STEPS[recipeId] };
 }
 
-/** 做好了,放上出餐台 */
-export function finishDish(state, recipeId) {
-    state.stock[recipeId] = (state.stock[recipeId] ?? 0) + 1;
+/**
+ * 做好了,放上出餐台。
+ * 同一道菜堆在一起时品质取**加权平均** —— 拿一份好的盖一份糊的说不过去。
+ */
+export function finishDish(state, recipeId, quality = 1) {
+    const cur = state.stock[recipeId] ?? { n: 0, q: 1 };
+    const n = cur.n + 1;
+    state.stock[recipeId] = { n, q: (cur.q * cur.n + quality) / n };
     return { ok: true };
 }
 
 /** 卖给一个游客。他要的那道得在出餐台上现成有 */
 export function serveGuest(state, recipeId) {
-    if (!(state.stock[recipeId] > 0)) return { ok: false, reason: '这道还没做好' };
-    state.stock[recipeId]--;
-    if (state.stock[recipeId] <= 0) delete state.stock[recipeId];
+    const cur = state.stock[recipeId];
+    if (!cur || cur.n <= 0) return { ok: false, reason: '这道还没做好' };
+    const quality = cur.q;
+    cur.n--;
+    if (cur.n <= 0) delete state.stock[recipeId];
 
-    const coins = servicePrice(state, recipeId);
+    const coins = servicePrice(state, recipeId, quality);
     state.coins += coins;
     state.completedOrders++;
     state.stats.served++;               // 手工出的也算出餐,成就一并算上
     const r = RECIPES.find(x => x.id === recipeId);
     return {
-        ok: true, coins, recipe: r,
+        ok: true, coins, quality, recipe: r,
         events: [{ type: 'serve', recipe: r, coins }, ...addExp(state, 4), ...checkAchievements(state)],
     };
+}
+
+/* ---------- 厨具 ---------- */
+
+/** 某件厨具现在有几格、多大火 */
+export function toolInfo(state, key) {
+    const lv = state.kitchen?.[key] ?? 1;
+    return { lv, slots: toolSlots(lv), power: toolPower(lv), cost: kitchenCost(key, lv) };
+}
+
+export function buyKitchen(state, key) {
+    if (!KITCHEN[key]) return { ok: false, reason: '没有这件厨具' };
+    const lv = state.kitchen[key] ?? 1;
+    const cost = kitchenCost(key, lv);
+    if (cost === null) return { ok: false, reason: '已经到顶了' };
+    if (state.coins < cost) return { ok: false, reason: `还差 ${cost - state.coins} 鸥币` };
+    state.coins -= cost;
+    state.kitchen[key] = lv + 1;
+    return { ok: true, key, level: lv + 1, events: [{ type: 'kitchen', key, level: lv + 1 }] };
+}
+
+export function buyPlate(state, key) {
+    const p = PLATES[key];
+    if (!p) return { ok: false, reason: '没有这种盘子' };
+    if (state.kitchen.plates.includes(key)) {
+        state.kitchen.plate = key;
+        return { ok: true, worn: true, plate: p };
+    }
+    if (state.coins < p.cost) return { ok: false, reason: `还差 ${p.cost - state.coins} 鸥币` };
+    state.coins -= p.cost;
+    state.kitchen.plates.push(key);
+    state.kitchen.plate = key;
+    return { ok: true, plate: p, events: [{ type: 'plate', plate: p }] };
 }
 
 /* ============================================================

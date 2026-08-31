@@ -473,7 +473,9 @@ AOU1.C.RZBPa8MwDMW_yzvrkGQr63Qb27mDbbcRimMrialjB9vpH0q_-3Ba2EnSk5DeT1ccJSYbPLgm6
 | 摊位的零碎升级件 | `tools/stallparts.py` + `scene.js` 的 `paintStall` | 不用 |
 | 装扮 | `tools/wear.py` + `js/data.js` 的 `COSMETICS`,跑 `npm run icons` | 不用 |
 | 大坝事件 | `js/data.js` 的 `EVENTS` | 不用 |
-| 某道菜怎么做 | `js/data.js` 的 `RECIPE_STEPS`(`wait` 等 / `tap` 动手) | 不用 |
+| 某道菜怎么做 | `js/data.js` 的 `RECIPE_STEPS` —— 一步 = 食材 + 厨具 + 时长 | 不用 |
+| 厨具的性格 | `js/data.js` 的 `TOOLS`,`window` 就是火候窗口的宽窄 | 不用 |
+| 厨具升级 / 餐盘 | `js/data.js` 的 `KITCHEN` / `PLATES` | 不用 |
 | 出摊的节奏 | `js/data.js` 的 `SERVICE`(来客间隔、耐心、出餐台上限) | 不用 |
 | 市场进货的价格/限量 | `js/data.js` 的 `MARKET` | 不用 |
 | 升级成本曲线 | `js/data.js` 的 `UPGRADES` + `upgradeCost` 的公比,**改完跑 sim** | 不用 |

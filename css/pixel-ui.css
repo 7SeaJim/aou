@@ -905,3 +905,138 @@
        那算不上「看得见码头」;46% 这条线正好还留着西山、湖面和远处那段堤。 */
     .px-drawer { top: 46%; left: 0; width: auto; box-shadow: 0 -4px 0 var(--ink); }
 }
+
+/* ============ 出摊的厨房 ============ */
+/* 布局照着老爹快餐店那一路压成一屏:
+   上是订单(画在 canvas 上)、中是砧板/煎盘/灶台、左下是烤箱、右是食谱。
+   **它是 DOM 不是画布** —— 核心动作是把食材拖到厨具上,拖拽和命中判定
+   浏览器本来就有,没必要在 canvas 上重造一遍。 */
+.px-kitchen {
+    position: absolute;
+    inset: 0;
+    z-index: 25;
+    pointer-events: none;      /* 只有里面的部件收事件,别挡住画面 */
+    font-family: var(--font-pixel);
+    font-size: 12px;
+    color: var(--ink);
+}
+.px-kitchen[hidden] { display: none; }
+.px-kitchen > * { pointer-events: auto; }
+
+/* 右边:食谱 + 手上正在做的 */
+.px-kside {
+    position: absolute;
+    top: 0; right: 0; bottom: 0;
+    width: 200px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 8px;
+    overflow-y: auto;
+    background: var(--sand);
+    box-shadow: inset 4px 0 0 var(--ink);
+}
+.px-kside h4 { font-size: 12px; margin: 2px 0 2px; color: var(--ink-soft); }
+
+/* 中间那排厨具 */
+.px-ktools {
+    position: absolute;
+    /* 148 = 底下的操作条(44)+ 烤箱那一格(约 100)。
+       摆低了会被操作条压住,摆高了柜台下面空一大块黑 */
+    left: 10px; right: 210px; bottom: 148px;
+    display: flex;
+    gap: 8px;
+    align-items: flex-end;
+}
+/* 烤箱单独在左下角 —— 它慢,不该和快节奏那三件挤在一条线上 */
+.px-koven { position: absolute; left: 10px; bottom: 52px; width: 46%; }
+
+.px-tool {
+    flex: 1;
+    background: var(--wood);
+    box-shadow: inset 0 0 0 3px var(--ink);
+    padding: 5px;
+}
+.px-tool__name { display: flex; align-items: center; gap: 5px; margin-bottom: 4px; }
+.px-tool__slots { display: flex; flex-wrap: wrap; gap: 4px; }
+.px-slotbox {
+    position: relative;
+    width: 46px; height: 44px;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 2px;
+    background: #241a13;
+    box-shadow: inset 0 0 0 2px var(--ink);
+    cursor: pointer;
+}
+.px-slotbox--empty { cursor: default; }
+.px-slotbox--hot { box-shadow: inset 0 0 0 2px var(--gold); }
+.px-slotbox__bar { position: absolute; left: 3px; right: 3px; bottom: 3px; height: 5px; background: #4a3628; }
+.px-slotbox__fill { height: 100%; }
+/* 「刚好」那一段在条子上是块亮的 —— 玩家盯的是这块,不是数字 */
+.px-slotbox__win { position: absolute; top: 0; bottom: 0; background: rgba(119,178,85,.55); }
+
+/* 在做的菜:可以拖的那张牌 */
+.px-chip2 {
+    display: flex; align-items: center; gap: 6px;
+    padding: 5px 6px;
+    background: var(--sand-2);
+    box-shadow: inset 0 0 0 2px var(--ink);
+    cursor: grab;
+    touch-action: none;        /* 不写这条,手机上一拖就变成滚页面 */
+    user-select: none;
+}
+.px-chip2--busy { opacity: .5; cursor: default; }
+.px-chip2 small { color: var(--ink-soft); }
+
+/* 拖起来时跟着手指走的那张影子 */
+.px-ghost {
+    position: fixed;
+    z-index: 90;
+    pointer-events: none;
+    padding: 4px 6px;
+    background: var(--gold-l);
+    box-shadow: inset 0 0 0 2px var(--ink);
+}
+/* 拖到能放的厨具上时,那件厨具亮一下 */
+.px-tool--drop { background: var(--gold); }
+
+.px-recipebtn {
+    display: flex; align-items: center; gap: 6px;
+    width: 100%;
+    padding: 5px 6px;
+    font: inherit; color: inherit; text-align: left;
+    background: var(--sand-2);
+    border: none;
+    box-shadow: inset 0 0 0 2px var(--ink);
+    cursor: pointer;
+}
+.px-recipebtn:hover:not(:disabled) { background: var(--gold-l); }
+.px-recipebtn:disabled { opacity: .4; cursor: default; }
+
+@media (max-width: 1059px) {
+    .px-kside { width: 150px; font-size: 11px; }
+    .px-ktools { right: 158px; bottom: 130px; gap: 5px; }
+    .px-slotbox { width: 38px; height: 38px; }
+}
+
+/* 订单条:排在画面最上面那一带(天空那儿),不压住柜台外站着的人。
+   画布上的人是「谁在等」,这排卡片是「我现在能给谁」,两件事各占一处。 */
+.px-korders {
+    position: absolute;
+    top: 6px; left: 6px; right: 210px;
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+.px-korder {
+    display: flex; align-items: center; gap: 5px;
+    width: 138px;
+    padding: 4px 5px;
+    background: rgba(247, 236, 202, .93);
+    box-shadow: inset 0 0 0 2px var(--ink);
+}
+.px-korder--ready { background: var(--gold-l); }
+@media (max-width: 1059px) {
+    .px-korders { right: 158px; }
+    .px-korder { width: 108px; }
+}

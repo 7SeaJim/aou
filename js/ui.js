@@ -13,7 +13,7 @@ import {
     DRINKS, FORTUNES, HOURS, hourSlot,
     CREW, FOOD_SOURCE, COSMETICS, SLOTS, dayPhase,
     TUTORIAL, TUTORIAL_GIFT, MARKET, MARKET_LEVEL,
-    RECIPE_STEPS, STATIONS, SERVICE, HOURS as _HOURS,
+    RECIPE_STEPS, SERVICE, TOOLS, QUALITY, KITCHEN, kitchenCost, PLATES,
 } from './data.js';
 import { paintWearPreview, paintWearItem } from './game/wear.js';
 import { renderCard } from './game/card.js';
@@ -81,6 +81,7 @@ export class UI {
         this.$drawer = $('#drawer');
         this.$drawerTitle = $('#drawerTitle');
         this.$sceneBar = $('#sceneBar');
+        this.$kitchen = $('#kitchen');
         this.$modal = $('#modal');
         this.$modalTitle = $('#modalTitle');
         this.$modalBody = $('#modalBody');
@@ -96,6 +97,7 @@ export class UI {
         }
         $('#drawerClose').addEventListener('click', () => { sfx.play('tab'); this.go(null); });
         $('#modalClose').addEventListener('click', () => { sfx.play('tab'); this.openModal(null); });
+        this.bindKitchen();
         // 场景条和弹窗里的按钮走同一套委托
         for (const host of [this.$sceneBar, this.$modalBody]) {
             host.addEventListener('click', e => {
@@ -254,16 +256,9 @@ export class UI {
                 this.toast('引导关了。想再看一遍就清档重开', 'star');
                 break;
 
-            case 'dish': {
-                const r = this.service?.startDish(data.id);
+            case 'open': {
+                const r = this.service?.open(data.id);
                 if (!r?.ok) return this.toast(this.explain(r ?? { reason: '现在开不了张' }), 'shop');
-                break;
-            }
-
-            case 'tap': {
-                const r = this.service?.tap(data.station, Number(data.slot));
-                if (!r?.ok) return r?.reason ? this.toast(r.reason, 'shop') : undefined;
-                if (r.done) this.toast('做好了,放上出餐台', 'shop');
                 break;
             }
 
@@ -272,6 +267,20 @@ export class UI {
                 if (!r?.ok) return this.toast(r?.reason ?? '给不了', 'coin');
                 this.toast(`${r.recipe.name} 卖出去了,+${r.coins} 鸥币`, 'coin');
                 this.showEvents(r.events.slice(1));
+                break;
+            }
+
+            case 'kitchen': {
+                const r = this.mutate(st => rules.buyKitchen(st, data.key));
+                if (!r.ok) return this.toast(r.reason, 'coin');
+                this.toast(`${KITCHEN[data.key].name} 升到 ${r.level} 级`, 'coin');
+                break;
+            }
+
+            case 'plate': {
+                const r = this.mutate(st => rules.buyPlate(st, data.key));
+                if (!r.ok) return this.toast(r.reason, 'coin');
+                this.toast(r.worn ? `换上${r.plate.name}` : `买下${r.plate.name}`, 'coin');
                 break;
             }
 
@@ -507,11 +516,13 @@ export class UI {
             this.$sceneBar.innerHTML = this.sceneBar();
             this.$drawer.hidden = true;
             this.$panel.innerHTML = '';
+            this.renderKitchen();
             this.renderModal();
             this.paintCanvases();
             return;
         }
         this.$modal.hidden = true;
+        this.$kitchen.hidden = true;
 
         const view = {
             dock: () => this.viewDock(),
@@ -766,6 +777,187 @@ export class UI {
         </div>`;
     }
 
+    /* ---------- 出摊的厨房 ---------- */
+
+    /**
+     * 厨房。**布局照着老爹快餐店那一路压成一屏**:
+     * 上是订单(画在 canvas 上)、中是砧板/煎盘/灶台、左下是烤箱、右是食谱。
+     *
+     * 烤箱单独摆左下角不和那三件挤一排:它慢,是「放着不管」的那一类,
+     * 和需要盯着的三件混在一起,玩家的眼睛不知道该看哪儿。
+     */
+    renderKitchen() {
+        if (this.screen !== 'service' || !rules.serviceOpen()) {
+            this.$kitchen.hidden = true;
+            return;
+        }
+        const v = this.service?.snapshot();
+        if (!v) { this.$kitchen.hidden = true; return; }
+        this.$kitchen.hidden = false;
+        const s = this.getState();
+
+        const mid = ['board', 'pan', 'stove'].map(k => this.toolBox(k, v)).join('');
+        const oven = this.toolBox('oven', v);
+
+        // 右边:手上在做的(可拖)+ 能开的菜
+        const doing = v.dishes.length ? v.dishes.map(d => `
+            <div class="px-chip2 ${d.busy ? 'px-chip2--busy' : ''}"
+                 ${d.busy ? '' : `data-drag="${d.id}" data-tool="${d.tool}"`}>
+                ${icon(FOODS[d.ing].icon)}
+                <div style="flex:1;min-width:0">
+                    <div>${d.stepName}</div>
+                    <small>拖到${TOOLS[d.tool].name} · ${d.step + 1}/${d.total}</small>
+                </div>
+            </div>`).join('') : '<small class="px-muted">还没开工</small>';
+
+        const menu = RECIPES.filter(r => s.unlockedRecipes.includes(r.id) && RECIPE_STEPS[r.id])
+            .map(r => {
+                const ok = rules.canAfford(s, r.cost) && v.stockCount < SERVICE.stockMax;
+                return `<button class="px-recipebtn" data-act="open" data-id="${r.id}"
+                                ${ok ? '' : 'disabled'}>
+                    ${icon(r.icon)} <span style="flex:1">${r.name}</span></button>`;
+            }).join('');
+
+        const stock = Object.entries(v.stock).filter(([, o]) => o.n > 0).map(([id, o]) => {
+            const r = RECIPES.find(x => x.id === id);
+            const g = o.q > 0.85 ? 'good' : o.q > 0.6 ? 'raw' : 'burnt';
+            return `<span class="px-chip" style="border-left:4px solid ${QUALITY[g].color}">
+                ${icon(r.icon)} ${o.n}</span>`;
+        }).join('') || '<small class="px-muted">空的</small>';
+
+        // 订单排在最上面那条 —— **画在天空那一带**,不压住柜台外站着的人。
+        // 画布上那几个人是「谁在等」,这排卡片是「我现在能给谁」,两件事各占一处。
+        const orders = v.guests.map(g => {
+            const r = RECIPES.find(x => x.id === g.want);
+            const col = g.left > 0.45 ? 'leaf' : g.left > 0.2 ? 'gold' : 'coral';
+            return `
+            <div class="px-korder ${g.ready ? 'px-korder--ready' : ''}">
+                ${icon(r.icon, 'lg')}
+                <div style="flex:1;min-width:0">
+                    <div style="font-size:11px">${r.name}</div>
+                    <div class="px-bar" style="height:6px;margin-top:3px">
+                        <div class="px-bar__fill px-bar__fill--${col}"
+                             style="width:${Math.round(g.left * 100)}%"></div>
+                    </div>
+                </div>
+                <button class="px-btn px-btn--sm" data-act="serve" data-id="${g.id}"
+                        ${g.ready ? '' : 'disabled'}>给</button>
+            </div>`;
+        }).join('');
+
+        this.$kitchen.innerHTML = `
+            <div class="px-korders">${orders}</div>
+            <div class="px-ktools">${mid}</div>
+            <div class="px-koven">${oven}</div>
+            <div class="px-kside">
+                <h4>手上在做</h4>${doing}
+                <h4>出餐台 ${v.stockCount}/${SERVICE.stockMax}</h4>
+                <div style="display:flex;gap:4px;flex-wrap:wrap">${stock}</div>
+                <h4>开一道</h4>${menu}
+            </div>`;
+    }
+
+    /** 一件厨具:名字 + 几个格子。格子里有活就画火候条 */
+    toolBox(key, v) {
+        const t = TOOLS[key];
+        const info = rules.toolInfo(this.getState(), key);
+        const slots = (v.tools[key] ?? []).map((j, i) => {
+            if (!j) return `<div class="px-slotbox px-slotbox--empty"></div>`;
+            const p = Math.min(1, j.p / 1.6);
+            const winL = ((1 - t.window) / 1.6) * 100;
+            const winW = ((t.window * 1.6) / 1.6) * 100;
+            return `
+            <div class="px-slotbox ${j.grade === 'good' ? 'px-slotbox--hot' : ''}"
+                 data-take="${key}" data-slot="${i}" title="${j.name}">
+                ${icon(FOODS[j.ing].icon)}
+                <div class="px-slotbox__bar">
+                    <div class="px-slotbox__win" style="left:${winL}%;width:${winW}%"></div>
+                    <div class="px-slotbox__fill"
+                         style="width:${Math.round(p * 100)}%;background:${QUALITY[j.grade].color}"></div>
+                </div>
+            </div>`;
+        }).join('');
+        return `
+        <div class="px-tool" data-drop="${key}">
+            <div class="px-tool__name">${icon(t.icon)} ${t.name}
+                <small class="px-muted">Lv.${info.lv}</small></div>
+            <div class="px-tool__slots">${slots}</div>
+        </div>`;
+    }
+
+    /**
+     * 厨房的操作:点格子端菜、拖牌子放菜。
+     *
+     * **拖拽走 pointer 事件不走 HTML5 drag** —— 后者在移动端基本不能用,
+     * 而这游戏一半以上的人在手机上。pointer 事件桌面和触屏是同一套代码。
+     */
+    bindKitchen() {
+        const K = this.$kitchen;
+
+        K.addEventListener('click', e => {
+            const take = e.target.closest('[data-take]');
+            if (take) {
+                sfx.play('serve' in {} ? 'click' : 'click');
+                const r = this.service?.take(take.dataset.take, Number(take.dataset.slot));
+                if (r?.done) {
+                    sfx.play(r.grade === 'good' ? 'coin' : 'click');
+                    this.toast(`${RECIPES.find(x => x.id === r.recipe).name} 装盘 · ${QUALITY[r.grade].name}`,
+                               'shop');
+                }
+                return;
+            }
+            const act = e.target.closest('[data-act]');
+            if (act) { sfx.play('click'); this.handle(act.dataset.act, act.dataset); }
+        });
+
+        let drag = null;
+        const ghost = document.createElement('div');
+        ghost.className = 'px-ghost';
+        ghost.hidden = true;
+        document.body.appendChild(ghost);
+
+        const dropUnder = (x, y) => {
+            const el = document.elementFromPoint(x, y);
+            return el?.closest('[data-drop]') ?? null;
+        };
+
+        K.addEventListener('pointerdown', e => {
+            const chip = e.target.closest('[data-drag]');
+            if (!chip) return;
+            drag = { id: Number(chip.dataset.drag), tool: chip.dataset.tool };
+            ghost.innerHTML = chip.innerHTML;
+            ghost.hidden = false;
+            ghost.style.left = `${e.clientX - 24}px`;
+            ghost.style.top = `${e.clientY - 18}px`;
+            chip.setPointerCapture?.(e.pointerId);
+            e.preventDefault();
+        });
+
+        K.addEventListener('pointermove', e => {
+            if (!drag) return;
+            ghost.style.left = `${e.clientX - 24}px`;
+            ghost.style.top = `${e.clientY - 18}px`;
+            for (const t of K.querySelectorAll('[data-drop]')) t.classList.remove('px-tool--drop');
+            const hit = dropUnder(e.clientX, e.clientY);
+            if (hit && hit.dataset.drop === drag.tool) hit.classList.add('px-tool--drop');
+        });
+
+        const end = e => {
+            if (!drag) return;
+            ghost.hidden = true;
+            for (const t of K.querySelectorAll('[data-drop]')) t.classList.remove('px-tool--drop');
+            const hit = dropUnder(e.clientX, e.clientY);
+            if (hit) {
+                const r = this.service?.place(drag.id, hit.dataset.drop);
+                if (r?.ok) sfx.play('click');
+                else if (r?.reason) this.toast(r.reason, 'shop');
+            }
+            drag = null;
+        };
+        K.addEventListener('pointerup', end);
+        K.addEventListener('pointercancel', () => { ghost.hidden = true; drag = null; });
+    }
+
     /** 场景里的弹窗。开着哪个由 this.modal 决定 */
     renderModal() {
         const kind = this.modal;
@@ -776,7 +968,7 @@ export class UI {
             fortune: ['今日签', () => this.modalFortune()],
             c4: [`海鸥四子棋 · ${s.c4.win} 胜 ${s.c4.lose} 负 ${s.c4.draw} 平`, () => this.c4View()],
             drink: ['请它喝一杯', () => this.modalDrink()],
-            kitchen: ['后厨', () => this.viewService()],
+            kitchen: ['后厨 · 添置家什', () => this.kitchenShop()],
         }[kind];
         if (!map) { this.$modal.hidden = true; return; }
         this.$modalTitle.textContent = map[0];
@@ -885,106 +1077,7 @@ export class UI {
      * 在 440×310 的画布上做点击判定,手机上每个工位不到一个指头宽 ——
      * 那不是操作,那是抽奖。
      */
-    viewService() {
-        const s = this.getState();
-        if (!rules.serviceOpen()) {
-            return `
-                        <div class="px-panel px-panel--sea">
-                <p>${icon('shop')} 这会儿摊上没人。</p>
-                <p class="px-muted">白天才有游客上坝。中午和晚上哇鸥回小屋,
-                   天黑之后坝上也就剩风了。</p>
-            </div>`;
-        }
-        const v = this.service?.snapshot();
-        if (!v) return '<h2>出摊</h2><p class="px-muted">正在开张…</p>';
-
-        const dish = id => RECIPES.find(r => r.id === id);
-
-        /* ---- 客人 ---- */
-        const guests = v.guests.length ? v.guests.map(g => {
-            const r = dish(g.want);
-            const col = g.left > 0.45 ? 'leaf' : g.left > 0.2 ? 'gold' : 'coral';
-            return `
-            <div class="px-ach ${g.ready ? 'px-ach--got' : ''}">
-                ${icon(r.icon, 'lg')}
-                <div style="flex:1;min-width:0">
-                    <strong>${r.name}</strong>
-                    <div class="px-bar" style="height:8px;margin-top:5px">
-                        <div class="px-bar__fill px-bar__fill--${col}"
-                             style="width:${Math.round(g.left * 100)}%"></div>
-                    </div>
-                </div>
-                <button class="px-btn px-btn--sm" data-act="serve" data-id="${g.id}"
-                        ${g.ready ? '' : 'disabled'}>给他</button>
-            </div>`;
-        }).join('') : '<p class="px-muted">还没人来。先做几份备着。</p>';
-
-        /* ---- 工位 ---- */
-        const line = (station, jobs) => jobs.map((j, i) => {
-            if (!j) return `<div class="px-ach"><span class="px-muted" style="flex:1">空着</span></div>`;
-            const r = dish(j.recipe);
-            const btn = j.kind === 'done'
-                ? `<button class="px-btn px-btn--sm" data-act="tap" data-station="${station}"
-                           data-slot="${i}">端走</button>`
-                : j.kind === 'tap'
-                ? `<button class="px-btn px-btn--sm px-btn--coral" data-act="tap"
-                           data-station="${station}" data-slot="${i}">${j.stepName}</button>`
-                : `<span class="px-tag">${j.stepName}</span>`;
-            return `
-            <div class="px-ach ${j.kind === 'done' ? 'px-ach--got' : ''}">
-                ${icon(r.icon, 'lg')}
-                <div style="flex:1;min-width:0">
-                    <strong>${r.name}</strong>
-                    ${j.kind === 'wait' ? `<div class="px-bar" style="height:8px;margin-top:5px">
-                        <div class="px-bar__fill" style="width:${Math.round(j.progress * 100)}%"></div>
-                    </div>` : `<p class="px-muted">${j.stepName}</p>`}
-                </div>
-                ${btn}
-            </div>`;
-        }).join('');
-
-        /* ---- 能做什么 ---- */
-        const menu = RECIPES.filter(r => s.unlockedRecipes.includes(r.id) && RECIPE_STEPS[r.id])
-            .map(r => {
-                const plan = RECIPE_STEPS[r.id];
-                const ok = rules.canAfford(s, r.cost) && v.stockCount < SERVICE.stockMax;
-                return `
-                <button class="px-btn px-btn--sm ${ok ? '' : 'px-btn--wood'}" data-act="dish"
-                        data-id="${r.id}" ${ok ? '' : 'disabled'}
-                        style="flex-direction:column;gap:2px;padding:8px 10px">
-                    ${icon(r.icon, 'lg')}
-                    <span style="font-size:12px">${r.name}</span>
-                    <span class="px-muted" style="font-size:11px">${STATIONS[plan.station].name}</span>
-                </button>`;
-            }).join('');
-
-        const stock = Object.entries(v.stock).filter(([, n]) => n > 0)
-            .map(([id, n]) => `<span class="px-chip">${icon(dish(id).icon)} ${dish(id).name} ×${n}</span>`)
-            .join(' ') || '<span class="px-muted">空的</span>';
-
-        return `
-                <p class="px-muted" style="margin-bottom:16px">
-            卖出 ${v.sold}${v.gone ? ` · 等走了 ${v.gone} 位` : ''} ·
-            出餐台 ${v.stockCount}/${SERVICE.stockMax}<br>
-            <strong>开了工的菜,离开这一页就废了</strong>(材料在开工时就下锅了)。</p>
-
-        <h3 style="margin-bottom:10px">柜台外</h3>
-        <div style="margin-bottom:20px">${guests}</div>
-
-        <h3 style="margin-bottom:10px">${STATIONS.stove.name}</h3>
-        <div style="margin-bottom:16px">${line('stove', v.jobs.stove)}</div>
-
-        <h3 style="margin-bottom:10px">${STATIONS.oven.name}<span class="px-muted"
-            style="font-size:13px"> · 慢,但一次放得下好几样</span></h3>
-        <div style="margin-bottom:20px">${line('oven', v.jobs.oven)}</div>
-
-        <h3 style="margin-bottom:10px">开一道</h3>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px">${menu}</div>
-
-        <h3 style="margin-bottom:10px">出餐台</h3>
-        <div style="display:flex;gap:8px;flex-wrap:wrap">${stock}</div>`;
-    }
-
+    // 旧的 viewService 删了 —— 出摊现在是整页 + DOM 厨房,见 renderKitchen()
     /** 图鉴单独一页。它记的是「见过什么」,背包记的是「手上有什么」,两件事。 */
     viewCodex() {
         return this.codexView();
@@ -1149,7 +1242,56 @@ export class UI {
         <h3 style="margin-bottom:12px">升级</h3>
         <div class="px-grid" style="--min:190px;margin-bottom:28px">${ups}</div>
 
+        ${this.kitchenShop()}
+
         ${this.crewView()}`;
+    }
+
+    /**
+     * 厨具和餐盘。**和摊位那四条升级分开摆** ——
+     * 摊位那四条改的是「你不在的时候赚多少」,这几条改的是「你在的时候能多快」。
+     * 两笔钱都从一个钱包出,但玩家心里该分得清:一条躺着赚,一条站着赚。
+     */
+    kitchenShop() {
+        const s = this.getState();
+        const tools = Object.entries(KITCHEN).map(([key, k]) => {
+            const info = rules.toolInfo(s, key);
+            return `
+            <div class="px-ach">
+                ${icon(TOOLS[key].icon, 'lg')}
+                <div style="flex:1;min-width:0">
+                    <strong>${k.name}</strong> <span class="px-muted">Lv.${info.lv}</span>
+                    <p class="px-muted">${k.desc}</p>
+                </div>
+                ${info.cost === null
+                    ? '<span class="px-tag px-tag--leaf">到顶了</span>'
+                    : `<button class="px-btn px-btn--sm" data-act="kitchen" data-key="${key}"
+                         ${s.coins < info.cost ? 'disabled' : ''}>${icon('coin')} ${info.cost}</button>`}
+            </div>`;
+        }).join('');
+
+        const plates = Object.entries(PLATES).map(([key, p]) => {
+            const own = s.kitchen.plates.includes(key);
+            const on = s.kitchen.plate === key;
+            return `
+            <div class="px-ach ${on ? 'px-ach--got' : ''}">
+                <span style="width:22px;height:22px;flex:none;background:${p.tint};
+                             box-shadow:inset 0 0 0 3px var(--ink)"></span>
+                <div style="flex:1;min-width:0"><strong>${p.name}</strong></div>
+                <button class="px-btn px-btn--sm ${on ? 'px-btn--wood' : ''}"
+                        data-act="plate" data-key="${key}"
+                        ${on || (!own && s.coins < p.cost) ? 'disabled' : ''}>
+                    ${on ? '用着' : own ? '换上' : `${icon('coin')} ${p.cost}`}</button>
+            </div>`;
+        }).join('');
+
+        return `
+        <h3 style="margin-bottom:6px">后厨</h3>
+        <p class="px-muted" style="margin-bottom:12px">
+            这几件管的是**你在摊上的时候**能做多快。上面那四条管的是你不在的时候。</p>
+        <div style="margin-bottom:16px">${tools}</div>
+        <h4 style="margin-bottom:8px">餐盘</h4>
+        <div style="margin-bottom:24px">${plates}</div>`;
     }
 
     viewPostcards() {

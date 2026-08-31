@@ -531,62 +531,123 @@ export const HELPER = {
  * 时段本身就是这个玩法的节制,不用再加「每天几次」的计数器。
  */
 
-/** 工位。灶台一次一样、快;烤箱一次能放好几样,但慢得多。 */
-export const STATIONS = {
-    stove: { name: '灶台', slots: 1, icon: 'stove' },
-    oven:  { name: '烤箱', slots: 4, icon: 'shop' },
+/**
+ * 四件厨具。布局照着老爹快餐店那一路:订单在上、食谱在右、案台在中、烤箱在左下。
+ *
+ * 每件厨具管一类活,**别互相顶替** —— 玩家看一眼菜谱就知道该往哪儿拖:
+ *
+ *   board 砧板  切。快,不怕过火,是新手最先学会的一步
+ *   pan   煎盘  煎。窗口窄,最考手速
+ *   stove 灶台  炒和煮。中等
+ *   oven  烤箱  烤和蒸。慢,但**窗口特别宽**,所以能一边烤一边干别的 ——
+ *               「游客不在时提前做」靠的就是它
+ */
+export const TOOLS = {
+    board: { name: '砧板', icon: 'chili',       spot: 'mid',  window: 0.55 },
+    pan:   { name: '煎盘', icon: 'yangyu_baba', spot: 'mid',  window: 0.22 },
+    stove: { name: '灶台', icon: 'stove',       spot: 'mid',  window: 0.34 },
+    oven:  { name: '烤箱', icon: 'xianhua_bing', spot: 'left', window: 0.75 },
 };
 
 /**
- * 每道菜怎么做。一道菜 = 一串步骤,两种:
+ * 火候。**过头和不到家一样糟** —— 这是这个玩法唯一的手上功夫。
  *
- *   wait  放上去等。等的时候你可以去干别的 —— 这是「烤箱能预制」的基础
- *   tap   要你动手点一下。它是这个玩法唯一的操作,所以每道菜至少有一步
+ * 一步的进度条从 0 走到 1;`window` 是「刚好」那一段占的比例,贴着 1 结束。
+ * 走过 1 就开始糊,`burnMs` 之后彻底焦。
  *
- * 步骤是**照着真做法写的**,不是随便凑的节奏:烧饵块先烤再刷酱、
- * 见手青得回锅炒第二遍(不炒透会看见小人,这个梗得留着)。
+ * 三档而不是连续打分:连续分数玩家读不出来自己差在哪,
+ * 三档是「生了 / 好了 / 焦了」,一眼知道下次该早点还是晚点。
+ */
+export const QUALITY = {
+    raw:   { name: '还生着', mul: 0.45, color: '#8a99a3' },
+    good:  { name: '刚好',   mul: 1.00, color: '#77b255' },
+    burnt: { name: '焦了',   mul: 0.45, color: '#c14e33' },
+};
+export const BURN_MS = 5000;      // 过了火之后再等这么久就彻底焦
+
+/**
+ * 每道菜怎么做。一步 = **把某样食材拖到某件厨具上,再在火候窗口里端下来**。
+ *
+ * 步骤照着真做法写,不是随便凑的节奏:烧饵块先烤饵块再切辣椒配,
+ * 见手青得下锅炒两遍(不炒透会看见小人,这个梗得留着)。
  * 玩家第一次做完一道菜,应该顺带知道了这道菜是怎么来的。
  */
 export const RECIPE_STEPS = {
-    shao_erkuai: { station: 'stove', steps: [
-        { kind: 'wait', ms: 4000,  name: '烤饵块' },
-        { kind: 'tap',              name: '刷甜咸酱' },
-    ] },
-    yangyu_baba: { station: 'stove', steps: [
-        { kind: 'tap',              name: '压成饼' },
-        { kind: 'wait', ms: 5000,  name: '煎两面' },
-    ] },
-    liangxia: { station: 'stove', steps: [
-        { kind: 'tap',              name: '漏凉虾' },
-        { kind: 'tap',              name: '兑红糖水' },
-    ] },
-    douhua_mx: { station: 'stove', steps: [
-        { kind: 'wait', ms: 4000,  name: '烫米线' },
-        { kind: 'tap',              name: '舀一勺豆花' },
-        { kind: 'tap',              name: '浇红油' },
-    ] },
-    xiaoguo_mx: { station: 'stove', steps: [
-        { kind: 'tap',              name: '下小铜锅' },
-        { kind: 'wait', ms: 7000,  name: '煮开' },
-    ] },
-    kao_rusan: { station: 'stove', steps: [
-        { kind: 'tap',              name: '卷上竹签' },
-        { kind: 'wait', ms: 6000,  name: '架上去烤' },
-        { kind: 'tap',              name: '刷玫瑰酱' },
-    ] },
-    jianshouqing: { station: 'stove', steps: [
-        { kind: 'tap',              name: '切片' },
-        { kind: 'wait', ms: 8000,  name: '大火炒' },
-        { kind: 'wait', ms: 8000,  name: '**再炒一遍**' },
-    ] },
-    xianhua_bing: { station: 'oven', steps: [
-        { kind: 'tap',              name: '包鲜花馅' },
-        { kind: 'wait', ms: 16000, name: '进烤箱' },
-    ] },
-    qiguoji: { station: 'oven', steps: [
-        { kind: 'tap',              name: '装汽锅' },
-        { kind: 'wait', ms: 24000, name: '上汽蒸' },
-    ] },
+    shao_erkuai: [
+        { ing: 'erkuai', tool: 'stove', ms: 3500, name: '烤饵块' },
+        { ing: 'chili',  tool: 'board', ms: 1500, name: '切辣椒' },
+    ],
+    yangyu_baba: [
+        { ing: 'potato', tool: 'board', ms: 1600, name: '切洋芋' },
+        { ing: 'potato', tool: 'pan',   ms: 4000, name: '煎两面' },
+    ],
+    liangxia: [
+        { ing: 'rice',  tool: 'stove', ms: 2500, name: '煮米浆' },
+        { ing: 'sugar', tool: 'board', ms: 1200, name: '刨红糖' },
+    ],
+    douhua_mx: [
+        { ing: 'rice',   tool: 'stove', ms: 3000, name: '烫米线' },
+        { ing: 'douhua', tool: 'board', ms: 1500, name: '舀豆花' },
+    ],
+    xiaoguo_mx: [
+        { ing: 'chili', tool: 'board', ms: 1500, name: '切小米辣' },
+        { ing: 'rice',  tool: 'stove', ms: 5000, name: '小铜锅煮开' },
+    ],
+    kao_rusan: [
+        { ing: 'rusan',  tool: 'pan',   ms: 3800, name: '架上去烤' },
+        { ing: 'flower', tool: 'board', ms: 1500, name: '调玫瑰酱' },
+    ],
+    jianshouqing: [
+        { ing: 'mushroom', tool: 'board', ms: 2000, name: '切片' },
+        { ing: 'mushroom', tool: 'stove', ms: 5000, name: '大火炒' },
+        { ing: 'mushroom', tool: 'stove', ms: 5000, name: '再炒一遍' },
+    ],
+    xianhua_bing: [
+        { ing: 'flower', tool: 'board', ms: 2000, name: '剁鲜花馅' },
+        { ing: 'erkuai', tool: 'oven',  ms: 11000, name: '进烤箱' },
+    ],
+    qiguoji: [
+        { ing: 'potato',   tool: 'board', ms: 2000, name: '切配菜' },
+        { ing: 'mushroom', tool: 'stove', ms: 4000, name: '爆香' },
+        { ing: 'chili',    tool: 'oven',  ms: 16000, name: '上汽蒸' },
+    ],
+};
+
+/**
+ * 厨具升级。**花的是鸥币,和摊位那四条线分开** ——
+ * 摊位那四条改的是「你不在的时候赚多少」,这四条改的是「你在的时候能多快」。
+ * 两笔钱都从一个钱包出,但玩家心里分得清:一条是躺着赚,一条是站着赚。
+ *
+ *   slots  同时能做几份
+ *   power  火力。时间按 1/power 缩短,窗口按比例跟着缩 —— 更快但不更容易
+ */
+export const KITCHEN = {
+    board: { name: '砧板', desc: '切得更快、能同时切几样', base: 400,  max: 5 },
+    pan:   { name: '煎盘', desc: '多一口煎盘、火更旺',      base: 900,  max: 5 },
+    stove: { name: '灶台', desc: '多一个灶眼、火更旺',      base: 700,  max: 5 },
+    oven:  { name: '烤箱', desc: '多一格、烤得更快',        base: 1500, max: 5 },
+};
+
+/** 第 lv 级要多少钱。满级返回 null */
+export function kitchenCost(key, lv) {
+    const k = KITCHEN[key];
+    if (!k || lv >= k.max) return null;
+    return Math.round(k.base * Math.pow(2.2, lv - 1));
+}
+
+/** 某件厨具在 lv 级时的格数和火力 */
+export const toolSlots = lv => 1 + Math.floor((lv - 1) / 2);
+export const toolPower = lv => 1 + (lv - 1) * 0.18;
+
+/**
+ * 餐盘。纯外观 + 一点点加价 —— **加价必须小**,
+ * 不然它就从「我喜欢这个花纹」变成「我不得不买这个花纹」。
+ */
+export const PLATES = {
+    plain:  { name: '白瓷盘',   cost: 0,     bonus: 0,    tint: '#fffdf4' },
+    blue:   { name: '青花盘',   cost: 3000,  bonus: 0.04, tint: '#62c4cc' },
+    wood:   { name: '木托盘',   cost: 8000,  bonus: 0.07, tint: '#cf9862' },
+    copper: { name: '紫铜盘',   cost: 20000, bonus: 0.10, tint: '#c14e33' },
 };
 
 export const SERVICE = {
