@@ -787,18 +787,19 @@
     align-items: center;
     gap: 3px;
     font-family: var(--font-pixel);
-    /* 13 不是 10。像素字体本来就没有抗锯齿,10px 在手机上直接糊成一团 ——
-       这一栏是给人瞄一眼的,瞄不清就等于没有 */
-    font-size: 13px;
+    /* 15 不是 10。像素字体本来就没有抗锯齿,小字号在手机上直接糊成一团 ——
+       这一栏是给人瞄一眼的,瞄不清就等于没有。
+       13 试过一版还是偏小,别再往下调了。 */
+    font-size: 15px;
     line-height: 1.35;
     color: var(--ink);
     text-align: center;
 }
 /* 第二行是标题。**不靠压暗区分** —— 木头底上再压暗就读不出来了,
    靠小一号和一点点透明度分主次就够 */
-.px-railstat small:last-child { font-size: 11px; opacity: .78; }
+.px-railstat small:last-child { font-size: 13px; opacity: .8; }
 .px-railstat__bar {
-    width: 46px;
+    width: 54px;
     height: 7px;
     background: var(--wood-d);
     box-shadow: inset 0 0 0 2px var(--ink);
@@ -821,7 +822,7 @@
     margin-left: auto;
     padding-right: 8px;
     font-family: var(--font-pixel);
-    font-size: 12px;
+    font-size: 15px;
     color: var(--ink);
 }
 .px-railinfo > span { display: flex; align-items: center; gap: 5px; }
@@ -836,7 +837,7 @@
     flex-direction: column;
     align-items: center;
     gap: 3px;
-    width: 62px;
+    width: 70px;
     padding: 7px 3px 6px;
     font-family: var(--font-pixel);
     font-size: 13px;

@@ -111,22 +111,30 @@ DISHES['xiaoguo_mx'] = [
 "................",
 ]
 
-# 鲜花饼:圆酥饼,顶上一个粉花印,侧面看得见酥皮层
+# 鲜花饼:圆酥饼,正中一个**红戳**,底下两道酥皮层。
+#
+# 上一版顶上画的是一朵粉花 —— 和食材「鲜花」用的是同一档粉,
+# 16 像素上两个都读成「一坨粉的圆东西」,这正是要避开的那件事。
+# 现在它的身份换成**酥皮 + 红印**:红印是真鲜花饼上就有的那个戳,
+# 而鲜花那边是粉瓣配金蕊,两个图从此一点不沾。
+#
+# **饼身不能用 S(沙色)。** 面板底色就是沙色,一整块 S 画上去等于没画 ——
+# 只剩一圈描边和中间那个红戳,读成一个甜甜圈。改成 s + T 两档暖黄褐。
 DISHES['xianhua_bing'] = [
 "................",
 "................",
-"....KKKKKKKK....",
-"..KKSSSSSSSSKK..",
-".KSSSSpppSSSSSK.",
-".KSSSpqpqpSSSSK.",
-".KSSSppqppSSSSK.",
-".KSSSSpppSSSSSK.",
-".KSSSSSSSSSSSSK.",
-".KsssssssssssK..",
-".KSSSSSSSSSSSK..",
-".KsssssssssssK..",
-"..KKsssssssKK...",
-"....KKKKKKK.....",
+"......KKKK......",
+"....KKssssKK....",
+"...KssssssssK...",
+"..KssssssssssK..",
+"..KssKXXXXKssK..",
+"..KssKXXXXKssK..",
+"..KssssssssssK..",
+"..KTTTTTTTTTTK..",
+"..KssssssssssK..",
+"...KTTTTTTTTK...",
+"....KKTTTTKK....",
+"......KKKK......",
 "................",
 "................",
 ]

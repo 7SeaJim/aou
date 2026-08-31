@@ -10,11 +10,11 @@
     <link rel="stylesheet" href="css/pixel-ui.css">
     <style>
         body { display: block; padding: 24px 16px 60px; }
-        /* 1072 = 916 的画面 + 左右两条按钮(68 宽)+ 两道 10 的缝。
-           还写 916 的话,按钮条会从画面身上抢走那 156px,
-           canvas 被挤到 760 —— 又回到了非整数倍缩放那个坑。
-           68 是按钮字号从 11 提到 13 之后撑出来的,「明信片」三个字要放得下。 */
-        .wrap { width: min(1072px, 100%); margin-inline: auto; }
+        /* 1096 = 916 的画面 + 左右两条按钮(80 宽)+ 两道 10 的缝。
+           还写 916 的话,按钮条会从画面身上抢走那 180px,
+           canvas 被挤到 736 —— 又回到了非整数倍缩放那个坑。
+           80 是字号提上去之后撑出来的:「明信片」「客单价」得放得下不撞边。 */
+        .wrap { width: min(1096px, 100%); margin-inline: auto; }
         .title { text-align: center; margin-bottom: 20px; }
         .title h1 { font-size: 32px; }
 
