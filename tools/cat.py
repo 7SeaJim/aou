@@ -133,16 +133,33 @@ def sleeping():
     rect(g, 3, 16, 3, 1, 'K')
     rect(g, 8, 16, 3, 1, 'K')
     rect(g, 6, 18, 2, 1, 'p')
-    # 尾巴:贴着底边绕到前面,尖收在前爪旁边。
+    # 尾巴:从屁股上长出来,贴着底边绕到前面,尖收在前爪旁边。
     # **不往上翘** —— 翘起来那一截在这个尺度上读成一片鱼鳍。
-    # 先铺 K 再填 o,这道 K 就是尾巴和身子之间那条缝
-    tail = [(29, 16), (29, 18), (27, 20), (24, 21), (21, 21), (18, 21),
-            (16, 21), (14, 21)]
-    for x, y in tail:
-        rect(g, x - 1, y - 1, 4, 4, 'K')
-    for x, y in tail:
-        rect(g, x, y, 2, 2, 'o')
-    rect(g, 13, 21, 2, 2, 'Y')             # 尖梢挑亮一格,收在这儿
+    #
+    # 三件事一起才让它看着是「长在身上」而不是「拼上去」的:
+    #
+    #   连续     原来是每隔两三格点一个 2×2 的方块,中间露出来的底色成了
+    #            一道道竖缝,整条尾巴读成一截截拼起来的。现在把点连成线。
+    #   根粗梢细 真尾巴根部有小臂那么粗,到梢才收细。**这一条最管用** ——
+    #            一条从头到尾一样粗的带子,无论怎么描边都像贴上去的皮带。
+    #   尾根不描边 描边只画在它压住身子的那一段;尾根那几格连着屁股,
+    #            中间不该有线。
+    tail = [(30, 15), (30, 17), (29, 19), (27, 20), (24, 21),
+            (20, 21), (17, 21), (14, 21)]
+    path = []
+    for i in range(len(tail) - 1):
+        (x0, y0), (x1, y1) = tail[i], tail[i + 1]
+        steps = max(abs(x1 - x0), abs(y1 - y0))
+        for t in range(steps + 1):
+            path.append((round(x0 + (x1 - x0) * t / steps),
+                         round(y0 + (y1 - y0) * t / steps)))
+    n = len(path)
+    girth = lambda i: 4 if i < n * 0.3 else 3 if i < n * 0.62 else 2
+    for i, (x, y) in enumerate(path):
+        if i >= 6:                         # 前六格是尾根,不描边
+            rect(g, x - 1, y - 1, girth(i) + 2, girth(i) + 2, 'K')
+    for i, (x, y) in enumerate(path):
+        rect(g, x, y, girth(i), girth(i), 'o')
     return rows(outline(g))
 
 
