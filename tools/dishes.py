@@ -71,41 +71,55 @@ DISHES['liangxia'] = [
 "................",
 ]
 
-# 豆花米线:一碗。白米线在下,白豆花在中,红油在上,葱花点缀
+# 豆花米线:蓝釉碗,碗里是米线,顶上一坨白豆花,加韭菜和一点酱。
+#
+# 上一版是白碗白料,和食材「豆花」(一个白色的圆坨)几乎一样 ——
+# 两个都读成「白的一坨」。现在靠三样分开:
+#   蓝碗   豆花那张图没有碗,这张有,而且是深蓝的
+#   米线条 碗里横着几道分隔线,看得出是「条」不是「坨」
+#   配料   一点绿、一点酱色 —— 素白的是豆花,拌过的是豆花米线
+#
+# 米线用 e(#e8d5a8)不用 E(#fff3d6):E 和豆花的白只差一点点,
+# 画上去看不出条纹,整碗又糊成一坨白。
 DISHES['douhua_mx'] = [
 "................",
 "................",
-"...KKKKKKKKKK...",
-"..KwwwwwwwwwwK..",
-".KwwXXwwwXXwwwK.",
-".KwXXXwGwXXXwwK.",
-".KwwwwwwwwwwwwK.",
-".KEEEEEEEEEEEEK.",
-".KEwEEwEEwEEwEK.",
-"..KEEEEEEEEEEK..",
-"..KBBBBBBBBBBK..",
-"...KbBBBBBBbK...",
-"....KbbbbbbK....",
-".....KKKKKK.....",
+".....KwwwwK.....",
+"...KKwwwwwwKK...",
+"..KewwwwwwwweK..",
+".KeeewwwwwweeeK.",
+".KeeKeeKeeKeeeK.",
+".KGeeKeeKeeKteK.",
+".KKeeeeeeeeeeKK.",
+"..KbbbbbbbbbbK..",
+"..KbNNNNNNNNbK..",
+"...KbbbbbbbbK...",
+"....KKbbbbKK....",
+"......KKKK......",
 "................",
 "................",
 ]
 
-# 小锅米线:带长柄的紫铜小锅,红汤。**锅柄**是它独一份的特征
+# 小锅米线:紫铜小锅,红汤,**右边一根伸出去的长柄**。
+#
+# 上一版整口锅是红的,柄只是右边一个小疙瘩 —— 读起来是「一只红杯子」。
+# 「小锅」这三个字的分量全在那根柄上:红的应该是**汤**,锅是铜的,
+# 柄要伸出锅外一大截,一眼就知道这是端着上桌的那种小锅。
+# 铜壁得占满两像素(上下各一道 o 的横边),1 像素的边在缩略图上直接没了。
 DISHES['xiaoguo_mx'] = [
 "................",
 "................",
-"..KKKKKKKKKK....",
-".KDDDDDDDDDDK...",
-"KXXXXXXXXXXXXK..",
-"KXXwXXXwXXwXXKKK",
-"KXXXXXXXXXXXXKdK",
-"KXwXXXwXXXwXXKdK",
-"KXXXXXXXXXXXXKdK",
-".KXXXXXXXXXXK.K.",
-".KDDDDDDDDDDK...",
-"..KDDDDDDDDK....",
-"...KKKKKKKK.....",
+"................",
+".KKKKKKKKKKK....",
+".KoooooooooK....",
+".KoXXXXXXXoK....",
+".KoXeXXeXXoKKKK.",
+".KoXXXeXXXoKDDK.",
+".KoXeXXXeXoKKKK.",
+".KoXXXXXXXoK....",
+".KoooooooooK....",
+"..KKKKKKKKK.....",
+"................",
 "................",
 "................",
 "................",

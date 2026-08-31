@@ -121,12 +121,19 @@ async function boot() {
 
     // 点大坝画面上的草棚就进小屋。判定用同一份坐标(scene.js 的 SHACK_HIT),
     // 画一处、点一处地各写一份的话,挪个位置就会「看着在这儿、点不到」。
+    //
+    // **条件是「现在画布上跑的是大坝」,不是「现在不在小屋」。**
+    // 三个场景共用一张画布,草棚的判定框是按大坝那一场的坐标算的;
+    // 换成出摊那一场之后,那块地方是案上那摞盘子 —— 点盘子直接进小屋,
+    // 因为原来的判断只排除了 hut,没排除别的场景。
+    // 用 scene 来判断的话,以后再加场景也不用回来补一条。
+    const onDam = () => !flight && scene === 'bg';
     canvas.addEventListener('click', e => {
-        if (flight || ui.screen === 'hut') return;
+        if (!onDam()) return;
         if (bg.hitShack(e.clientX, e.clientY)) ui.go('hut');
     });
     canvas.addEventListener('pointermove', e => {
-        if (flight || ui.screen === 'hut') { canvas.style.cursor = ''; return; }
+        if (!onDam()) { canvas.style.cursor = ''; return; }
         canvas.style.cursor = bg.hitShack(e.clientX, e.clientY) ? 'pointer' : '';
     });
 

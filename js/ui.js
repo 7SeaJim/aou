@@ -38,7 +38,7 @@ const TOAST_MS = 2600;
 /** 抽屉顶上那行字。和按钮上的名字一致,不然点开会有一瞬间的「我点的是这个吗」 */
 const DRAWER_TITLE = {
     dock: '海埂大坝', service: '出摊', cook: '摊子', hut: '小屋',
-    bag: '背包', codex: '图鉴', postcard: '明信片', achievement: '成就',
+    bag: '背包', codex: '图鉴 · 食材和菜谱', postcard: '明信片', achievement: '成就',
     wear: '装扮', chat: '聊天', save: '存档',
 };
 
@@ -1304,12 +1304,45 @@ export class UI {
                     ${n ? FOOD_SOURCE[k] : '还没见过'}</p>
             </div>`;
         }).join('');
+        /* ---- 菜谱 ----
+           **没解锁的也列出来,连要什么料一起列。**
+           原来这一页只有食材,想知道能做什么得先去「摊子」或者等白天出摊 ——
+           而「我攒这堆洋芋是为了什么」正是玩家在坝上晃的时候要问的问题。
+           锁着的那几道给出等级条件:它同时也是一张「往哪儿练」的路线图。 */
+        const dishes = RECIPES.map(r => {
+            const open = s.unlockedRecipes.includes(r.id);
+            const hand = !!RECIPE_STEPS[r.id];
+            const cost = Object.entries(r.cost).map(([k, n]) => {
+                const have = s.backpack[k] ?? 0;
+                return `<span class="px-tag ${have >= n ? 'px-tag--leaf' : ''}"
+                    >${icon(FOODS[k].icon)} ${FOODS[k].name} ${have}/${n}</span>`;
+            }).join(' ');
+            return `<div class="px-panel" style="padding:10px 12px;${open ? '' : 'opacity:.55'}">
+                <p style="margin-bottom:6px">${icon(r.icon, 'lg')}
+                   ${open ? r.name : '???'}
+                   ${open
+                     ? `<span class="px-muted" style="font-size:12px;white-space:nowrap"
+                          >${icon('coin')} ${r.reward}</span>`
+                     : `<span class="px-muted" style="font-size:12px;white-space:nowrap"
+                          >Lv.${r.levelReq} 解锁</span>`}</p>
+                ${open ? `<div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:6px">${cost}</div>
+                <p class="px-muted" style="font-size:12px;line-height:1.6;margin:0">
+                    ${hand ? '摆到摊上自己卖,白天也能出摊亲手做(卖得更贵)' : '摆到摊上自己卖'}</p>` : ''}
+            </div>`;
+        }).join('');
+
         return `
         <h3 style="margin-bottom:6px">食材图鉴
             <span class="px-muted" style="font-size:13px">${seen} / ${FOOD_KEYS.length}</span></h3>
         <p class="px-muted" style="margin-bottom:12px;font-size:13px">
             记的是累计见过多少,用掉了也不会减。</p>
-        <div class="px-grid" style="--min:190px">${rows}</div>`;
+        <div class="px-grid" style="--min:190px;margin-bottom:26px">${rows}</div>
+
+        <h3 style="margin-bottom:6px">菜谱
+            <span class="px-muted" style="font-size:13px">${s.unlockedRecipes.length} / ${RECIPES.length}</span></h3>
+        <p class="px-muted" style="margin-bottom:12px;font-size:13px">
+            料够不够按现在背包里的算。等级到了自动解锁,不用买。</p>
+        <div class="px-grid" style="--min:200px">${dishes}</div>`;
     }
 
     viewCook() {
