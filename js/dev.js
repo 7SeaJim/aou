@@ -131,7 +131,7 @@ function backup() {
  * @param {object} deps.rules
  * @param {object} deps.ui
  */
-export function installDev({ getState, mutate, storage, fly, getFlight, rules, ui }) {
+export function installDev({ getState, mutate, storage, fly, getFlight, rules, ui, service }) {
     const reload = async (state) => {
         await storage.replace(state);
         location.reload();
@@ -295,6 +295,19 @@ export function installDev({ getState, mutate, storage, fly, getFlight, rules, u
             ui._cardKey = null;          // 逼它重画,不然缓存挡着
             ui.render();
             return opt ? `钉住 ${JSON.stringify(opt)}` : '恢复自动';
+        },
+
+        /** 出摊那一场现在是个什么局面。调这个小游戏时用 */
+        svc() {
+            if (!service) return '还没建起来';
+            return { t: Math.round(service.t), ...service.snapshot() };
+        },
+
+        /** 立刻招一个客人来,不用干等 */
+        guest() {
+            if (!service) return '还没建起来';
+            service.nextGuestAt = service.t;
+            return '这就来';
         },
 
         /** 从头走一遍开场引导 */
@@ -485,6 +498,8 @@ export function installDev({ getState, mutate, storage, fly, getFlight, rules, u
                 'wa.clearLog()':   '清空大坝事件日志',
                 'wa.sfx(name)':    '试听音效;不传参数列出全部名字',
                 'wa.tutorial(n)':  '把开场引导拨回第 n+1 步(默认从头)',
+                'wa.svc()':        '出摊现在的局面(客人/工位/出餐台)',
+                'wa.guest()':      '立刻招一个客人来',
                 'wa.fortune(i,m)': '直接把今日签设成第 i 卦、第 m 种花纹(看卡片排版)',
                 'wa.card(opt)':    "钉住卡片的背景/版式/天光;不传列出可选值,传 null 恢复自动",
                 'wa.seed(n)':      '固定飞行随机序列,同一局可重放',
@@ -508,6 +523,9 @@ export function installDev({ getState, mutate, storage, fly, getFlight, rules, u
     };
 
     window.wa = wa;
+    // 出摊那一场直接挂出来。headless 里虚拟时钟不给动画帧,
+    // 测玩法只能手动调 _tick —— 这是给那种测试留的口子
+    wa.__svc = service;
 
     /* ---------- URL 参数:把常用的调试起点做成可以直接分享的链接 ---------- */
     const q = new URLSearchParams(location.search);

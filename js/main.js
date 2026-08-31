@@ -10,6 +10,7 @@ import { Flight, W, H } from './game/flight.js';
 import { SpriteBook } from './game/sprite.js';
 import { TitleScreen } from './game/title.js';
 import { Hut } from './game/hut.js';
+import { Service } from './game/service.js';
 import { hourSlot } from './data.js';
 import { now } from './clock.js';
 import { UI } from './ui.js';
@@ -62,7 +63,6 @@ async function boot() {
     // 跨天重置 / 天气轮换
     let dirty = rules.refreshDaily(state);
     dirty = rules.refreshWeather(state) || dirty;
-    dirty = rules.refreshOrders(state) || dirty;
 
     // 离线结算要在天气刷新**之后**:摊位的客单价吃天气系数,
     // 先结算的话用的是上次离开时那档天气。
@@ -76,16 +76,21 @@ async function boot() {
     const canvas = document.getElementById('bgCanvas');
     const bg = new Background(canvas, () => state);
     const hut = new Hut(canvas, () => state, () => hourSlot(now()));
+    // 出摊也画在同一张画布上。它比别的场景多一件事:局面变了要通知面板重绘
+    const service = new Service(canvas, () => state, mutate, () => ui?.render());
     bg.start();
 
     ui = new UI({
         getState: () => state,
         mutate,
+        service,
         onFly: () => startFlight(sprites),
         onScreen: screen => {
-            const wantHut = screen === 'hut';
-            if (wantHut) { bg.stop(); hut.start(); }
-            else { hut.stop(); bg.start(); }
+            // 三个场景共用一张画布,谁在跑谁画 —— 两个都跑着会互相盖
+            hut.stop(); service.stop(); bg.stop();
+            if (screen === 'hut') hut.start();
+            else if (screen === 'service' && rules.serviceOpen()) { service.reset(); service.start(); }
+            else bg.start();
         },
     });
     ui.mount();
@@ -121,6 +126,7 @@ async function boot() {
         storage,
         rules,
         ui,
+        service,
         fly: () => startFlight(sprites),
         getFlight: () => flight,
     });

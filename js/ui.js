@@ -13,6 +13,7 @@ import {
     DRINKS, FORTUNES, HOURS, hourSlot,
     CREW, FOOD_SOURCE, COSMETICS, SLOTS, dayPhase,
     TUTORIAL, TUTORIAL_GIFT, MARKET, MARKET_LEVEL,
+    RECIPE_STEPS, STATIONS, SERVICE, HOURS as _HOURS,
 } from './data.js';
 import { paintWearPreview, paintWearItem } from './game/wear.js';
 import { renderCard } from './game/card.js';
@@ -44,11 +45,13 @@ export class UI {
      * @param {()=>void} deps.onFly
      * @param {(screen:string)=>void} [deps.onScreen] 切页时通知,用来换舞台上的场景
      */
-    constructor({ getState, mutate, onFly, onScreen }) {
+    constructor({ getState, mutate, onFly, onScreen, service }) {
         this.getState = getState;
         this.mutate = mutate;
         this.onFly = onFly;
         this.onScreen = onScreen;
+        /** 出摊那一场。局面在它手里,面板只是它的一个视图 */
+        this.service = service;
         this.screen = 'dock';
         this.toastTimer = null;
         /** 正在下的那局四子棋。不进存档 —— 一局棋没必要跨会话保留。 */
@@ -104,14 +107,6 @@ export class UI {
                 const r = this.mutate(st => rules.cook(st, data.id));
                 if (!r.ok) return this.toast(this.explain(r), 'erkuai');
                 this.toast(`做好了 ${RECIPES.find(x => x.id === data.id).name},+${data.reward} 鸥币`, 'coin');
-                this.showEvents(r.events);
-                break;
-            }
-
-            case 'deliver': {
-                const r = this.mutate(st => rules.deliverOrder(st, Number(data.id)));
-                if (!r.ok) return this.toast(this.explain(r), 'postcard');
-                this.toast(`交付完成,+${r.events[0].order.reward} 鸥币`, 'coin');
                 this.showEvents(r.events);
                 break;
             }
@@ -213,6 +208,27 @@ export class UI {
                 this.mutate(st => { st.tutorial = TUTORIAL_DONE; });
                 this.toast('引导关了。想再看一遍就清档重开', 'star');
                 break;
+
+            case 'dish': {
+                const r = this.service?.startDish(data.id);
+                if (!r?.ok) return this.toast(this.explain(r ?? { reason: '现在开不了张' }), 'shop');
+                break;
+            }
+
+            case 'tap': {
+                const r = this.service?.tap(data.station, Number(data.slot));
+                if (!r?.ok) return r?.reason ? this.toast(r.reason, 'shop') : undefined;
+                if (r.done) this.toast('做好了,放上出餐台', 'shop');
+                break;
+            }
+
+            case 'serve': {
+                const r = this.service?.serve(Number(data.id));
+                if (!r?.ok) return this.toast(r?.reason ?? '给不了', 'coin');
+                this.toast(`${r.recipe.name} 卖出去了,+${r.coins} 鸥币`, 'coin');
+                this.showEvents(r.events.slice(1));
+                break;
+            }
 
             case 'buy': {
                 const r = this.mutate(st => rules.buyFood(st, data.key, Number(data.n)));
@@ -439,6 +455,7 @@ export class UI {
             cook: () => this.viewCook(),
             postcard: () => this.viewPostcards(),
             codex: () => this.viewCodex(),
+            service: () => this.viewService(),
             achievement: () => this.viewAchievements(),
             wear: () => this.viewWear(),
             chat: () => this.viewChat(),
@@ -509,7 +526,7 @@ export class UI {
 
     renderTabs() {
         const tabs = [
-            ['dock', '大坝', 'map'], ['hut', '小屋', 'waou'],
+            ['dock', '大坝', 'map'], ['service', '出摊', 'shao_erkuai'], ['hut', '小屋', 'waou'],
             ['bag', '背包', 'backpack'], ['cook', '摊子', 'shop'],
             ['postcard', '明信片', 'postcard'], ['codex', '图鉴', 'erkuai'],
             ['achievement', '成就', 'trophy'],
@@ -542,7 +559,6 @@ export class UI {
     viewDock() {
         const s = this.getState();
         const w = WEATHER[s.weather] ?? WEATHER.sunny;
-        const order = s.orders[0];
         return `
         <h2 style="margin-bottom:12px">海埂大坝</h2>
         <p class="px-muted" style="margin-bottom:20px">
@@ -557,7 +573,7 @@ export class UI {
         <!-- 大坝是枢纽。**画面在上、面板在下,面板越长玩家越看不见码头** ——
              所以常去的地方在这儿一次摆开,不用往下翻页签。 -->
         <div class="px-hub">
-            ${[['cook', '摊子', 'shop'], ['hut', '小屋', 'waou'],
+            ${[['service', '出摊', 'shao_erkuai'], ['cook', '摊子', 'shop'], ['hut', '小屋', 'waou'],
                ['bag', '背包', 'backpack'], ['codex', '图鉴', 'erkuai'],
                ['postcard', '明信片', 'postcard'], ['achievement', '成就', 'trophy'],
                ['wear', '装扮', 'cap'], ['chat', '聊天', 'heart']]
@@ -568,17 +584,7 @@ export class UI {
         ${this.hutHint()}
         ${this.showPanel()}
         ${this.eventLog()}
-        ${this.stallSummary()}
-        ${order ? `
-        <div class="px-panel px-panel--sea">
-            <p>今日订单:<strong>${order.name}</strong></p>
-            <p class="px-muted">需要 ${Object.entries(order.need)
-                .map(([k, v]) => `${icon(FOODS[k].icon)} ${FOODS[k].name}×${v}`).join(' ')}</p>
-            <div style="display:flex;gap:16px;align-items:center;margin-top:14px">
-                <span class="px-tag px-tag--gold">奖励 ${order.reward} 鸥币</span>
-                <button class="px-btn px-btn--sm" data-act="deliver" data-id="${order.id}">交付</button>
-            </div>
-        </div>` : `<p class="px-muted">暂时没有订单。${s.level < 2 ? '到 2 级后游客会开始点单。' : '出去转一圈看看?'}</p>`}`;
+        ${this.stallSummary()}`;
     }
 
     /** 一条事件的一句话总结,吐司用。日志里显示的是事件本身的叙述。 */
@@ -814,6 +820,113 @@ export class UI {
         <div class="px-grid" style="--min:190px">${items}</div>`;
     }
 
+    /**
+     * 出摊。**画布负责看,这块面板负责操作。**
+     * 在 440×310 的画布上做点击判定,手机上每个工位不到一个指头宽 ——
+     * 那不是操作,那是抽奖。
+     */
+    viewService() {
+        const s = this.getState();
+        if (!rules.serviceOpen()) {
+            return `
+            <h2 style="margin-bottom:8px">出摊</h2>
+            <div class="px-panel px-panel--sea">
+                <p>${icon('shop')} 这会儿摊上没人。</p>
+                <p class="px-muted">白天才有游客上坝。中午和晚上哇鸥回小屋,
+                   天黑之后坝上也就剩风了。</p>
+            </div>`;
+        }
+        const v = this.service?.snapshot();
+        if (!v) return '<h2>出摊</h2><p class="px-muted">正在开张…</p>';
+
+        const dish = id => RECIPES.find(r => r.id === id);
+
+        /* ---- 客人 ---- */
+        const guests = v.guests.length ? v.guests.map(g => {
+            const r = dish(g.want);
+            const col = g.left > 0.45 ? 'leaf' : g.left > 0.2 ? 'gold' : 'coral';
+            return `
+            <div class="px-ach ${g.ready ? 'px-ach--got' : ''}">
+                ${icon(r.icon, 'lg')}
+                <div style="flex:1;min-width:0">
+                    <strong>${r.name}</strong>
+                    <div class="px-bar" style="height:8px;margin-top:5px">
+                        <div class="px-bar__fill px-bar__fill--${col}"
+                             style="width:${Math.round(g.left * 100)}%"></div>
+                    </div>
+                </div>
+                <button class="px-btn px-btn--sm" data-act="serve" data-id="${g.id}"
+                        ${g.ready ? '' : 'disabled'}>给他</button>
+            </div>`;
+        }).join('') : '<p class="px-muted">还没人来。先做几份备着。</p>';
+
+        /* ---- 工位 ---- */
+        const line = (station, jobs) => jobs.map((j, i) => {
+            if (!j) return `<div class="px-ach"><span class="px-muted" style="flex:1">空着</span></div>`;
+            const r = dish(j.recipe);
+            const btn = j.kind === 'done'
+                ? `<button class="px-btn px-btn--sm" data-act="tap" data-station="${station}"
+                           data-slot="${i}">端走</button>`
+                : j.kind === 'tap'
+                ? `<button class="px-btn px-btn--sm px-btn--coral" data-act="tap"
+                           data-station="${station}" data-slot="${i}">${j.stepName}</button>`
+                : `<span class="px-tag">${j.stepName}</span>`;
+            return `
+            <div class="px-ach ${j.kind === 'done' ? 'px-ach--got' : ''}">
+                ${icon(r.icon, 'lg')}
+                <div style="flex:1;min-width:0">
+                    <strong>${r.name}</strong>
+                    ${j.kind === 'wait' ? `<div class="px-bar" style="height:8px;margin-top:5px">
+                        <div class="px-bar__fill" style="width:${Math.round(j.progress * 100)}%"></div>
+                    </div>` : `<p class="px-muted">${j.stepName}</p>`}
+                </div>
+                ${btn}
+            </div>`;
+        }).join('');
+
+        /* ---- 能做什么 ---- */
+        const menu = RECIPES.filter(r => s.unlockedRecipes.includes(r.id) && RECIPE_STEPS[r.id])
+            .map(r => {
+                const plan = RECIPE_STEPS[r.id];
+                const ok = rules.canAfford(s, r.cost) && v.stockCount < SERVICE.stockMax;
+                return `
+                <button class="px-btn px-btn--sm ${ok ? '' : 'px-btn--wood'}" data-act="dish"
+                        data-id="${r.id}" ${ok ? '' : 'disabled'}
+                        style="flex-direction:column;gap:2px;padding:8px 10px">
+                    ${icon(r.icon, 'lg')}
+                    <span style="font-size:12px">${r.name}</span>
+                    <span class="px-muted" style="font-size:11px">${STATIONS[plan.station].name}</span>
+                </button>`;
+            }).join('');
+
+        const stock = Object.entries(v.stock).filter(([, n]) => n > 0)
+            .map(([id, n]) => `<span class="px-chip">${icon(dish(id).icon)} ${dish(id).name} ×${n}</span>`)
+            .join(' ') || '<span class="px-muted">空的</span>';
+
+        return `
+        <h2 style="margin-bottom:6px">出摊</h2>
+        <p class="px-muted" style="margin-bottom:16px">
+            卖出 ${v.sold}${v.gone ? ` · 等走了 ${v.gone} 位` : ''} ·
+            出餐台 ${v.stockCount}/${SERVICE.stockMax}<br>
+            <strong>开了工的菜,离开这一页就废了</strong>(材料在开工时就下锅了)。</p>
+
+        <h3 style="margin-bottom:10px">柜台外</h3>
+        <div style="margin-bottom:20px">${guests}</div>
+
+        <h3 style="margin-bottom:10px">${STATIONS.stove.name}</h3>
+        <div style="margin-bottom:16px">${line('stove', v.jobs.stove)}</div>
+
+        <h3 style="margin-bottom:10px">${STATIONS.oven.name}<span class="px-muted"
+            style="font-size:13px"> · 慢,但一次放得下好几样</span></h3>
+        <div style="margin-bottom:20px">${line('oven', v.jobs.oven)}</div>
+
+        <h3 style="margin-bottom:10px">开一道</h3>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px">${menu}</div>
+
+        <h3 style="margin-bottom:10px">出餐台</h3>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">${stock}</div>`;
+    }
+
     /** 图鉴单独一页。它记的是「见过什么」,背包记的是「手上有什么」,两件事。 */
     viewCodex() {
         return this.codexView();
@@ -965,28 +1078,13 @@ export class UI {
             </div>`;
         }).join('');
 
-        /* ---- 手工做菜(急用钱时手动来一份) ---- */
-        const rows = RECIPES.map(r => {
-            const unlocked = s.unlockedRecipes.includes(r.id);
-            const ok = unlocked && rules.canAfford(s, r.cost);
-            const cost = Object.entries(r.cost)
-                .map(([k, v]) => `${icon(FOODS[k].icon)} ${v}`).join(' ');
-            return `
-            <div class="px-panel" style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:14px">
-                ${icon(r.icon, 'lg')}
-                <strong style="min-width:5em">${unlocked ? r.name : '???'}</strong>
-                <span class="px-muted" style="flex:1">
-                    ${unlocked ? `${cost} → ${r.reward} 鸥币` : `Lv.${r.levelReq} 解锁`}</span>
-                <button class="px-btn px-btn--sm" data-act="cook" data-id="${r.id}"
-                    data-reward="${r.reward}" ${ok ? '' : 'disabled'}>制作</button>
-            </div>`;
-        }).join('');
-
         return `
         <h2 style="margin-bottom:6px">哇鸥的小吃摊</h2>
         <p class="px-muted" style="margin-bottom:18px">
-            摆上去的菜会自己卖,吃背包里的材料。你不在的时候也照卖,
-            不过没人看着,卖得慢些,货架也堆不下太多。</p>
+            摆上去的菜自己会卖 —— 买主是坝上溜达的野猫、麻雀和别的海鸥,
+            它们不挑,给什么吃什么,所以给的钱也少。你不在的时候也照卖,
+            不过没人看着,卖得慢些,货架也堆不下太多。<br>
+            <strong>想卖给真正的游客,白天去「出摊」亲手做。</strong></p>
         <div class="px-grid" style="--min:230px;margin-bottom:28px">${slots}</div>
 
         ${this.marketView()}
@@ -994,10 +1092,7 @@ export class UI {
         <h3 style="margin-bottom:12px">升级</h3>
         <div class="px-grid" style="--min:190px;margin-bottom:28px">${ups}</div>
 
-        ${this.crewView()}
-
-        <h3 style="margin-bottom:12px">手工做一份</h3>
-        ${rows}`;
+        ${this.crewView()}`;
     }
 
     viewPostcards() {

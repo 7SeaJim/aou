@@ -727,3 +727,8 @@
     .px-hub { grid-template-columns: repeat(4, 1fr); gap: 6px; }
     .px-hubbtn { font-size: 12px; padding: 9px 2px 8px; }
 }
+
+/* 耐心条的三档颜色。绿→黄→红,不用数字 —— 一眼看出还等不等得起 */
+.px-bar__fill--leaf  { background: var(--leaf); }
+.px-bar__fill--gold  { background: var(--gold); }
+.px-bar__fill--coral { background: var(--coral); }

@@ -98,8 +98,19 @@ function decide(s) {
             if ((s.backpack[k] ?? 0) < 60) rules.buyFood(s, k, Infinity);
         }
     }
-    // 交订单
-    for (const o of [...s.orders]) rules.deliverOrder(s, o.id);
+    // 出摊。模拟器不跑那个小游戏(它要一双手),按「一次出摊做成几份」代入:
+    // 白天上线一次,手脚麻利的能出六七份,这里取中等
+    if (rules.serviceOpen()) {
+        for (let i = 0; i < 5; i++) {
+            const open = RECIPES.filter(r => s.unlockedRecipes.includes(r.id))
+                .filter(r => rules.canAfford(s, r.cost))
+                .sort((a, b) => b.reward - a.reward);
+            if (!open[0]) break;
+            if (!rules.startDish(s, open[0].id).ok) break;
+            rules.finishDish(s, open[0].id);
+            rules.serveGuest(s, open[0].id);
+        }
+    }
     // 升级:留一倍余钱,别把身家全砸进去
     for (let n = 0; n < 4; n++) {
         const best = Object.keys(UPGRADES)
@@ -142,7 +153,6 @@ function simulate(who, days, startMs) {
             T = day0 + hour * 3600_000;
             rules.refreshDaily(s, new Date(T));
             rules.refreshWeather(s, T);
-            rules.refreshOrders(s);
 
             const off = rules.settleOffline(s, T);
             if (off[0]?.starved?.length) starvedToday = true;

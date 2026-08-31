@@ -490,6 +490,95 @@ export const TUTORIAL = [
 export const TUTORIAL_GIFT = 5;
 
 /* ============================================================
+   出摊:白天亲手做菜卖给游客
+   ============================================================ */
+
+/**
+ * 出摊是**主动玩法**,和摊位自动出餐是两回事:
+ *
+ *   摊位自动出餐  你不在的时候也在卖,卖给大坝上溜达的野猫、麻雀、
+ *                 其他海鸥 —— 它们不挑,给什么吃什么,所以价钱也低
+ *   出摊          你亲手做,卖给真正来买的游客。人挑嘴、要等,
+ *                 但一份能卖上价
+ *
+ * 这样两条线不打架:自动出餐是底,出摊是你愿意花时间就能拿到的上限。
+ *
+ * **只在白天出摊。** 哇鸥中午和晚上回小屋,晚上坝上也没人买 ——
+ * 时段本身就是这个玩法的节制,不用再加「每天几次」的计数器。
+ */
+
+/** 工位。灶台一次一样、快;烤箱一次能放好几样,但慢得多。 */
+export const STATIONS = {
+    stove: { name: '灶台', slots: 1, icon: 'stove' },
+    oven:  { name: '烤箱', slots: 4, icon: 'shop' },
+};
+
+/**
+ * 每道菜怎么做。一道菜 = 一串步骤,两种:
+ *
+ *   wait  放上去等。等的时候你可以去干别的 —— 这是「烤箱能预制」的基础
+ *   tap   要你动手点一下。它是这个玩法唯一的操作,所以每道菜至少有一步
+ *
+ * 步骤是**照着真做法写的**,不是随便凑的节奏:烧饵块先烤再刷酱、
+ * 见手青得回锅炒第二遍(不炒透会看见小人,这个梗得留着)。
+ * 玩家第一次做完一道菜,应该顺带知道了这道菜是怎么来的。
+ */
+export const RECIPE_STEPS = {
+    shao_erkuai: { station: 'stove', steps: [
+        { kind: 'wait', ms: 4000,  name: '烤饵块' },
+        { kind: 'tap',              name: '刷甜咸酱' },
+    ] },
+    yangyu_baba: { station: 'stove', steps: [
+        { kind: 'tap',              name: '压成饼' },
+        { kind: 'wait', ms: 5000,  name: '煎两面' },
+    ] },
+    liangxia: { station: 'stove', steps: [
+        { kind: 'tap',              name: '漏凉虾' },
+        { kind: 'tap',              name: '兑红糖水' },
+    ] },
+    douhua_mx: { station: 'stove', steps: [
+        { kind: 'wait', ms: 4000,  name: '烫米线' },
+        { kind: 'tap',              name: '舀一勺豆花' },
+        { kind: 'tap',              name: '浇红油' },
+    ] },
+    xiaoguo_mx: { station: 'stove', steps: [
+        { kind: 'tap',              name: '下小铜锅' },
+        { kind: 'wait', ms: 7000,  name: '煮开' },
+    ] },
+    kao_rusan: { station: 'stove', steps: [
+        { kind: 'tap',              name: '卷上竹签' },
+        { kind: 'wait', ms: 6000,  name: '架上去烤' },
+        { kind: 'tap',              name: '刷玫瑰酱' },
+    ] },
+    jianshouqing: { station: 'stove', steps: [
+        { kind: 'tap',              name: '切片' },
+        { kind: 'wait', ms: 8000,  name: '大火炒' },
+        { kind: 'wait', ms: 8000,  name: '**再炒一遍**' },
+    ] },
+    xianhua_bing: { station: 'oven', steps: [
+        { kind: 'tap',              name: '包鲜花馅' },
+        { kind: 'wait', ms: 16000, name: '进烤箱' },
+    ] },
+    qiguoji: { station: 'oven', steps: [
+        { kind: 'tap',              name: '装汽锅' },
+        { kind: 'wait', ms: 24000, name: '上汽蒸' },
+    ] },
+};
+
+export const SERVICE = {
+    /** 亲手做的比自动出餐值钱多少。主动玩法总得有回报,不然没人愿意动手 */
+    priceMul: 1.8,
+    /** 出餐台最多放几份。放不下就不能再做了 —— 逼玩家去招呼客人,不是一直闷头做 */
+    stockMax: 12,
+    /** 游客隔多久来一个(毫秒)。招牌越好来得越勤 */
+    comeMs: 9000,
+    /** 一个游客最多等多久 */
+    patienceMs: 42_000,
+    /** 摊前最多站几个 */
+    queueMax: 4,
+};
+
+/* ============================================================
    篆新市场:拿鸥币换材料
    ============================================================ */
 
@@ -623,13 +712,8 @@ export const WEATHER = {
 };
 
 /** 订单模板。接单时从这里随机抽。 */
-export const ORDER_TEMPLATES = [
-    { name: '早点摊常客', reward: 18, need: { erkuai: 3 } },
-    { name: '一碗米线',   reward: 30, need: { rice: 2, douhua: 1 } },
-    { name: '洋芋管够',   reward: 22, need: { potato: 4 } },
-    { name: '带盒鲜花饼', reward: 35, need: { flower: 3, erkuai: 1 } },
-    { name: '来点辣的',   reward: 26, need: { chili: 3, potato: 2 } },
-];
+// ORDER_TEMPLATES 删了 —— 订单和出摊是同一件事的两种写法,见 v9→v10 迁移。
+
 
 export const CHAT_NODES = [
     { id: 0, bot: '哇——!我是哇鸥。去年冬天跟着大部队从西伯利亚飞过来的,春天它们都回去了,我没走。',

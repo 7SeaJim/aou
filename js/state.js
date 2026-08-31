@@ -5,7 +5,7 @@
  * 好处:改目录不用写迁移,存档也更小(存档码是要玩家复制的)。
  */
 
-export const SAVE_VERSION = 9;
+export const SAVE_VERSION = 10;
 
 // 食材的键。改这里要同步 data.js 的 FOODS,并且 SAVE_VERSION +1 补一条迁移 ——
 // 这些键是 backpack 的字段名,直接进存档。
@@ -41,7 +41,6 @@ export function createInitialState() {
         postcards: [],            // 已获得的明信片 id
         achievements: [],         // 已达成的成就 id
         unlockedRecipes: ['shao_erkuai'],
-        orders: [],
         completedOrders: 0,
         dailyTries: DAILY_TRIES,
         lastDate: '',
@@ -85,6 +84,11 @@ export function createInitialState() {
          * 不限量的话稀有材料变成纯粹用钱买,觅食和表演就都不用玩了。
          */
         market: { date: '', bought: {} },
+        /**
+         * 出摊时预先做好、还没卖出去的成品。**必须存盘** ——
+         * 「游客不在的时候可以提前做」这件事,只有跨会话留得住才成立。
+         */
+        stock: {},
         /** 已拥有的装扮 id */
         cosmetics: [],
         /** 正戴着的。每个槽位一件,null 表示空着。 */
@@ -113,6 +117,16 @@ export function createInitialState() {
  * 那种 falsy 判断 —— 字段真值为 0 或 '' 时会被误判成缺失。
  */
 const migrations = {
+    // v9 -> v10:出摊玩法。加成品暂存,**去掉订单**。
+    //
+    // 订单和出摊是同一件事的两种写法(都是「有人要一道菜,你给他」),
+    // 留着两套只会让玩家在两个地方各点一次。旧的 orders 直接删,
+    // completedOrders 留着 —— 成就在用它,出摊交货照样往上加。
+    9(old) {
+        const { orders, ...rest } = old;
+        return { ...rest, version: 10, stock: {} };
+    },
+
     // v8 -> v9:货币改名(羽毛 -> 瓶盖),加篆新市场的每日进货记录。
     //
     // 字段跟着一起改名了(feathers -> caps),所以这一步要**搬值**,不是加字段。
@@ -333,7 +347,13 @@ function normalize(s) {
     out.unlockedRecipes = uniq(asArray(out.unlockedRecipes).filter(x => typeof x === 'string'));
     // 第一道菜必须是开着的,否则新手卡死在「什么都做不了」
     if (!out.unlockedRecipes.includes('shao_erkuai')) out.unlockedRecipes.unshift('shao_erkuai');
-    out.orders = asArray(out.orders).filter(o => o && typeof o === 'object').slice(0, 8);
+    out.stock = (() => {
+        const st = {};
+        for (const [k, v] of Object.entries(out.stock ?? {})) {
+            if (typeof k === 'string') st[k] = clampInt(v, 0, 99);
+        }
+        return st;
+    })();
 
     // ---- 放置字段 ----
     // lastSeen 夹在 [很久以前, 现在]:存档码是玩家可改的,

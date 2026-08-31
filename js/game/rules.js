@@ -7,12 +7,13 @@
  */
 
 import {
-    RECIPES, ACHIEVEMENTS, CAP_VALUE, ORDER_TEMPLATES, WEATHER,
+    RECIPES, ACHIEVEMENTS, CAP_VALUE, WEATHER,
     UPGRADES, upgradeCost, slotsAt, SERVE_MS,
     SHOWS, SHOW_MS, SHOW_WEATHER, POSTCARDS,
     DRINKS, DRINK_KEYS, SHELL_MARKS, divine, hourSlot, onDam,
     CREW, crewBonus, SEASONS, seasonOf,
     COSMETICS, EVENTS, ITEMS, MARKET, MARKET_LEVEL, FOODS,
+    RECIPE_STEPS, SERVICE, dayPhase,
 } from '../data.js';
 import { DAILY_TRIES } from '../state.js';
 import { now as clockNow } from '../clock.js';
@@ -124,34 +125,69 @@ export function cook(state, recipeId) {
     return { ok: true, events };
 }
 
-/* ---------- 订单 ---------- */
+/* ---------- 出摊:白天亲手做菜卖给游客 ---------- */
 
-export function refreshOrders(state) {
-    if (state.level < 2 || state.orders.length > 0) return false;
-    const t = ORDER_TEMPLATES[Math.floor(Math.random() * ORDER_TEMPLATES.length)];
-    state.orders.push({ id: Date.now(), name: t.name, reward: t.reward, need: { ...t.need } });
-    return true;
+/**
+ * 现在能不能出摊。**白天 + 哇鸥在大坝上** —— 它中午和晚上回小屋,
+ * 晚上坝上也没人买。时段本身就是这个玩法的节制,不用再加每日次数。
+ */
+export const serviceOpen = (when = clockNow()) => onDam(when) && dayPhase(when) === 'day';
+
+/** 亲手做的一份能卖多少。比自动出餐贵 —— 主动玩法总得有回报 */
+export function servicePrice(state, recipeId) {
+    const r = RECIPES.find(x => x.id === recipeId);
+    if (!r) return 0;
+    return Math.round(r.reward * stallInfo(state).priceMul * SERVICE.priceMul);
 }
 
-export function deliverOrder(state, orderId) {
-    const i = state.orders.findIndex(o => o.id === orderId);
-    if (i < 0) return { ok: false, reason: '订单不存在' };
+/** 出餐台上一共放了几份 */
+export const stockCount = state =>
+    Object.values(state.stock).reduce((a, b) => a + b, 0);
 
-    const order = state.orders[i];
-    if (!canAfford(state, order.need)) {
-        return { ok: false, reason: '材料不够', missing: missingFor(state, order.need) };
+/**
+ * 开始做一道菜。**材料在这里就扣掉。**
+ *
+ * 扣在开头而不是做完:扣在做完的话,玩家可以拿一份材料同时开三口锅,
+ * 到点一起出餐 —— 那不是「提前做」,那是凭空变材料。
+ * 代价是中途走人会亏掉材料,所以界面上得说清楚。
+ */
+export function startDish(state, recipeId) {
+    const r = RECIPES.find(x => x.id === recipeId);
+    if (!r) return { ok: false, reason: '没有这道菜' };
+    if (!RECIPE_STEPS[recipeId]) return { ok: false, reason: '这道菜还没写做法' };
+    if (!state.unlockedRecipes.includes(recipeId)) return { ok: false, reason: '这个食谱还没解锁' };
+    if (stockCount(state) >= SERVICE.stockMax) {
+        return { ok: false, reason: '出餐台满了,先招呼客人' };
     }
-
-    spend(state, order.need);
-    state.coins += order.reward;
-    state.completedOrders++;
-    state.orders.splice(i, 1);          // 完成即移除,不再留 completed 标记堆在存档里
-
-    const events = [{ type: 'order', order }, ...addExp(state, 5), ...checkAchievements(state)];
-    refreshOrders(state);
-    return { ok: true, events };
+    if (!canAfford(state, r.cost)) {
+        return { ok: false, reason: '材料不够', missing: missingFor(state, r.cost) };
+    }
+    spend(state, r.cost);
+    return { ok: true, recipe: r, plan: RECIPE_STEPS[recipeId] };
 }
 
+/** 做好了,放上出餐台 */
+export function finishDish(state, recipeId) {
+    state.stock[recipeId] = (state.stock[recipeId] ?? 0) + 1;
+    return { ok: true };
+}
+
+/** 卖给一个游客。他要的那道得在出餐台上现成有 */
+export function serveGuest(state, recipeId) {
+    if (!(state.stock[recipeId] > 0)) return { ok: false, reason: '这道还没做好' };
+    state.stock[recipeId]--;
+    if (state.stock[recipeId] <= 0) delete state.stock[recipeId];
+
+    const coins = servicePrice(state, recipeId);
+    state.coins += coins;
+    state.completedOrders++;
+    state.stats.served++;               // 手工出的也算出餐,成就一并算上
+    const r = RECIPES.find(x => x.id === recipeId);
+    return {
+        ok: true, coins, recipe: r,
+        events: [{ type: 'serve', recipe: r, coins }, ...addExp(state, 4), ...checkAchievements(state)],
+    };
+}
 
 /* ============================================================
    摊位:放置玩法的核心
@@ -763,7 +799,6 @@ export function settleFlight(state, result) {
 
     events.push(...addExp(state, Math.floor(result.score / 5)));
     events.push(...checkAchievements(state));
-    refreshOrders(state);
 
     return events;
 }
