@@ -106,9 +106,6 @@ export class Background {
         // 折耳根:不出摊的时候她就在坝上睡觉。出摊时她在柜台后面,这儿就不画了。
         // **画在路人之前** —— 她那条道靠后,人从她前面过
         if (!serviceOpen(when)) drawCat(ctx, DECK_Y, t, phase, rainy);
-        // 路过的人。几个人跟着钟点和天气走,下雨天各撑一把伞
-        drawStrollers(ctx, DECK_Y, t, phase,
-                      { count: strollerCount(when, weather), rainy });
 
         const up = this.getState().upgrades;
         drawStallSteam(ctx, DECK_Y, t, up);
@@ -126,6 +123,12 @@ export class Background {
                 unlockedShows(this.getState()).length, fedNow,
                 this.getState().wearing, phase, rainy);
         }
+
+        // 路过的人**画在最后**。他们走的那条道(-4)比围观的(-13)更靠前,
+        // 谁靠前谁后画 —— 画在围观之前的话,后排的人会盖住前排走过的人,
+        // 一排人前后关系整个反过来。
+        drawStrollers(ctx, DECK_Y, t, phase,
+                      { count: strollerCount(when, weather), rainy });
 
         // 近景压在所有东西之上,包括哇鸥 —— 被前景挡住一点才有纵深
         drawReeds(ctx, weather, t, phase);

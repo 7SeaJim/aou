@@ -727,20 +727,30 @@ export function drawPerformance(ctx, x, baseY, t, shows = 1, fedNow = false,
     // **每个人有自己的举手节奏**,而且真有人投喂的那一下(fedNow)会多一个人举手 ——
     // 动作和规则层的产出是同一件事,不是各演各的。一排人整齐地一起动是最假的。
     const crowd = Math.min(7, 2 + Math.floor(shows * 0.7));
+    // **每人往前后错开一点。** 七个人踩在同一条线上是一堵墙,不是一圈人 ——
+    // 身子只差两格宽,轮廓一挨上就糊成一片。
+    // 错开之后必须**从后往前画**,否则靠后的人会盖住靠前的 ——
+    // 这正是路人和围观混在一起时踩过的那个坑,同一个道理。
+    const DZ = [0, 4, 1, 5, 2, 6, 3];
+    const line = [];
     for (let i = 0; i < crowd; i++) {
         const side = i % 2 ? 1 : -1;
         // 最近的一对也要离哇鸥 28 格 —— 人是 24 格高、哇鸥只有 16 格,
         // 围太近的话主角直接淹没在一排人腿里
-        const dx = side * (28 + Math.floor(i / 2) * 15);
+        line.push({ i, dx: side * (28 + Math.floor(i / 2) * 15), dz: DZ[i % DZ.length] });
+    }
+    line.sort((a, b) => a.dz - b.dz);
+    for (const { i, dx, dz } of line) {
         const who = ONLOOKERS[(i * 3 + 1) % ONLOOKERS.length];
         // 每人一个错开的周期,轮到自己那一小段就举手
         const cycle = 5200 + i * 900;
         const waving = (t + i * 1700) % cycle < 700 || (fedNow && i === (t / 97 | 0) % crowd);
         const key = waving ? who + '_wave' : who;
         const bob = Math.sin(t * 0.0016 + i * 1.7) > 0.6 ? 1 : 0;
-        shadow(ctx, x + dx, baseY + bob, 12, 0.18);
-        drawStanding(ctx, shadedSprite(key, SCENERY[key], phase), x + dx, baseY + bob);
-        if (rainy) drawUmbrella(ctx, x + dx, baseY + bob - 20, i + 1, phase);
+        const y = baseY + bob + dz;
+        shadow(ctx, x + dx, y, 12, 0.18);
+        drawStanding(ctx, shadedSprite(key, SCENERY[key], phase), x + dx, y);
+        if (rainy) drawUmbrella(ctx, x + dx, y - 20, i + 1, phase);
     }
 
     shadow(ctx, x, baseY, 14, 0.2);
