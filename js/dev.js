@@ -526,6 +526,7 @@ export function installDev({ getState, mutate, storage, fly, getFlight, rules, u
     // 出摊那一场直接挂出来。headless 里虚拟时钟不给动画帧,
     // 测玩法只能手动调 _tick —— 这是给那种测试留的口子
     wa.__svc = service;
+    wa.__ui = ui;
 
     /* ---------- URL 参数:把常用的调试起点做成可以直接分享的链接 ---------- */
     const q = new URLSearchParams(location.search);

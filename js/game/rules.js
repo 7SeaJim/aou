@@ -13,7 +13,7 @@ import {
     DRINKS, DRINK_KEYS, SHELL_MARKS, divine, hourSlot, onDam,
     CREW, crewBonus, SEASONS, seasonOf,
     COSMETICS, EVENTS, ITEMS, MARKET, MARKET_LEVEL, FOODS,
-    RECIPE_STEPS, SERVICE, dayPhase,
+    RECIPE_STEPS, SERVICE,
     KITCHEN, kitchenCost, toolSlots, toolPower, PLATES,
 } from '../data.js';
 import { DAILY_TRIES } from '../state.js';
@@ -129,10 +129,15 @@ export function cook(state, recipeId) {
 /* ---------- 出摊:白天亲手做菜卖给游客 ---------- */
 
 /**
- * 现在能不能出摊。**白天 + 哇鸥在大坝上** —— 它中午和晚上回小屋,
- * 晚上坝上也没人买。时段本身就是这个玩法的节制,不用再加每日次数。
+ * 现在能不能出摊。**一条规则:哇鸥在大坝上,摊子就开着。**
+ *
+ * 原来还要「天亮着」,于是 17:30 天一擦黑摊子就收 —— 可傍晚恰恰是海埂大坝
+ * 人最多的时候,也是大多数人下班后才打开游戏的点。两条规则并成一条,
+ * 玩家也少记一件事:它人在哪儿,摊子就在哪儿。
+ *
+ * 开着的时段见 SERVICE.span,那串字要和这里的判断一起改。
  */
-export const serviceOpen = (when = clockNow()) => onDam(when) && dayPhase(when) === 'day';
+export const serviceOpen = (when = clockNow()) => onDam(when);
 
 /** 出餐台上一共放了几份 */
 export const stockCount = state =>

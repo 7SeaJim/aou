@@ -744,12 +744,23 @@ export class UI {
             ${back}`;
         }
         if (this.screen === 'service') {
-            const v = rules.serviceOpen() ? this.service?.snapshot() : null;
+            const back = `<button class="px-btn px-btn--sm px-btn--wood" data-screen="">收摊回大坝</button>`;
+            const shop = `<button class="px-btn px-btn--sm" data-modal="kitchen">${icon('stove')} 后厨</button>`;
+            // 打烊时留一句说明和两个出口。**后厨照样进得去** ——
+            // 摊子没开正好是升厨具的时候,一起关掉等于罚玩家来早了。
+            if (!rules.serviceOpen()) {
+                return `<span class="px-chip px-chip--dark">${icon('stove')} 摊子这会儿没开
+                        · ${SERVICE.span}</span>
+                        ${shop}
+                        <button class="px-btn px-btn--sm" data-screen="hut">${icon('waou')} 去小屋</button>
+                        ${back}`;
+            }
+            const v = this.service?.snapshot();
             return `
             ${v ? `<span class="px-chip px-chip--dark">${icon('coin')} 卖出 ${v.sold}</span>
                    <span class="px-chip px-chip--dark">${icon('shop')} 出餐台 ${v.stockCount}</span>` : ''}
-            <button class="px-btn px-btn--sm" data-modal="kitchen">${icon('stove')} 后厨</button>
-            <button class="px-btn px-btn--sm px-btn--wood" data-screen="">收摊回大坝</button>`;
+            ${shop}
+            ${back}`;
         }
         return `<button class="px-btn px-btn--sm px-btn--wood" data-screen="">回大坝</button>`;
     }
@@ -787,8 +798,21 @@ export class UI {
      * 和需要盯着的三件混在一起,玩家的眼睛不知道该看哪儿。
      */
     renderKitchen() {
-        if (this.screen !== 'service' || !rules.serviceOpen()) {
-            this.$kitchen.hidden = true;
+        if (this.screen !== 'service') { this.$kitchen.hidden = true; return; }
+
+        // 打烊。**不能直接 hidden 了事** —— 那样整页只剩底下两个按钮,
+        // 画面和大坝一模一样,玩家不知道自己到底点开了什么(这就是那个
+        // 「点出摊只有收摊和后厨」的 bug:摊子关着,界面什么都不说)。
+        if (!rules.serviceOpen()) {
+            this.$kitchen.hidden = false;
+            this.$kitchen.innerHTML = `
+                <div class="px-kclosed">
+                    <p class="px-kclosed__t">${icon('stove', 'lg')} 摊子这会儿没开</p>
+                    <p>出摊时间 <strong>${SERVICE.span}</strong><br>
+                       哇鸥回草棚歇脚的时候,摊子跟着收。</p>
+                    <p class="px-muted">折耳根这会儿正在坝上睡觉。<br>
+                       等不及的话,可以先去<strong>后厨</strong>把厨具升了。</p>
+                </div>`;
             return;
         }
         const v = this.service?.snapshot();

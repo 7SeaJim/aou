@@ -22,9 +22,10 @@
 import { PixelScreen, sprite, drawStanding } from './pixmap.js';
 import { SCENERY, ICON_GRIDS } from './pixels.js';
 import { pal, VW, VH } from './scene.js';
+import { now } from '../clock.js';
 import { shadedSprite } from './tint.js';
 import {
-    RECIPES, RECIPE_STEPS, TOOLS, QUALITY, BURN_MS, SERVICE, HELPER,
+    RECIPES, RECIPE_STEPS, TOOLS, QUALITY, BURN_MS, SERVICE, HELPER, dayPhase,
 } from '../data.js';
 import * as rules from './rules.js';
 
@@ -227,11 +228,14 @@ export class Service {
 
     _draw() {
         const { ctx } = this.screen;
-        const P = pal(this.getState().weather ?? 'sunny', 'day');
+        // 天光跟着真时间走,不写死成白天 —— 摊子现在开到 19:00,
+        // 傍晚那一段外面的大坝是橘的,摊子还亮得像正午的话,一眼就出戏
+        const phase = dayPhase(now());
+        const P = pal(this.getState().weather ?? 'sunny', phase);
         paintBackdrop(ctx, P);
         this._drawGuests(ctx);
         paintCounter(ctx, P);
-        this._drawCat(ctx, P);
+        this._drawCat(ctx, phase);
         this.screen.present();
     }
 
@@ -252,8 +256,8 @@ export class Service {
     }
 
     /** 折耳根在柜台后面。上班的时候她坐在这儿,尾巴一甩一甩 */
-    _drawCat(ctx, P) {
-        const cv = shadedSprite('cat_work', SCENERY.cat_work, 'day');
+    _drawCat(ctx, phase) {
+        const cv = shadedSprite('cat_work', SCENERY.cat_work, phase);
         const bob = Math.sin(this.t * 0.0021) > 0 ? 0 : 1;
         drawStanding(ctx, cv, 320, COUNTER_Y + 2 + bob);
     }

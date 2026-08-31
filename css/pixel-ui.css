@@ -923,6 +923,26 @@
 .px-kitchen[hidden] { display: none; }
 .px-kitchen > * { pointer-events: auto; }
 
+/* 打烊时压在画面正中的那块牌子。摊子没开的时候整页只有它 */
+.px-kclosed {
+    position: absolute;
+    left: 50%; top: 44%;
+    transform: translate(-50%, -50%);
+    width: min(420px, 78%);
+    padding: 20px 22px;
+    text-align: center;
+    line-height: 1.9;
+    background: var(--sand);
+    border: 3px solid var(--ink);
+    box-shadow: 6px 6px 0 rgba(0, 0, 0, .35);
+}
+.px-kclosed p { margin: 0 0 10px; }
+.px-kclosed p:last-child { margin-bottom: 0; }
+.px-kclosed__t {
+    font-size: 16px;
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+}
+
 /* 右边:食谱 + 手上正在做的 */
 .px-kside {
     position: absolute;

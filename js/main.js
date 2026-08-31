@@ -33,6 +33,8 @@ const SPRITES = {
 
 let state = null;
 let ui = null;
+/** 换画布上跑的那一场。boot() 里装上,出摊到点开关时也靠它 */
+let syncScene = () => false;
 let flight = null;
 /** 开发用的播种随机源工厂。生产构建里始终是 null */
 let devRng = null;
@@ -80,18 +82,30 @@ async function boot() {
     const service = new Service(canvas, () => state, mutate, () => ui?.render());
     bg.start();
 
+    // 三个场景共用一张画布,谁在跑谁画 —— 两个都跑着会互相盖。
+    // **不只在切页时算,每秒复查一次**:摊子到点会自己开、自己关,
+    // 玩家坐在出摊那页不动的话,没有任何一次切页会来通知它。
+    let scene = 'bg';
+    syncScene = () => {
+        const want = ui?.screen === 'hut' ? 'hut'
+            : ui?.screen === 'service' && rules.serviceOpen() ? 'service'
+            : 'bg';
+        if (want === scene) return false;
+        scene = want;
+        hut.stop(); service.stop(); bg.stop();
+        if (want === 'hut') hut.start();
+        else if (want === 'service') { service.reset(); service.start(); }
+        else bg.start();
+        return true;
+    };
+
     ui = new UI({
         getState: () => state,
         mutate,
         service,
         onFly: () => startFlight(sprites),
-        onScreen: screen => {
-            // 三个场景共用一张画布,谁在跑谁画 —— 两个都跑着会互相盖
-            hut.stop(); service.stop(); bg.stop();
-            if (screen === 'hut') hut.start();
-            else if (screen === 'service' && rules.serviceOpen()) { service.reset(); service.start(); }
-            else bg.start();
-        },
+        // go() 紧接着就会 render,这里只管换画布上跑的那一场
+        onScreen: () => syncScene(),
     });
     ui.mount();
 
@@ -195,6 +209,10 @@ function startStallLoop() {
         }
     }, 1000);
     setInterval(() => ui?.paintStallBars(), 250);
+
+    // 出摊时段的开关。到点了要么把摊子支起来,要么换成打烊那块牌子 ——
+    // 两种情况都得重画厨房那一层,所以只在真的切了场景时才 render
+    setInterval(() => { if (syncScene() && ui?.screen === 'service') ui.render(); }, 1000);
 }
 
 function togglePause() {
