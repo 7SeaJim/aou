@@ -22,6 +22,7 @@ import * as c4 from './game/connect4.js';
 import { now } from './clock.js';
 import { FOOD_KEYS, DAILY_TRIES, TUTORIAL_DONE } from './state.js';
 import * as rules from './game/rules.js';
+import { STATIONS } from './game/service.js';
 import * as sfx from './audio.js';
 
 const $ = sel => document.querySelector(sel);
@@ -630,12 +631,23 @@ export class UI {
             ['postcard', '明信片', 'postcard'], ['achievement', '成就', 'trophy'],
         ].map(btn).join('');
 
+        // 底下这条原来只有几个按钮挤在正中,右边空着大半条。
+        // **空着的地方该放的是「现在什么情况」** —— 几点了、摊子开没开、什么季节。
+        // 这三件事玩家隔一会儿就要问一次,原来得自己去推。
+        const phase = { day: '白天', dusk: '傍晚', night: '夜里' }[dayPhase(now())];
+        const open = rules.serviceOpen();
+        const w = WEATHER[s.weather] ?? WEATHER.sunny;
         this.$rails[2].innerHTML =
             `<button class="px-railbtn px-railbtn--go" data-act="fly"
                      ${s.dailyTries <= 0 ? 'disabled' : ''}>
                 ${icon('waou', 'lg')}<span>出发觅食 ${s.dailyTries}/${DAILY_TRIES}</span></button>`
             + [['wear', '装扮', 'cap'], ['chat', '聊天', 'heart'],
-               ['save', '存档', 'coin']].map(btn).join('');
+               ['save', '存档', 'coin']].map(btn).join('')
+            + `<span class="px-railinfo">
+                <span>${icon(w.icon)} ${phase} · ${w.name}</span>
+                <span class="${open ? '' : 'px-muted'}">${icon('shop')} 摊子${open ? '开着' : '打烊了'}</span>
+                <span>${icon('star')} ${rules.seasonNow().name}季</span>
+               </span>`;
     }
 
     viewDock() {
@@ -831,8 +843,7 @@ export class UI {
 
         const s = this.getState();
 
-        const mid = ['board', 'pan', 'stove'].map(k => this.toolBox(k, v)).join('');
-        const oven = this.toolBox('oven', v);
+        const stations = Object.keys(TOOLS).map(k => this.station(k, v)).join('');
 
         // 右边:手上在做的(可拖)+ 能开的菜
         const doing = v.dishes.length ? v.dishes.map(d => `
@@ -882,14 +893,37 @@ export class UI {
 
         this.$kitchen.innerHTML = `
             <div class="px-korders">${orders}</div>
-            <div class="px-ktools">${mid}</div>
-            <div class="px-koven">${oven}</div>
+            ${stations}
             <div class="px-kside">
                 <h4>手上在做</h4>${doing}
                 <h4>出餐台 ${v.stockCount}/${SERVICE.stockMax}</h4>
                 <div style="display:flex;gap:4px;flex-wrap:wrap">${stock}</div>
                 <h4>开一道</h4>${menu}
             </div>`;
+    }
+
+    /**
+     * 一件家什在 DOM 这边的那块判定框。**它是透明的** ——
+     * 东西本身画在画布上(见 service.js 的 STATIONS),这儿只负责收手指。
+     *
+     * 为什么不干脆全放画布上:核心动作是拖,而拖拽、命中判定、拖影这些
+     * 浏览器本来就有。所以画归画布、点归 DOM,两边共用同一张坐标表。
+     *
+     * 坐标 ×2 是因为画布是 440×310 的位图放大两倍贴到 880×620 上的。
+     */
+    station(key, v) {
+        const st = STATIONS[key];
+        const [x, y, w, h] = st.hit;
+        const jobs = (v.tools[key] ?? []).filter(Boolean);
+        const done = jobs.length > 0;
+        const hot = jobs.some(j => j.grade === 'good');
+        return `
+        <div class="px-station ${done ? 'px-station--busy' : ''} ${hot ? 'px-station--hot' : ''}"
+             data-drop="${key}" ${done ? `data-take="${key}"` : ''}
+             title="${TOOLS[key].name}"
+             style="left:${x * 2}px;top:${y * 2}px;width:${w * 2}px;height:${h * 2}px">
+            <span class="px-station__tag">${TOOLS[key].name}</span>
+        </div>`;
     }
 
     /**
@@ -904,18 +938,16 @@ export class UI {
         const v = this.service?.snapshot();
         if (!v) return;
 
+        // 火候条画在画布上(service.js 的 _bar),这儿只管判定框的两个状态类:
+        // 有没有东西在上头、到没到「刚好」。就两个 classList.toggle,不碰结构
         for (const [key, cells] of Object.entries(v.tools)) {
-            cells.forEach((j, i) => {
-                const box = this.$kitchen.querySelector(`[data-cell="${key}:${i}"]`);
-                if (!box || !j) return;
-                const fill = box.querySelector('[data-fill]');
-                if (fill) {
-                    fill.style.width = `${Math.round(Math.min(1, j.p / 1.6) * 100)}%`;
-                    fill.style.background = QUALITY[j.grade].color;
-                }
-                // 「刚好」那一档给个亮框,这是玩家真正在等的那个信号
-                box.classList.toggle('px-slotbox--hot', j.grade === 'good');
-            });
+            const box = this.$kitchen.querySelector(`.px-station[data-drop="${key}"]`);
+            if (!box) continue;
+            const jobs = cells.filter(Boolean);
+            box.classList.toggle('px-station--busy', jobs.length > 0);
+            box.classList.toggle('px-station--hot', jobs.some(j => j.grade === 'good'));
+            box.toggleAttribute('data-take', jobs.length > 0);
+            if (jobs.length > 0) box.setAttribute('data-take', key);
         }
         for (const g of v.guests) {
             const bar = this.$kitchen.querySelector(`[data-guest="${g.id}"] [data-wait]`);
@@ -924,37 +956,6 @@ export class UI {
             const col = g.left > 0.45 ? 'leaf' : g.left > 0.2 ? 'gold' : 'coral';
             bar.className = `px-bar__fill px-bar__fill--${col}`;
         }
-    }
-
-    /** 一件厨具:名字 + 几个格子。格子里有活就画火候条 */
-    toolBox(key, v) {
-        const t = TOOLS[key];
-        const info = rules.toolInfo(this.getState(), key);
-        const slots = (v.tools[key] ?? []).map((j, i) => {
-            // 空格子里放一个淡淡的厨具图 —— 一块纯色方块读起来像贴图没加载出来,
-            // 有个影子在里面才看得出这是「往这儿放东西」的地方
-            if (!j) return `<div class="px-slotbox px-slotbox--empty">
-                <span class="px-slotbox__hint">${icon(t.icon)}</span></div>`;
-            const p = Math.min(1, j.p / 1.6);
-            const winL = ((1 - t.window) / 1.6) * 100;
-            const winW = ((t.window * 1.6) / 1.6) * 100;
-            return `
-            <div class="px-slotbox ${j.grade === 'good' ? 'px-slotbox--hot' : ''}"
-                 data-take="${key}" data-slot="${i}" data-cell="${key}:${i}" title="${j.name}">
-                ${icon(FOODS[j.ing].icon)}
-                <div class="px-slotbox__bar">
-                    <div class="px-slotbox__win" style="left:${winL}%;width:${winW}%"></div>
-                    <div class="px-slotbox__fill" data-fill
-                         style="width:${Math.round(p * 100)}%;background:${QUALITY[j.grade].color}"></div>
-                </div>
-            </div>`;
-        }).join('');
-        return `
-        <div class="px-tool" data-drop="${key}">
-            <div class="px-tool__name">${icon(t.icon)} ${t.name}
-                <small class="px-muted">Lv.${info.lv}</small></div>
-            <div class="px-tool__slots">${slots}</div>
-        </div>`;
     }
 
     /**
@@ -969,8 +970,8 @@ export class UI {
         K.addEventListener('click', e => {
             const take = e.target.closest('[data-take]');
             if (take) {
-                sfx.play('serve' in {} ? 'click' : 'click');
-                const r = this.service?.take(take.dataset.take, Number(take.dataset.slot));
+                sfx.play('click');
+                const r = this.service?.takeBest(take.dataset.take);
                 if (r?.done) {
                     sfx.play(r.grade === 'good' ? 'coin' : 'click');
                     this.toast(`${RECIPES.find(x => x.id === r.recipe).name} 装盘 · ${QUALITY[r.grade].name}`,
@@ -998,8 +999,8 @@ export class UI {
         let lit = null;
         const light = el => {
             if (el === lit) return;
-            lit?.classList.remove('px-tool--drop');
-            el?.classList.add('px-tool--drop');
+            lit?.classList.remove('px-station--drop');
+            el?.classList.add('px-station--drop');
             lit = el;
         };
 

@@ -765,17 +765,40 @@
 }
 .px-rail--v {
     flex-direction: column;
+    /* 按钮沿着整条摊开,不堆在顶上。
+       原来四个按钮挤在 620 高的柱子最上面那 240,底下空着一大截 */
+    justify-content: space-evenly;
     margin-block: 14px;
     padding: 6px 5px;
 }
+/* 按钮之间一道浅色接缝,让这条柱子看着是一整块面板而不是几个飘着的按钮 */
+.px-rail--v .px-railbtn + .px-railbtn { box-shadow: 0 -1px 0 rgba(74, 54, 40, .22); }
+.px-rail--v .px-railbtn[aria-selected="true"] { box-shadow: inset 0 0 0 3px var(--ink); }
 #railLeft  { border-right: none; margin-right: -4px; }
 #railRight { border-left: none;  margin-left: -4px; }
 .px-rail--h {
     flex-wrap: wrap;
-    justify-content: center;
+    align-items: center;
     padding: 5px 6px;
     margin-inline: 14px;
     margin-top: -4px;
+}
+/* 右边那截「现在什么情况」。靠 margin-left:auto 顶到最右,把这条填满 */
+.px-railinfo {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-left: auto;
+    padding-right: 8px;
+    font-family: var(--font-pixel);
+    font-size: 12px;
+    color: var(--ink);
+}
+.px-railinfo > span { display: flex; align-items: center; gap: 5px; }
+@media (max-width: 700px) {
+    /* 窄屏放不下就整条收起来 —— 挤成两行反而更乱 */
+    .px-railinfo { display: none; }
+    .px-rail--h { justify-content: center; }
 }
 
 .px-railbtn {
@@ -946,7 +969,7 @@
 /* 右边:食谱 + 手上正在做的 */
 .px-kside {
     position: absolute;
-    top: 0; right: 0; bottom: 0;
+    top: 0; right: 0; bottom: 48px;   /* 48 = 底下那条操作条,插到底会被它压住 */
     width: 200px;
     display: flex;
     flex-direction: column;
@@ -959,44 +982,37 @@
 .px-kside h4 { font-size: 12px; margin: 2px 0 2px; color: var(--ink-soft); }
 
 /* 中间那排厨具 */
-.px-ktools {
+/**
+ * 一件家什的判定框。**透明的** —— 东西本身画在画布上,这儿只收手指。
+ * 位置由 service.js 的 STATIONS 算好后直接写在 style 里。
+ */
+.px-station {
     position: absolute;
-    /* 148 = 底下的操作条(44)+ 烤箱那一格(约 100)。
-       摆低了会被操作条压住,摆高了柜台下面空一大块黑 */
-    left: 10px; right: 210px; bottom: 148px;
-    display: flex;
-    gap: 8px;
-    align-items: flex-end;
-}
-/* 烤箱单独在左下角 —— 它慢,不该和快节奏那三件挤在一条线上 */
-.px-koven { position: absolute; left: 10px; bottom: 52px; width: 46%; }
-
-.px-tool {
-    flex: 1;
-    background: var(--wood);
-    box-shadow: inset 0 0 0 3px var(--ink);
-    padding: 5px;
-}
-.px-tool__name { display: flex; align-items: center; gap: 5px; margin-bottom: 4px; }
-.px-tool__slots { display: flex; flex-wrap: wrap; gap: 4px; }
-.px-slotbox {
-    position: relative;
-    width: 46px; height: 44px;
-    display: flex; flex-direction: column;
-    align-items: center; justify-content: center; gap: 2px;
-    /* 深木色的凹槽,不是纯黑 —— 一块 #241a13 的方块读起来像贴图没加载出来 */
-    background: #6b4a2e;
-    box-shadow: inset 0 0 0 2px var(--ink), inset 3px 3px 0 #52371f;
+    box-shadow: inset 0 0 0 2px transparent;
     cursor: pointer;
+    transition: box-shadow .08s;
 }
-.px-slotbox--empty { cursor: default; }
-/* 空格子里那个淡淡的厨具影子:告诉玩家这儿是放东西的地方 */
-.px-slotbox__hint { opacity: .4; filter: grayscale(.35); }
-.px-slotbox--hot { box-shadow: inset 0 0 0 2px var(--gold); }
-.px-slotbox__bar { position: absolute; left: 3px; right: 3px; bottom: 3px; height: 5px; background: #4a3628; }
-.px-slotbox__fill { height: 100%; }
-/* 「刚好」那一段在条子上是块亮的 —— 玩家盯的是这块,不是数字 */
-.px-slotbox__win { position: absolute; top: 0; bottom: 0; background: rgba(119,178,85,.55); }
+/* 上头有东西:**不画框**。菜就摆在那件东西上,画面自己说得清楚,
+   多一个方框只会把刚拆掉的「工位」又装回来 */
+/* 到「刚好」了:金框。这是玩家在等的那个信号,整屏只有它该这么响 */
+.px-station--hot  { box-shadow: inset 0 0 0 3px var(--gold); }
+.px-station:hover { box-shadow: inset 0 0 0 2px rgba(255, 253, 244, .55); }
+/* 拖着能放的东西经过时 */
+.px-station--drop { box-shadow: inset 0 0 0 3px var(--gold-l); background: rgba(245, 184, 61, .18); }
+
+/* 名字贴在框子左上角,小小一枚 —— 不写名字的话新玩家分不清哪台是哪台 */
+.px-station__tag {
+    /* 名字挂在判定框**下面** —— 挂上面会压住东西本身,
+       挂下面正好落在案子正面那排柜门上,像案上贴的标签 */
+    position: absolute;
+    left: 0; top: 100%;
+    padding: 1px 4px;
+    font-size: 11px;
+    line-height: 15px;
+    color: var(--sand);
+    background: rgba(36, 26, 19, .72);
+    pointer-events: none;
+}
 
 /* 在做的菜:可以拖的那张牌 */
 .px-chip2 {
@@ -1023,8 +1039,6 @@
     background: var(--gold-l);
     box-shadow: inset 0 0 0 2px var(--ink);
 }
-/* 拖到能放的厨具上时,那件厨具亮一下 */
-.px-tool--drop { background: var(--gold); }
 
 .px-recipebtn {
     display: flex; align-items: center; gap: 6px;
@@ -1041,8 +1055,6 @@
 
 @media (max-width: 1059px) {
     .px-kside { width: 150px; font-size: 11px; }
-    .px-ktools { right: 158px; bottom: 130px; gap: 5px; }
-    .px-slotbox { width: 38px; height: 38px; }
 }
 
 /* 订单条:排在画面最上面那一带(天空那儿),不压住柜台外站着的人。

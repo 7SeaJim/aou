@@ -10,6 +10,7 @@ from people import PEOPLE
 from stallparts import STALL_PARTS
 from stall import STALLS
 from cat import CAT
+from kitchenware import KITCHENWARE
 
 # ---------- 哇鸥 32×32 ----------
 # 主角。原型是红嘴鸥 —— 每年冬天从西伯利亚飞到滇池越冬的那种,
@@ -934,6 +935,7 @@ SCENERY = {
     **STALL_PARTS,     # 摊位的零碎升级件,见 tools/stallparts.py
     **STALLS,          # 摊子本体的四个阶段,见 tools/stall.py
     **CAT,             # 折耳根,见 tools/cat.py
+    **KITCHENWARE,     # 出摊那一场案上的四件家什,见 tools/kitchenware.py
     'storm':      STORM,
     'boat':       BOAT,
     'cloud_a':    CLOUD_A,

@@ -25,17 +25,50 @@ import { pal, VW, VH } from './scene.js';
 import { now } from '../clock.js';
 import { shadedSprite } from './tint.js';
 import {
-    RECIPES, RECIPE_STEPS, TOOLS, QUALITY, BURN_MS, SERVICE, HELPER, dayPhase,
+    RECIPES, RECIPE_STEPS, TOOLS, QUALITY, BURN_MS, SERVICE, HELPER, FOODS, dayPhase,
 } from '../data.js';
 import * as rules from './rules.js';
 
-const HORIZON = 76;
-const RAIL_Y = 100;
-const DECK_Y = 158;      // 游客脚下
-const COUNTER_Y = 170;   // 柜台面
+// 出摊这一场的分层。**和大坝那一场的比例不一样是故意的** ——
+// 大坝看的是风景,这儿看的是做菜。原来天和湖占了一半屏幕、案子挤在最底下
+// 那一条,做菜的地方还没有空甲板大。现在外面压到 45%,案子那头拿走 55%。
+const HORIZON = 52;
+const RAIL_Y = 70;
+const DECK_Y = 124;      // 游客脚下
+const COUNTER_Y = 138;   // 柜台面
 
 // 队伍只排在左边 —— 右边那 200px 被食谱面板盖着,排过去的人看不见
 const QUEUE_X = [52, 108, 164, 220, 276];
+
+/** 案板面的高度。案上那三件东西都踩在这条线上 */
+export const BENCH_Y = 192;
+const FRONT_Y = 196;     // 案子正面从这儿往下
+const FLOOR_Y = 290;     // 地面
+
+/**
+ * 四件家什各自摆在哪儿。**这张表是画面和点击判定的同一个来源** ——
+ * 画在这儿、点在那儿地各写一份坐标,挪个位置就会「看着在这儿、点不到」。
+ *
+ *   cx/by   精灵图的中心 x 和底边 y(drawStanding 就按这两个数摆)
+ *   hit     点击/放下的判定框 [x, y, 宽, 高],比图本身大一圈 ——
+ *           手指按下去的地方不会那么准,尤其砧板只有 14 高
+ *   food    正在做的东西画在哪儿(底边中心),多个格子沿 x 排开
+ *   bar     火候条画在哪儿。前三件在东西上方,烤箱的画在它自己的玻璃窗上
+ */
+export const STATIONS = {
+    board: { key: 'kw_board', cx: 44,  by: BENCH_Y,
+             hit: [18, 166, 54, 28],  food: { x: 44, y: 184, gap: 13 },
+             bar: { x: 22, y: 168, w: 44 } },
+    pan:   { key: 'kw_pan',   cx: 112, by: BENCH_Y,
+             hit: [90, 164, 46, 30],  food: { x: 106, y: 188, gap: 11 },
+             bar: { x: 94, y: 166, w: 36 } },
+    stove: { key: 'kw_stove', cx: 188, by: BENCH_Y,
+             hit: [152, 148, 72, 46], food: { x: 188, y: 168, gap: 15 },
+             bar: { x: 158, y: 146, w: 60 } },
+    oven:  { key: 'kw_oven',  cx: 66,  by: 268,
+             hit: [23, 220, 88, 50],  food: { x: 66, y: 252, gap: 17 },
+             bar: { x: 31, y: 258, w: 70 } },
+};
 
 let uid = 1;
 
@@ -142,6 +175,23 @@ export class Service {
         return { ok: true };
     }
 
+    /**
+     * 端走这台上最该端的那一份 —— 走得最靠前的那格。
+     *
+     * 现在一台上可能同时有三格,但玩家看到的是「灶台上有东西」这一件事,
+     * 不是三个编号。**让他指着东西说「这个」,而不是先数清是第几格。**
+     */
+    takeBest(toolKey) {
+        const cells = this.tools[toolKey] ?? [];
+        let best = -1, bp = -1;
+        cells.forEach((j, i) => {
+            if (!j) return;
+            const p = (this.t - j.at) / j.ms;
+            if (p > bp) { bp = p; best = i; }
+        });
+        return best < 0 ? { ok: false } : this.take(toolKey, best);
+    }
+
     /** 从厨具上端下来。火候就是在这一下定的 */
     take(toolKey, slot) {
         const j = this.tools[toolKey]?.[slot];
@@ -244,6 +294,8 @@ export class Service {
         this._drawGuests(ctx);
         paintCounter(ctx, P);
         this._drawCat(ctx, phase);
+        this._drawStations(ctx);
+        this._drawPlates(ctx);
         this.screen.present();
     }
 
@@ -261,6 +313,105 @@ export class Service {
             ctx.fillStyle = left > 0.45 ? '#77b255' : left > 0.2 ? '#f5b83d' : '#e8384f';
             ctx.fillRect(x - 10, top - 25, Math.round(20 * left), 2);
         });
+    }
+
+    /**
+     * 案上那四件家什,以及每件上头正在做的东西和它的火候条。
+     *
+     * **东西画在画布上,判定框在 DOM 上**,两边共用 STATIONS 那张表。
+     * 原来这四件是四个一模一样的木框子,框里几个方格 —— 看着像流水线的工位。
+     * 现在它们各是各的形状、各占各的地方,拖过去就是把菜放到那件东西上。
+     */
+    _drawStations(ctx) {
+        for (const [key, st] of Object.entries(STATIONS)) {
+            const cv = sprite(st.key, SCENERY[st.key]);
+            drawStanding(ctx, cv, st.cx, st.by);
+
+            const jobs = this.tools[key].map(j => j && this._cook(j)).filter(Boolean);
+            if (!jobs.length) continue;
+
+            // 灶台和烤箱在烧的时候炉膛里见火。坐标是各自那张图上炉门的位置
+            if (key === 'stove') this._fire(ctx, 167, 171, 42, 10, jobs);
+            if (key === 'oven')  this._fire(ctx, 38,  239, 56, 14, jobs);
+
+            const n = jobs.length;
+            jobs.forEach((j, i) => {
+                const x = st.food.x + (i - (n - 1) / 2) * st.food.gap;
+                const g = ICON_GRIDS[FOODS[j.ing].icon];
+                if (g) drawStanding(ctx, sprite(FOODS[j.ing].icon, g), x, st.food.y);
+            });
+            this._bar(ctx, st, key, jobs);
+        }
+    }
+
+    /**
+     * 炉膛里的火。做得越久烧得越旺,焦了转成暗红。
+     *
+     * **画成一排高低不齐的火苗,不是一条色带。** 一条整齐的橙色横条读起来
+     * 是「进度条」或者「贴图坏了」,只有参差的舌头才像在烧。
+     */
+    _fire(ctx, x, y, w, h, jobs) {
+        const hottest = Math.max(...jobs.map(j => Math.min(1.2, j.p)));
+        const burnt = jobs.some(j => j.grade === 'burnt');
+        const base = burnt ? '#8a2f1e' : '#c14e33';
+        const tip = burnt ? '#c14e33' : '#f5b83d';
+        ctx.fillStyle = '#3a1d12';
+        ctx.fillRect(x, y, w, h);
+        // 火苗的高低按位置定死,不随机 —— 每帧换一套高度会闪得人眼疼
+        const H = [0.55, 0.85, 0.7, 1, 0.6, 0.9, 0.75, 0.95, 0.65, 0.8];
+        const step = 4;
+        for (let i = 0; x + i * step < x + w; i++) {
+            const grow = 0.35 + Math.min(1, hottest) * 0.65;
+            const t = Math.max(2, Math.round(h * H[i % H.length] * grow));
+            ctx.fillStyle = base;
+            ctx.fillRect(x + i * step, y + h - t, step - 1, t);
+            ctx.fillStyle = tip;
+            ctx.fillRect(x + i * step, y + h - Math.round(t * 0.45), step - 1, Math.round(t * 0.45));
+        }
+    }
+
+    /**
+     * 火候条。**「刚好」那一段画成一块亮的** —— 玩家盯的是这块,不是数字。
+     * 条子紧贴着东西本身,不另开一处:眼睛不用在两个地方来回跑。
+     */
+    _bar(ctx, st, key, jobs) {
+        const { x, y, w } = st.bar;
+        ctx.fillStyle = '#241a13';
+        ctx.fillRect(x - 1, y - 1, w + 2, 7);
+        ctx.fillStyle = '#5f6d78';
+        ctx.fillRect(x, y, w, 5);
+        const j = jobs.reduce((a, b) => (b.p > a.p ? b : a));
+        const win = TOOLS[key].window;
+        ctx.fillStyle = 'rgba(119,178,85,.85)';
+        ctx.fillRect(x + Math.round(w * (1 - win) / 1.6), y,
+                     Math.round(w * win * 1.6 / 1.6), 5);
+        ctx.fillStyle = QUALITY[j.grade].color;
+        ctx.fillRect(x, y, Math.round(w * Math.min(1, j.p / 1.6)), 5);
+        // 刚好的时候给条子镶一道金边,余光里也能看见
+        if (j.grade === 'good') {
+            ctx.fillStyle = '#f5b83d';
+            ctx.fillRect(x - 1, y - 1, w + 2, 1);
+            ctx.fillRect(x - 1, y + 5, w + 2, 1);
+        }
+    }
+
+    /** 案子右边那一摞做好的。出餐台以前只是右栏里一个数字,现在看得见 */
+    _drawPlates(ctx) {
+        const stock = this.getState().stock ?? {};
+        let i = 0;
+        for (const [id, o] of Object.entries(stock)) {
+            for (let n = 0; n < (o?.n ?? 0) && i < 8; n++, i++) {
+                const x = 244 + (i % 3) * 32;
+                const y = BENCH_Y - (i < 3 ? 0 : 15);
+                ctx.fillStyle = '#4a3628';
+                ctx.fillRect(x - 11, y - 4, 22, 4);
+                ctx.fillStyle = o.q > 0.85 ? '#f7ecca' : o.q > 0.6 ? '#dfc98e' : '#b8b0a0';
+                ctx.fillRect(x - 10, y - 3, 20, 2);
+                const r = RECIPES.find(v => v.id === id);
+                const g = r && ICON_GRIDS[r.icon];
+                if (g) drawStanding(ctx, sprite(r.icon, g), x, y - 3);
+            }
+        }
     }
 
     /** 折耳根在柜台后面。上班的时候她坐在这儿,尾巴一甩一甩 */
@@ -328,10 +479,14 @@ function paintCounter(ctx, P) {
     paintInterior(ctx, P);
 }
 
-/** 柜台里边:板壁 + 搁板 + 地面 */
+/**
+ * 柜台里边:板壁 + 搁板 + **案子** + 地面。
+ *
+ * 案子是后加的:四件家什得站在什么东西上,悬在空中的灶台不成立。
+ * 案面那条线就是 BENCH_Y —— 家什的底边全踩在它上面,烤箱嵌在案子正面。
+ */
 function paintInterior(ctx, P) {
     const top = COUNTER_Y + 3;
-    const floorY = VH - 26;
     const night = P.night;
     // 夜里整体压暗一档,但**绝不压到纯黑** —— 分不出层次的暗和坏图没区别
     const wall = night ? '#4a3524' : '#5e4229';
@@ -339,23 +494,22 @@ function paintInterior(ctx, P) {
     const glow = night ? '#6b4d2f' : '#8a6039';
 
     ctx.fillStyle = wall;
-    ctx.fillRect(0, top, VW, floorY - top);
+    ctx.fillRect(0, top, VW, FRONT_Y - top);
     // 横板:每 11 像素一道缝,靠上的几道亮一点(外面的光斜着照进来)
-    for (let y = top + 11; y < floorY; y += 11) {
+    for (let y = top + 11; y < BENCH_Y - 6; y += 11) {
         const near = 1 - Math.min(1, (y - top) / 70);
         ctx.fillStyle = near > 0.35 ? glow : plank;
         ctx.fillRect(0, y, VW, 1);
     }
-    // 柜台下沿漏进来的一道光
     ctx.fillStyle = glow;
     ctx.fillRect(0, top, VW, 2);
 
     // 一道搁板。上面摆几个坛子罐子,让这面墙不只是一面墙
-    const shelfY = top + 30;
+    const shelfY = top + 26;
     ctx.fillStyle = plank; ctx.fillRect(0, shelfY, VW, 3);
     ctx.fillStyle = glow;  ctx.fillRect(0, shelfY, VW, 1);
-    const jars = [[24, 9, '#9c6b43'], [40, 7, '#7d8a6b'], [300, 8, '#9c6b43'],
-                  [318, 6, '#8a5a4a'], [396, 9, '#7d8a6b'], [414, 7, '#9c6b43']];
+    const jars = [[18, 9, '#9c6b43'], [34, 7, '#7d8a6b'], [206, 8, '#9c6b43'],
+                  [224, 6, '#8a5a4a'], [300, 9, '#7d8a6b'], [318, 7, '#9c6b43']];
     for (const [x, h, c] of jars) {
         ctx.fillStyle = night ? '#4a3524' : c;
         ctx.fillRect(x, shelfY - h, 10, h);
@@ -363,11 +517,82 @@ function paintInterior(ctx, P) {
         ctx.fillRect(x, shelfY - h - 2, 10, 2);
     }
 
-    // 地面:比墙暗,给一条踢脚线分开
-    ctx.fillStyle = plank;  ctx.fillRect(0, floorY, VW, VH - floorY);
-    ctx.fillStyle = wall;   ctx.fillRect(0, floorY, VW, 2);
+    // 案面。**这条亮边就是「东西站在上面」那句话** ——
+    // 少了它,家什看着是贴在墙上而不是摆在案上
+    ctx.fillStyle = '#4a3628'; ctx.fillRect(0, BENCH_Y - 6, VW, 2);
+    ctx.fillStyle = night ? '#a97f52' : '#cf9862'; ctx.fillRect(0, BENCH_Y - 4, VW, 4);
+    ctx.fillStyle = night ? '#c49a68' : '#e0b077'; ctx.fillRect(0, BENCH_Y - 4, VW, 1);
+    ctx.fillStyle = '#4a3628'; ctx.fillRect(0, BENCH_Y, VW, 2);
+
+    // 案子正面。烤箱嵌在左边,右边是两格敞开的架子 ——
+    // **这一片占了三成屏幕,空着就是三成的空。** 摊子底下本来就堆着东西:
+    // 摞起来的碗、装米线的筐、几袋米、一只煤气罐。
+    ctx.fillStyle = night ? '#6b4a2e' : '#9c6b43';
+    ctx.fillRect(0, FRONT_Y, VW, FLOOR_Y - FRONT_Y);
+    ctx.fillStyle = night ? '#4a3524' : '#6b4a2e';
+    ctx.fillRect(0, FRONT_Y, VW, 2);
+    paintUnderBench(ctx, night);
+
+    // 地面:比案子暗,给一条踢脚线分开
+    ctx.fillStyle = plank;  ctx.fillRect(0, FLOOR_Y, VW, VH - FLOOR_Y);
+    ctx.fillStyle = wall;   ctx.fillRect(0, FLOOR_Y, VW, 2);
     ctx.fillStyle = night ? '#33241a' : '#42301e';
-    for (let x = 6; x < VW; x += 29) ctx.fillRect(x, floorY + 2, 1, VH - floorY - 2);
+    for (let x = 6; x < VW; x += 29) ctx.fillRect(x, FLOOR_Y + 2, 1, VH - FLOOR_Y - 2);
+}
+
+/** 案子底下那两格敞开的架子。摊子底下堆的东西,不是装饰,是这行的样子 */
+function paintUnderBench(ctx, night) {
+    const dim = c => (night ? '#4a3524' : c);
+    const shelf = (x, y, w, h) => {
+        ctx.fillStyle = '#3a2a1c'; ctx.fillRect(x, y, w, h);
+        ctx.fillStyle = night ? '#5a3d26' : '#84592f';
+        ctx.fillRect(x, y, w, 2); ctx.fillRect(x, y + h - 2, w, 2);
+        ctx.fillRect(x, y, 2, h);  ctx.fillRect(x + w - 2, y, 2, h);
+    };
+    const bowls = (x, y, n, c) => {          // 摞起来的一叠碗
+        for (let i = 0; i < n; i++) {
+            ctx.fillStyle = '#4a3628'; ctx.fillRect(x, y - i * 5, 20, 5);
+            ctx.fillStyle = dim(c);    ctx.fillRect(x + 1, y - i * 5 + 1, 18, 3);
+        }
+    };
+    const sack = (x, y, w, h, c) => {        // 一袋米
+        ctx.fillStyle = '#4a3628'; ctx.fillRect(x, y - h, w, h);
+        ctx.fillStyle = dim(c);    ctx.fillRect(x + 1, y - h + 1, w - 2, h - 2);
+        ctx.fillStyle = '#4a3628'; ctx.fillRect(x + w / 2 - 3, y - h - 2, 6, 3);
+    };
+
+    const top = FRONT_Y + 10, mid = FRONT_Y + 48, bot = FLOOR_Y - 6;
+    shelf(126, top, 96, bot - top);
+    ctx.fillStyle = night ? '#5a3d26' : '#84592f';
+    ctx.fillRect(126, mid, 96, 3);
+    bowls(134, mid - 2, 4, '#f7ecca');
+    bowls(160, mid - 2, 3, '#dfe4e8');
+    bowls(186, mid - 2, 5, '#f7ecca');
+    sack(134, bot - 4, 24, 26, '#dfc98e');
+    sack(164, bot - 4, 22, 22, '#b8b0a0');
+    sack(192, bot - 4, 24, 24, '#dfc98e');
+
+    shelf(232, top, 100, bot - top);
+    ctx.fillStyle = night ? '#5a3d26' : '#84592f';
+    ctx.fillRect(232, mid, 100, 3);
+    // 装米线的竹筐
+    for (const x of [240, 272, 304]) {
+        ctx.fillStyle = '#4a3628'; ctx.fillRect(x, mid - 20, 24, 20);
+        ctx.fillStyle = dim('#cf9862'); ctx.fillRect(x + 1, mid - 19, 22, 18);
+        ctx.fillStyle = '#4a3628';
+        for (let y = mid - 16; y < mid - 2; y += 5) ctx.fillRect(x + 1, y, 22, 1);
+        ctx.fillStyle = dim('#fffdf4'); ctx.fillRect(x + 3, mid - 17, 18, 4);
+    }
+    // 煤气罐
+    ctx.fillStyle = '#4a3628'; ctx.fillRect(292, bot - 40, 26, 40);
+    ctx.fillStyle = dim('#8a99a3'); ctx.fillRect(293, bot - 38, 24, 37);
+    ctx.fillStyle = dim('#5f6d78'); ctx.fillRect(293, bot - 38, 24, 4);
+    ctx.fillStyle = '#4a3628'; ctx.fillRect(300, bot - 45, 10, 6);
+    // 一摞蒸笼
+    for (let i = 0; i < 3; i++) {
+        ctx.fillStyle = '#4a3628'; ctx.fillRect(242, bot - 8 - i * 9, 40, 9);
+        ctx.fillStyle = dim('#cf9862'); ctx.fillRect(243, bot - 7 - i * 9, 38, 7);
+    }
 }
 
 function bubble(ctx, cx, y, recipeId) {
