@@ -10,7 +10,10 @@
     <link rel="stylesheet" href="css/pixel-ui.css">
     <style>
         body { display: block; padding: 24px 16px 60px; }
-        .wrap { width: min(916px, 100%); margin-inline: auto; }
+        /* 1060 = 916 的画面 + 左右两条按钮(62 宽)+ 两道 10 的缝。
+           还写 916 的话,按钮条会从画面身上抢走 144px,
+           canvas 被挤到 736 —— 又回到了非整数倍缩放那个坑。 */
+        .wrap { width: min(1060px, 100%); margin-inline: auto; }
         .title { text-align: center; margin-bottom: 20px; }
         .title h1 { font-size: 32px; }
 
@@ -99,8 +102,13 @@
 
     <div id="hud"></div>
 
-    <!-- 游戏舞台:背景 canvas + 飞行覆盖层 -->
-    <div class="px-stage" style="margin-bottom:28px">
+    <!-- 机身:画面在正中,功能按钮围着它排。
+         点一个按钮,内容以抽屉的形式压在画面上 —— **画面始终在那儿**,
+         不像原来那样往下接一长条面板,一划码头就出画了。 -->
+    <div class="px-console">
+        <div id="railLeft" class="px-rail px-rail--v"></div>
+
+        <div class="px-stage">
         <div class="px-screen">
             <canvas id="bgCanvas" width="880" height="620"></canvas>
 
@@ -124,11 +132,21 @@
                     <button class="px-btn" id="flyResume">▶ 继续</button>
                 </div>
             </div>
-        </div>
-    </div>
 
-    <div id="tabs" class="px-tabs"></div>
-    <div id="panel" class="px-panel"></div>
+            <!-- 抽屉:压在画面上,**不铺满** —— 露出来的那一截就是「码头还在」 -->
+            <div id="drawer" class="px-drawer" hidden>
+                <div class="px-drawer__bar">
+                    <strong id="drawerTitle"></strong>
+                    <button class="px-btn px-btn--sm px-btn--coral" id="drawerClose">收起</button>
+                </div>
+                <div id="panel" class="px-drawer__body"></div>
+            </div>
+        </div>
+        </div>
+
+        <div id="railRight" class="px-rail px-rail--v"></div>
+        <div id="railBottom" class="px-rail px-rail--h"></div>
+    </div>
 
 </div>
 

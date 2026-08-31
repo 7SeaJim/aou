@@ -34,6 +34,13 @@ const el = (tag, cls, html) => {
 /** 一条吐司在屏幕上待多久。showEvents 的排队间隔要按它来。 */
 const TOAST_MS = 2600;
 
+/** 抽屉顶上那行字。和按钮上的名字一致,不然点开会有一瞬间的「我点的是这个吗」 */
+const DRAWER_TITLE = {
+    dock: '海埂大坝', service: '出摊', cook: '摊子', hut: '小屋',
+    bag: '背包', codex: '图鉴', postcard: '明信片', achievement: '成就',
+    wear: '装扮', chat: '聊天', save: '存档',
+};
+
 const icon = (name, size = '') =>
     `<i class="px-icon px-icon--${name}${size ? ' px-icon--' + size : ''}"></i>`;
 
@@ -52,7 +59,8 @@ export class UI {
         this.onScreen = onScreen;
         /** 出摊那一场。局面在它手里,面板只是它的一个视图 */
         this.service = service;
-        this.screen = 'dock';
+        /** 抽屉里现在开着哪一页。null = 没开,整块画面都看得见 */
+        this.screen = null;
         this.toastTimer = null;
         /** 正在下的那局四子棋。不进存档 —— 一局棋没必要跨会话保留。 */
         this.board = null;
@@ -61,14 +69,21 @@ export class UI {
 
     mount() {
         this.$panel = $('#panel');
-        this.$tabs = $('#tabs');
         this.$hud = $('#hud');
         this.$toast = $('#toast');
+        this.$drawer = $('#drawer');
+        this.$drawerTitle = $('#drawerTitle');
+        this.$rails = ['#railLeft', '#railRight', '#railBottom'].map($);
 
-        this.$tabs.addEventListener('click', e => {
-            const btn = e.target.closest('[data-screen]');
-            if (btn) { sfx.play('tab'); this.go(btn.dataset.screen); }
-        });
+        for (const rail of this.$rails) {
+            rail.addEventListener('click', e => {
+                const btn = e.target.closest('[data-screen]');
+                if (btn) { sfx.play('tab'); this.go(btn.dataset.screen); return; }
+                const act = e.target.closest('[data-act]');
+                if (act) { sfx.play('click'); this.handle(act.dataset.act, act.dataset); }
+            });
+        }
+        $('#drawerClose').addEventListener('click', () => { sfx.play('tab'); this.go(null); });
         // HUD 里目前只有静音一个按钮,但也走委托 —— renderHud 每秒可能重绘
         this.$hud.addEventListener('click', e => {
             const btn = e.target.closest('[data-act]');
@@ -86,10 +101,15 @@ export class UI {
         this.render();
     }
 
+    /**
+     * 开 / 关抽屉。传 null 就是收起来。
+     * 再点一次正开着的那一页也是收起来 —— 按钮和抽屉是同一个开关,
+     * 不然玩家会去找关闭按钮。
+     */
     go(screen) {
-        if (this.screen === screen) return;
-        this.screen = screen;
-        this.onScreen?.(screen);      // 舞台那块画面跟着切
+        const next = this.screen === screen ? null : screen;
+        this.screen = next;
+        this.onScreen?.(next);        // 舞台那块画面跟着切
         this.render();
     }
 
@@ -99,6 +119,7 @@ export class UI {
         const s = this.getState();
         switch (act) {
             case 'fly':
+                this.go(null);            // 抽屉压在飞行画面上面,先收起来
                 if (s.dailyTries <= 0) return this.toast('今天的觅食次数用完了,明天再来', 'coin');
                 this.onFly();
                 break;
@@ -447,20 +468,26 @@ export class UI {
     render() {
         this.advanceTutorial();
         this.renderHud();
-        this.renderTabs();
-        this.$panel.innerHTML = this.coachView() + ({
+        this.renderRails();
+
+        const view = {
             dock: () => this.viewDock(),
+            service: () => this.viewService(),
             hut: () => this.viewHut(),
             bag: () => this.viewBag(),
+            codex: () => this.viewCodex(),
             cook: () => this.viewCook(),
             postcard: () => this.viewPostcards(),
-            codex: () => this.viewCodex(),
-            service: () => this.viewService(),
             achievement: () => this.viewAchievements(),
             wear: () => this.viewWear(),
             chat: () => this.viewChat(),
             save: () => this.viewSave(),
-        }[this.screen] ?? (() => ''))();
+        }[this.screen];
+
+        this.$drawer.hidden = !view;
+        if (!view) { this.$panel.innerHTML = ''; return; }
+        this.$drawerTitle.textContent = DRAWER_TITLE[this.screen] ?? '';
+        this.$panel.innerHTML = this.coachView() + view();
         this.paintCanvases();
     }
 
@@ -524,63 +551,43 @@ export class UI {
         </div>`;
     }
 
-    renderTabs() {
-        const tabs = [
-            ['dock', '大坝', 'map'], ['service', '出摊', 'shao_erkuai'], ['hut', '小屋', 'waou'],
-            ['bag', '背包', 'backpack'], ['cook', '摊子', 'shop'],
-            ['postcard', '明信片', 'postcard'], ['codex', '图鉴', 'erkuai'],
-            ['achievement', '成就', 'trophy'],
-            ['wear', '装扮', 'cap'],
-            ['chat', '聊天', 'waou'], ['save', '存档', 'coin'],
-        ];
+    /**
+     * 三条按钮。左边是玩法、右边是收集与状态、下面是动作。
+     * **不再有页签** —— 页签的语义是「切换整页」,而这儿画面从不切换,
+     * 只是在它上面开一个抽屉。
+     */
+    renderRails() {
         const s = this.getState();
-        // 引导期间给目标页签描一圈,不然「去『摊子』」四个字在九个页签里得找一会儿
-        const want = s.tutorial < TUTORIAL.length ? TUTORIAL[s.tutorial].tab : null;
-        this.$tabs.innerHTML = tabs.map(([id, name, ico]) =>
-            `<button class="px-tab${id === want && id !== this.screen ? ' px-tab--coach' : ''}"
-                     data-screen="${id}" aria-selected="${this.screen === id}">
-                ${icon(ico)} ${name}</button>`).join('');
+        const btn = ([id, name, ico]) =>
+            `<button class="px-railbtn" data-screen="${id}"
+                     aria-selected="${this.screen === id}">
+                ${icon(ico, 'lg')}<span>${name}</span></button>`;
 
-        // 窄屏上页签是横着滑的一条,选中的那个可能在屏幕外。
-        //
-        // 自己算 scrollLeft,不用 scrollIntoView:后者会把**所有**祖先容器
-        // 一起滚,在手机上表现为页面莫名其妙往下跳一截;而且它的 'nearest'
-        // 只保证「露出来」,选中项会贴在屏幕边上,看着像被切掉了。
-        //
-        // 要等一帧 —— 刚塞完 innerHTML 时浏览器还没排版,这会儿问位置全是 0。
-        requestAnimationFrame(() => {
-            const box = this.$tabs;
-            const sel = box.querySelector('[aria-selected="true"]');
-            if (!sel || box.scrollWidth <= box.clientWidth) return;
-            box.scrollLeft = sel.offsetLeft - (box.clientWidth - sel.offsetWidth) / 2;
-        });
+        this.$rails[0].innerHTML = [
+            ['dock', '大坝', 'map'], ['service', '出摊', 'shao_erkuai'],
+            ['cook', '摊子', 'shop'], ['hut', '小屋', 'waou'],
+        ].map(btn).join('');
+
+        this.$rails[1].innerHTML = [
+            ['bag', '背包', 'backpack'], ['codex', '图鉴', 'erkuai'],
+            ['postcard', '明信片', 'postcard'], ['achievement', '成就', 'trophy'],
+        ].map(btn).join('');
+
+        this.$rails[2].innerHTML =
+            `<button class="px-railbtn px-railbtn--go" data-act="fly"
+                     ${s.dailyTries <= 0 ? 'disabled' : ''}>
+                ${icon('waou', 'lg')}<span>出发觅食 ${s.dailyTries}/${DAILY_TRIES}</span></button>`
+            + [['wear', '装扮', 'cap'], ['chat', '聊天', 'heart'],
+               ['save', '存档', 'coin']].map(btn).join('');
     }
 
     viewDock() {
         const s = this.getState();
         const w = WEATHER[s.weather] ?? WEATHER.sunny;
         return `
-        <h2 style="margin-bottom:12px">海埂大坝</h2>
-        <p class="px-muted" style="margin-bottom:20px">
+                <p class="px-muted" style="margin-bottom:20px">
             ${icon(w.icon)} ${w.name} · ${w.note} ·
             ${icon('waou')} ${rules.seasonNow().name}季 · ${rules.seasonNow().note}</p>
-        <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:18px">
-            <button class="px-btn px-btn--lg" data-act="fly" ${s.dailyTries <= 0 ? 'disabled' : ''}>
-                ${icon('waou', 'lg')} 出发觅食
-            </button>
-        </div>
-
-        <!-- 大坝是枢纽。**画面在上、面板在下,面板越长玩家越看不见码头** ——
-             所以常去的地方在这儿一次摆开,不用往下翻页签。 -->
-        <div class="px-hub">
-            ${[['service', '出摊', 'shao_erkuai'], ['cook', '摊子', 'shop'], ['hut', '小屋', 'waou'],
-               ['bag', '背包', 'backpack'], ['codex', '图鉴', 'erkuai'],
-               ['postcard', '明信片', 'postcard'], ['achievement', '成就', 'trophy'],
-               ['wear', '装扮', 'cap'], ['chat', '聊天', 'heart']]
-              .map(([id, name, ico]) =>
-                `<button class="px-hubbtn" data-screen="${id}">
-                    ${icon(ico, 'lg')}<span>${name}</span></button>`).join('')}
-        </div>
         ${this.hutHint()}
         ${this.showPanel()}
         ${this.eventLog()}
@@ -661,7 +668,6 @@ export class UI {
 
         if (!slot) {
             return `
-            <h2 style="margin-bottom:8px">哇鸥的小屋</h2>
             <p class="px-muted" style="margin-bottom:18px">堤岸边的一个草棚,里面垫着草。</p>
             <div class="px-panel px-panel--sea">
                 <p>${icon('waou')} 草棚空着,草垫上还留着一个窝。</p>
@@ -674,7 +680,6 @@ export class UI {
         }
         if (slot === 'night') {
             return `
-            <h2 style="margin-bottom:8px">哇鸥的小屋</h2>
             <p class="px-muted" style="margin-bottom:18px">
                 ${HOURS.night.name} · ${HOURS.night.note} · ${HOURS.night.span}</p>
             <div class="px-panel px-panel--sea">
@@ -689,7 +694,6 @@ export class UI {
         const f = fortuneToday && s.fortune !== null ? FORTUNES[s.fortune] : null;
 
         return `
-        <h2 style="margin-bottom:8px">哇鸥的小屋</h2>
         <p class="px-muted" style="margin-bottom:18px">
             ${HOURS[slot].name} · ${HOURS[slot].note} · ${HOURS[slot].span} ·
             好感度 <strong>${s.affinity}</strong></p>
@@ -813,8 +817,7 @@ export class UI {
         }).join('');
 
         return `
-        <h2 style="margin-bottom:16px">背包</h2>
-        <p class="px-muted" style="margin-bottom:10px">食材</p>
+                <p class="px-muted" style="margin-bottom:10px">食材</p>
         <div class="px-grid" style="--min:150px;margin-bottom:24px">${foods}</div>
         <p class="px-muted" style="margin-bottom:10px">道具 · 下次觅食自动使用</p>
         <div class="px-grid" style="--min:190px">${items}</div>`;
@@ -829,8 +832,7 @@ export class UI {
         const s = this.getState();
         if (!rules.serviceOpen()) {
             return `
-            <h2 style="margin-bottom:8px">出摊</h2>
-            <div class="px-panel px-panel--sea">
+                        <div class="px-panel px-panel--sea">
                 <p>${icon('shop')} 这会儿摊上没人。</p>
                 <p class="px-muted">白天才有游客上坝。中午和晚上哇鸥回小屋,
                    天黑之后坝上也就剩风了。</p>
@@ -904,8 +906,7 @@ export class UI {
             .join(' ') || '<span class="px-muted">空的</span>';
 
         return `
-        <h2 style="margin-bottom:6px">出摊</h2>
-        <p class="px-muted" style="margin-bottom:16px">
+                <p class="px-muted" style="margin-bottom:16px">
             卖出 ${v.sold}${v.gone ? ` · 等走了 ${v.gone} 位` : ''} ·
             出餐台 ${v.stockCount}/${SERVICE.stockMax}<br>
             <strong>开了工的菜,离开这一页就废了</strong>(材料在开工时就下锅了)。</p>
@@ -1079,8 +1080,7 @@ export class UI {
         }).join('');
 
         return `
-        <h2 style="margin-bottom:6px">哇鸥的小吃摊</h2>
-        <p class="px-muted" style="margin-bottom:18px">
+                <p class="px-muted" style="margin-bottom:18px">
             摆上去的菜自己会卖 —— 买主是坝上溜达的野猫、麻雀和别的海鸥,
             它们不挑,给什么吃什么,所以给的钱也少。你不在的时候也照卖,
             不过没人看着,卖得慢些,货架也堆不下太多。<br>
@@ -1188,8 +1188,7 @@ export class UI {
         }).join('');
 
         return `
-        <h2 style="margin-bottom:6px">装扮</h2>
-        <p class="px-muted" style="margin-bottom:18px">
+                <p class="px-muted" style="margin-bottom:18px">
             用瓶盖买,不花鸥币 —— 鸥币留着升摊子。瓶盖只从成就来,现有
             <strong>${s.caps}</strong> 根。戴上之后大坝和小屋里都看得见。</p>
         <div style="display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap">
@@ -1258,8 +1257,7 @@ export class UI {
     viewChat() {
         const node = CHAT_NODES[this.getState().chatNode] ?? CHAT_NODES[0];
         return `
-        <h2 style="margin-bottom:20px">和阿欧聊天</h2>
-        <div class="px-dialog">
+                <div class="px-dialog">
             <span class="px-dialog__name">${icon('waou')} 哇鸥</span>
             <p class="px-dialog__text">${node.bot}</p>
             <div class="px-dialog__options">
@@ -1272,8 +1270,7 @@ export class UI {
 
     viewSave() {
         return `
-        <h2 style="margin-bottom:8px">存档</h2>
-        <p class="px-muted" style="margin-bottom:18px">
+                <p class="px-muted" style="margin-bottom:18px">
             进度存在这台设备的浏览器里。清缓存、换设备都会丢 ——
             导出一串存档码收好,在哪都能接着玩。
         </p>
