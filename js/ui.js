@@ -66,6 +66,11 @@ export class UI {
         this.onScreen = onScreen;
         /** 出摊那一场。局面在它手里,面板只是它的一个视图 */
         this.service = service;
+        // 火候条每帧走这条线,只改 style;结构重建走 onChange
+        if (service) service.onFrame = () => this.paintKitchenBars();
+        /** 手指正按着一张牌往厨具上拖。拖的过程中不许重建厨房 */
+        this.dragging = false;
+        this.kitchenDirty = false;
         /** 抽屉里现在开着哪一页。null = 没开,整块画面都看得见 */
         this.screen = null;
         this.toastTimer = null;
@@ -818,6 +823,11 @@ export class UI {
         const v = this.service?.snapshot();
         if (!v) { this.$kitchen.hidden = true; return; }
         this.$kitchen.hidden = false;
+
+        // **拖到一半不许重建。** 重建会把手指底下那张牌换成一个新节点,
+        // 手势当场断掉。攒着,松手再补一次。
+        if (this.dragging) { this.kitchenDirty = true; return; }
+
         const s = this.getState();
 
         const mid = ['board', 'pan', 'stove'].map(k => this.toolBox(k, v)).join('');
@@ -855,12 +865,12 @@ export class UI {
             const r = RECIPES.find(x => x.id === g.want);
             const col = g.left > 0.45 ? 'leaf' : g.left > 0.2 ? 'gold' : 'coral';
             return `
-            <div class="px-korder ${g.ready ? 'px-korder--ready' : ''}">
+            <div class="px-korder ${g.ready ? 'px-korder--ready' : ''}" data-guest="${g.id}">
                 ${icon(r.icon, 'lg')}
                 <div style="flex:1;min-width:0">
                     <div style="font-size:11px">${r.name}</div>
                     <div class="px-bar" style="height:6px;margin-top:3px">
-                        <div class="px-bar__fill px-bar__fill--${col}"
+                        <div class="px-bar__fill px-bar__fill--${col}" data-wait
                              style="width:${Math.round(g.left * 100)}%"></div>
                     </div>
                 </div>
@@ -881,22 +891,59 @@ export class UI {
             </div>`;
     }
 
+    /**
+     * 每帧刷一次进度条。**只写 style,不碰结构。**
+     *
+     * 火候条要顺滑,一秒重建五次 innerHTML 也确实能动 —— 但那样整页一闪一闪,
+     * 拖到一半的牌子被换掉,拖拽直接废掉。所以结构只在局面变了的时候重建
+     * (来人、走人、上灶、装盘),条子走这儿。
+     */
+    paintKitchenBars() {
+        if (this.screen !== 'service' || !this.$kitchen || this.$kitchen.hidden) return;
+        const v = this.service?.snapshot();
+        if (!v) return;
+
+        for (const [key, cells] of Object.entries(v.tools)) {
+            cells.forEach((j, i) => {
+                const box = this.$kitchen.querySelector(`[data-cell="${key}:${i}"]`);
+                if (!box || !j) return;
+                const fill = box.querySelector('[data-fill]');
+                if (fill) {
+                    fill.style.width = `${Math.round(Math.min(1, j.p / 1.6) * 100)}%`;
+                    fill.style.background = QUALITY[j.grade].color;
+                }
+                // 「刚好」那一档给个亮框,这是玩家真正在等的那个信号
+                box.classList.toggle('px-slotbox--hot', j.grade === 'good');
+            });
+        }
+        for (const g of v.guests) {
+            const bar = this.$kitchen.querySelector(`[data-guest="${g.id}"] [data-wait]`);
+            if (!bar) continue;
+            bar.style.width = `${Math.round(g.left * 100)}%`;
+            const col = g.left > 0.45 ? 'leaf' : g.left > 0.2 ? 'gold' : 'coral';
+            bar.className = `px-bar__fill px-bar__fill--${col}`;
+        }
+    }
+
     /** 一件厨具:名字 + 几个格子。格子里有活就画火候条 */
     toolBox(key, v) {
         const t = TOOLS[key];
         const info = rules.toolInfo(this.getState(), key);
         const slots = (v.tools[key] ?? []).map((j, i) => {
-            if (!j) return `<div class="px-slotbox px-slotbox--empty"></div>`;
+            // 空格子里放一个淡淡的厨具图 —— 一块纯色方块读起来像贴图没加载出来,
+            // 有个影子在里面才看得出这是「往这儿放东西」的地方
+            if (!j) return `<div class="px-slotbox px-slotbox--empty">
+                <span class="px-slotbox__hint">${icon(t.icon)}</span></div>`;
             const p = Math.min(1, j.p / 1.6);
             const winL = ((1 - t.window) / 1.6) * 100;
             const winW = ((t.window * 1.6) / 1.6) * 100;
             return `
             <div class="px-slotbox ${j.grade === 'good' ? 'px-slotbox--hot' : ''}"
-                 data-take="${key}" data-slot="${i}" title="${j.name}">
+                 data-take="${key}" data-slot="${i}" data-cell="${key}:${i}" title="${j.name}">
                 ${icon(FOODS[j.ing].icon)}
                 <div class="px-slotbox__bar">
                     <div class="px-slotbox__win" style="left:${winL}%;width:${winW}%"></div>
-                    <div class="px-slotbox__fill"
+                    <div class="px-slotbox__fill" data-fill
                          style="width:${Math.round(p * 100)}%;background:${QUALITY[j.grade].color}"></div>
                 </div>
             </div>`;
@@ -945,41 +992,59 @@ export class UI {
             return el?.closest('[data-drop]') ?? null;
         };
 
+        // 高亮只在换了目标时改一次 class。原来每次 pointermove 都把所有厨具
+        // 清一遍再加回去 —— 手机上一秒几十次,每次都触发重排
+        let lit = null;
+        const light = el => {
+            if (el === lit) return;
+            lit?.classList.remove('px-tool--drop');
+            el?.classList.add('px-tool--drop');
+            lit = el;
+        };
+
+        const stopDrag = () => {
+            ghost.hidden = true;
+            light(null);
+            drag = null;
+            this.dragging = false;
+            // 拖的过程中攒下的重建,松手一次补上
+            if (this.kitchenDirty) { this.kitchenDirty = false; this.render(); }
+        };
+
         K.addEventListener('pointerdown', e => {
             const chip = e.target.closest('[data-drag]');
             if (!chip) return;
             drag = { id: Number(chip.dataset.drag), tool: chip.dataset.tool };
+            this.dragging = true;
             ghost.innerHTML = chip.innerHTML;
             ghost.hidden = false;
-            ghost.style.left = `${e.clientX - 24}px`;
-            ghost.style.top = `${e.clientY - 18}px`;
-            chip.setPointerCapture?.(e.pointerId);
+            ghost.style.transform = `translate(${e.clientX - 24}px, ${e.clientY - 18}px)`;
+            // **捕获挂在容器上,不挂在那张牌上。** 牌子是会被重建换掉的,
+            // 换掉的那一刻捕获就丢了,手势断在半路 —— 容器一直都在
+            K.setPointerCapture?.(e.pointerId);
             e.preventDefault();
         });
 
         K.addEventListener('pointermove', e => {
             if (!drag) return;
-            ghost.style.left = `${e.clientX - 24}px`;
-            ghost.style.top = `${e.clientY - 18}px`;
-            for (const t of K.querySelectorAll('[data-drop]')) t.classList.remove('px-tool--drop');
+            // 用 transform 不用 left/top:前者只走合成,后者每帧触发重排
+            ghost.style.transform = `translate(${e.clientX - 24}px, ${e.clientY - 18}px)`;
             const hit = dropUnder(e.clientX, e.clientY);
-            if (hit && hit.dataset.drop === drag.tool) hit.classList.add('px-tool--drop');
+            light(hit && hit.dataset.drop === drag.tool ? hit : null);
         });
 
-        const end = e => {
+        K.addEventListener('pointerup', e => {
             if (!drag) return;
-            ghost.hidden = true;
-            for (const t of K.querySelectorAll('[data-drop]')) t.classList.remove('px-tool--drop');
+            const id = drag.id;
             const hit = dropUnder(e.clientX, e.clientY);
+            stopDrag();
             if (hit) {
-                const r = this.service?.place(drag.id, hit.dataset.drop);
+                const r = this.service?.place(id, hit.dataset.drop);
                 if (r?.ok) sfx.play('click');
                 else if (r?.reason) this.toast(r.reason, 'shop');
             }
-            drag = null;
-        };
-        K.addEventListener('pointerup', end);
-        K.addEventListener('pointercancel', () => { ghost.hidden = true; drag = null; });
+        });
+        K.addEventListener('pointercancel', stopDrag);
     }
 
     /** 场景里的弹窗。开着哪个由 this.modal 决定 */

@@ -44,7 +44,10 @@ export class Service {
         this.screen = new PixelScreen(canvas, VW, VH);
         this.getState = getState;
         this.mutate = mutate;
+        /** 局面变了(来人、走人、上灶、装盘)—— 重建界面 */
         this.onChange = onChange;
+        /** 每帧一次,只用来刷进度条。界面自己装上,见 UI 构造函数 */
+        this.onFrame = null;
         this.rafId = null;
         this.reset();
         this._loop = this._loop.bind(this);
@@ -211,8 +214,11 @@ export class Service {
             const g = this.guests.find(x => (s.stock[x.want]?.n ?? 0) > 0);
             if (g) { this.catAt = this.t; this.serve(g.id); changed = true; }
         }
-        // 火候到点了要提醒一下:进度条本身在动,这里只管重绘节奏
-        if (Math.floor(this.t / 200) !== Math.floor((this.t - dt) / 200)) changed = true;
+        // **只有局面变了才通知重绘。**
+        // 原来这儿还有一条「每 200 毫秒也算变了」,为的是让火候进度条动起来 ——
+        // 代价是整个厨房的 innerHTML 一秒重建五次:页面一闪一闪,拖到一半的
+        // 那张牌被换掉,拖拽根本没法用。进度条现在走 onFrame,只改几个
+        // style.width,不碰结构。
         if (changed) this.onChange?.();
     }
 
@@ -222,6 +228,8 @@ export class Service {
         this.last = ts;
         this._tick(dt);
         this._draw();
+        // 每帧只刷进度条那几根,不重建结构 —— 和摊位那几条进度条一个路子
+        this.onFrame?.();
     }
 
     /* ---------- 背景 ---------- */
@@ -301,14 +309,65 @@ function paintBackdrop(ctx, P) {
     for (let x = 10; x < VW; x += 23) ctx.fillRect(x, RAIL_Y + 15, 1, DECK_Y - RAIL_Y - 15);
 }
 
-/** 柜台。它下面那一大片交给 DOM 的厨房盖住,所以只画到台面 */
+/**
+ * 柜台,以及柜台里头那一片。
+ *
+ * 柜台以下占了画面下面 44%。原来那儿是一整块 `#241a13` 的纯色 ——
+ * 注释写着「交给 DOM 的厨房盖住」,但 DOM 只盖住了厨具那几个盒子,
+ * 盒子之间、烤箱右边、操作条周围全露着,一大片死黑,看着像贴图没加载出来。
+ *
+ * 现在按**摊子里边**来画:横铺的木板墙、一道搁板、脚下的地面,
+ * 顶上再压一道从外面漏进来的光。露出来的地方就都是该露的东西了。
+ */
 function paintCounter(ctx, P) {
     const W = P.wood;
     ctx.fillStyle = W.ink;   ctx.fillRect(0, DECK_Y, VW, VH - DECK_Y);
     ctx.fillStyle = W.light; ctx.fillRect(0, DECK_Y + 2, VW, 7);
     ctx.fillStyle = W.wood;  ctx.fillRect(0, DECK_Y + 9, VW, COUNTER_Y - DECK_Y);
     ctx.fillStyle = W.dark;  ctx.fillRect(0, COUNTER_Y, VW, 3);
-    ctx.fillStyle = '#241a13'; ctx.fillRect(0, COUNTER_Y + 3, VW, VH - COUNTER_Y - 3);
+    paintInterior(ctx, P);
+}
+
+/** 柜台里边:板壁 + 搁板 + 地面 */
+function paintInterior(ctx, P) {
+    const top = COUNTER_Y + 3;
+    const floorY = VH - 26;
+    const night = P.night;
+    // 夜里整体压暗一档,但**绝不压到纯黑** —— 分不出层次的暗和坏图没区别
+    const wall = night ? '#4a3524' : '#5e4229';
+    const plank = night ? '#3d2b1d' : '#4e3722';
+    const glow = night ? '#6b4d2f' : '#8a6039';
+
+    ctx.fillStyle = wall;
+    ctx.fillRect(0, top, VW, floorY - top);
+    // 横板:每 11 像素一道缝,靠上的几道亮一点(外面的光斜着照进来)
+    for (let y = top + 11; y < floorY; y += 11) {
+        const near = 1 - Math.min(1, (y - top) / 70);
+        ctx.fillStyle = near > 0.35 ? glow : plank;
+        ctx.fillRect(0, y, VW, 1);
+    }
+    // 柜台下沿漏进来的一道光
+    ctx.fillStyle = glow;
+    ctx.fillRect(0, top, VW, 2);
+
+    // 一道搁板。上面摆几个坛子罐子,让这面墙不只是一面墙
+    const shelfY = top + 30;
+    ctx.fillStyle = plank; ctx.fillRect(0, shelfY, VW, 3);
+    ctx.fillStyle = glow;  ctx.fillRect(0, shelfY, VW, 1);
+    const jars = [[24, 9, '#9c6b43'], [40, 7, '#7d8a6b'], [300, 8, '#9c6b43'],
+                  [318, 6, '#8a5a4a'], [396, 9, '#7d8a6b'], [414, 7, '#9c6b43']];
+    for (const [x, h, c] of jars) {
+        ctx.fillStyle = night ? '#4a3524' : c;
+        ctx.fillRect(x, shelfY - h, 10, h);
+        ctx.fillStyle = plank;
+        ctx.fillRect(x, shelfY - h - 2, 10, 2);
+    }
+
+    // 地面:比墙暗,给一条踢脚线分开
+    ctx.fillStyle = plank;  ctx.fillRect(0, floorY, VW, VH - floorY);
+    ctx.fillStyle = wall;   ctx.fillRect(0, floorY, VW, 2);
+    ctx.fillStyle = night ? '#33241a' : '#42301e';
+    for (let x = 6; x < VW; x += 29) ctx.fillRect(x, floorY + 2, 1, VH - floorY - 2);
 }
 
 function bubble(ctx, cx, y, recipeId) {

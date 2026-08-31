@@ -984,11 +984,14 @@
     width: 46px; height: 44px;
     display: flex; flex-direction: column;
     align-items: center; justify-content: center; gap: 2px;
-    background: #241a13;
-    box-shadow: inset 0 0 0 2px var(--ink);
+    /* 深木色的凹槽,不是纯黑 —— 一块 #241a13 的方块读起来像贴图没加载出来 */
+    background: #6b4a2e;
+    box-shadow: inset 0 0 0 2px var(--ink), inset 3px 3px 0 #52371f;
     cursor: pointer;
 }
 .px-slotbox--empty { cursor: default; }
+/* 空格子里那个淡淡的厨具影子:告诉玩家这儿是放东西的地方 */
+.px-slotbox__hint { opacity: .3; filter: grayscale(.6); }
 .px-slotbox--hot { box-shadow: inset 0 0 0 2px var(--gold); }
 .px-slotbox__bar { position: absolute; left: 3px; right: 3px; bottom: 3px; height: 5px; background: #4a3628; }
 .px-slotbox__fill { height: 100%; }
@@ -1011,6 +1014,9 @@
 /* 拖起来时跟着手指走的那张影子 */
 .px-ghost {
     position: fixed;
+    left: 0; top: 0;
+    /* 位置走 transform 不走 left/top:前者只走合成,后者每帧触发重排 */
+    will-change: transform;
     z-index: 90;
     pointer-events: none;
     padding: 4px 6px;
