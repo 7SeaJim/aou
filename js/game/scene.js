@@ -561,8 +561,8 @@ export function shadow(ctx, cx, baseY, w, k = 0.22) {
 const STALL_STAGES = [
     { key: 'stall1', min: 0,  smoke: [17, 7],  sign: null,             side: true },
     { key: 'stall2', min: 10, smoke: [24, 15], sign: null,             side: true },
-    { key: 'stall3', min: 20, smoke: [49, -1], sign: [16, 12, 32, 5],  side: false },
-    { key: 'stall4', min: 32, smoke: [60, 1],  sign: [8, 18, 60, 9],   side: false },
+    { key: 'stall3', min: 20, smoke: [48, -1], sign: [14, 16, 36, 6],  side: false },
+    { key: 'stall4', min: 32, smoke: [66, -1], sign: [8, 17, 68, 10],  side: false },
 ];
 
 const STALL_X = 76;      // 摊子的水平中心。四段都按它居中,所以只有一个数

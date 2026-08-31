@@ -438,6 +438,7 @@ export class UI {
             bag: () => this.viewBag(),
             cook: () => this.viewCook(),
             postcard: () => this.viewPostcards(),
+            codex: () => this.viewCodex(),
             achievement: () => this.viewAchievements(),
             wear: () => this.viewWear(),
             chat: () => this.viewChat(),
@@ -510,7 +511,8 @@ export class UI {
         const tabs = [
             ['dock', '大坝', 'map'], ['hut', '小屋', 'waou'],
             ['bag', '背包', 'backpack'], ['cook', '摊子', 'shop'],
-            ['postcard', '明信片', 'postcard'], ['achievement', '成就', 'trophy'],
+            ['postcard', '明信片', 'postcard'], ['codex', '图鉴', 'erkuai'],
+            ['achievement', '成就', 'trophy'],
             ['wear', '装扮', 'cap'],
             ['chat', '聊天', 'waou'], ['save', '存档', 'coin'],
         ];
@@ -546,12 +548,22 @@ export class UI {
         <p class="px-muted" style="margin-bottom:20px">
             ${icon(w.icon)} ${w.name} · ${w.note} ·
             ${icon('waou')} ${rules.seasonNow().name}季 · ${rules.seasonNow().note}</p>
-        <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:24px">
+        <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:18px">
             <button class="px-btn px-btn--lg" data-act="fly" ${s.dailyTries <= 0 ? 'disabled' : ''}>
                 ${icon('waou', 'lg')} 出发觅食
             </button>
-            <span class="px-chip">${icon('backpack')} 每次捡到 <strong>×${rules.haulPerPickup(s.level)}</strong></span>
-            <button class="px-btn px-btn--sea" data-screen="cook">${icon('shop', 'lg')} 看摊子</button>
+        </div>
+
+        <!-- 大坝是枢纽。**画面在上、面板在下,面板越长玩家越看不见码头** ——
+             所以常去的地方在这儿一次摆开,不用往下翻页签。 -->
+        <div class="px-hub">
+            ${[['cook', '摊子', 'shop'], ['hut', '小屋', 'waou'],
+               ['bag', '背包', 'backpack'], ['codex', '图鉴', 'erkuai'],
+               ['postcard', '明信片', 'postcard'], ['achievement', '成就', 'trophy'],
+               ['wear', '装扮', 'cap'], ['chat', '聊天', 'heart']]
+              .map(([id, name, ico]) =>
+                `<button class="px-hubbtn" data-screen="${id}">
+                    ${icon(ico, 'lg')}<span>${name}</span></button>`).join('')}
         </div>
         ${this.hutHint()}
         ${this.showPanel()}
@@ -769,23 +781,15 @@ export class UI {
     viewBag() {
         const s = this.getState();
 
-        // 这样材料用在哪几道菜。**只列已解锁的** —— 列上没解锁的等于剧透,
-        // 而且玩家会去翻一道他根本做不出来的菜。
-        const usedIn = k => RECIPES
-            .filter(r => r.cost[k] && s.unlockedRecipes.includes(r.id))
-            .map(r => r.name);
-
+        // 不写「这样能做什么」—— 那是食谱那一页的事,写两遍等于两处要同步维护,
+        // 而且背包本来就该是「我有什么」,不是「我该干嘛」
         const foods = FOOD_KEYS.map(k => {
             const n = s.backpack[k] ?? 0;
-            const use = usedIn(k);
             return `
             <div class="px-bagitem ${n ? '' : 'px-bagitem--empty'}">
                 ${icon(FOODS[k].icon, 'lg')}
                 <div style="flex:1;min-width:0">
                     <strong>${FOODS[k].name}</strong> <span class="px-tag">${n}</span>
-                    <p class="px-muted">${use.length
-                        ? '用在 ' + use.slice(0, 3).join('、') + (use.length > 3 ? ' 等' : '')
-                        : '还没有用得上它的菜'}</p>
                 </div>
             </div>`;
         }).join('');
@@ -803,14 +807,16 @@ export class UI {
         }).join('');
 
         return `
-        <h2 style="margin-bottom:6px">背包</h2>
-        <p class="px-muted" style="margin-bottom:16px">
-            每样材料下面写着它能做什么。上限每样 ${rules.BAG_MAX} 个。</p>
+        <h2 style="margin-bottom:16px">背包</h2>
         <p class="px-muted" style="margin-bottom:10px">食材</p>
-        <div class="px-grid" style="--min:190px;margin-bottom:24px">${foods}</div>
+        <div class="px-grid" style="--min:150px;margin-bottom:24px">${foods}</div>
         <p class="px-muted" style="margin-bottom:10px">道具 · 下次觅食自动使用</p>
-        <div class="px-grid" style="--min:190px;margin-bottom:28px">${items}</div>
-        ${this.codexView()}`;
+        <div class="px-grid" style="--min:190px">${items}</div>`;
+    }
+
+    /** 图鉴单独一页。它记的是「见过什么」,背包记的是「手上有什么」,两件事。 */
+    viewCodex() {
+        return this.codexView();
     }
 
     /** 哇鸥回屋了就在大坝页说一声,免得玩家以为表演坏了 */
@@ -851,11 +857,8 @@ export class UI {
             </div>`;
         }
         return `<div class="px-panel px-panel--gold" style="margin-bottom:24px">
-            <p>${icon('waou')} 没出去的时候,哇鸥在大坝上表演 ——
-               <strong>${info.shows.length}</strong> 个节目,
-               每 <strong>${(info.interval / 1000).toFixed(0)}</strong> 秒有人投喂,
-               一次给 <strong>${info.per}</strong> 个</p>
-            <p class="px-muted" style="margin:10px 0 6px">节目单 · 等级、成就、去过的地方都会解锁新节目</p>
+            <p>${icon('waou')} 没出去的时候,哇鸥在大坝上表演,路人看得高兴了会喂它东西。</p>
+            <p class="px-muted" style="margin:10px 0 6px">会的节目 · 节目越多,围的人越多</p>
             <div style="display:flex;gap:6px;flex-wrap:wrap">${list}</div>
         </div>`;
     }
@@ -941,8 +944,7 @@ export class UI {
                     <div class="px-bar__fill" data-bar="${i}" style="width:${pct}%"></div>
                 </div>
                 <p class="px-muted" style="font-size:12px;line-height:1.6">
-                    每 ${(info.serveMs / 1000).toFixed(1)} 秒一份 ·
-                    ${Math.round(r.reward * info.priceMul)} 鸥币<br>
+                    ${Math.round(r.reward * info.priceMul)} 鸥币一份<br>
                     吃 ${Object.entries(r.cost).map(([k, v]) => `${FOODS[k].name}×${v}`).join(' ')}
                     ${enough ? '' : '<br><span style="color:var(--coral)">材料不够,停着</span>'}
                 </p>
@@ -953,12 +955,9 @@ export class UI {
         const ups = Object.entries(UPGRADES).map(([key, u]) => {
             const lv = s.upgrades[key] ?? 1;
             const cost = upgradeCost(key, lv);
-            const now = key === 'shelf' ? `${u.mul(lv)} 小时`
-                      : key === 'warmer' ? `${Math.round(u.mul(lv) * 100)}%`
-                      : `×${u.mul(lv).toFixed(2)}`;
             return `<div class="px-panel" style="padding:12px 14px">
                 <p style="margin-bottom:4px">${icon(u.icon, 'lg')} ${u.name} <span class="px-muted">Lv.${lv}</span></p>
-                <p class="px-muted" style="font-size:12px;margin-bottom:10px">${u.desc} · 当前 ${now}</p>
+                <p class="px-muted" style="font-size:12px;margin-bottom:10px">${u.desc}</p>
                 ${cost === null
                     ? '<span class="px-tag px-tag--leaf">已满级</span>'
                     : `<button class="px-btn px-btn--sm" data-act="upgrade" data-key="${key}"
@@ -986,8 +985,8 @@ export class UI {
         return `
         <h2 style="margin-bottom:6px">哇鸥的小吃摊</h2>
         <p class="px-muted" style="margin-bottom:18px">
-            摆上去的菜会自己卖,吃背包里的材料。你不在的时候也在卖,
-            按 ${Math.round(info.offlineRate * 100)}% 折算,最多攒 ${info.offlineCapMs / 3600_000} 小时。</p>
+            摆上去的菜会自己卖,吃背包里的材料。你不在的时候也照卖,
+            不过没人看着,卖得慢些,货架也堆不下太多。</p>
         <div class="px-grid" style="--min:230px;margin-bottom:28px">${slots}</div>
 
         ${this.marketView()}
