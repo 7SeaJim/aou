@@ -238,7 +238,7 @@ export class UI {
             }
 
             case 'savecard': {
-                const img = this.$panel.querySelector('[data-card]');
+                const img = document.querySelector('[data-card]');
                 if (!img?.src) return this.toast('图还没画好,等一下', 'star');
                 const a = document.createElement('a');
                 a.href = img.src;
@@ -741,6 +741,29 @@ export class UI {
             <button class="px-btn px-btn--sm px-btn--wood" data-screen="">收摊回大坝</button>`;
         }
         return `<button class="px-btn px-btn--sm px-btn--wood" data-screen="">回大坝</button>`;
+    }
+
+    /**
+     * 今日签的卡片。今天还没转就返回空串 —— 场景条拿它当「有没有签」的判据。
+     *
+     * 图是 canvas 画完转成 data URL 塞进 <img> 的,不是直接摆一块 canvas ——
+     * **手机上长按 <img> 才有「保存图片」,长按 canvas 没有。**
+     */
+    fortuneCard() {
+        const s = this.getState();
+        if (s.fortune === null || s.fortuneDate !== now().toDateString()) return '';
+        return `
+        <div class="px-cardbox">
+            <img class="px-card" data-card alt="哇鸥今日运势">
+            <div>
+                <p class="px-muted" style="font-size:13px;line-height:1.8">
+                    一天一张,明天的签是另一张。<br>
+                    手机上<strong>长按图片</strong>就能存;电脑上点下面这个。
+                </p>
+                <button class="px-btn px-btn--sm" data-act="savecard"
+                        style="margin-top:10px">存成图片</button>
+            </div>
+        </div>`;
     }
 
     /** 场景里的弹窗。开着哪个由 this.modal 决定 */
@@ -1246,9 +1269,10 @@ export class UI {
 
     /** innerHTML 铺完之后把画布补上。canvas 的内容不在 HTML 里,重绘一次就没了。 */
     paintCanvases() {
-        const prev = this.$panel.querySelector('[data-wear-preview]');
+        // 抽屉、弹窗、场景条都可能装着画布,所以从整篇文档里找,不认哪个容器
+        const prev = document.querySelector('[data-wear-preview]');
         if (prev) paintWearPreview(prev, this.getState().wearing, ICON_GRIDS);
-        for (const cv of this.$panel.querySelectorAll('[data-wear-item]')) {
+        for (const cv of document.querySelectorAll('[data-wear-item]')) {
             if (cv.dataset.wearItem) paintWearItem(cv, cv.dataset.wearItem);
         }
         this.paintCard();
@@ -1273,7 +1297,7 @@ export class UI {
 
         document.fonts.ready.then(() => {
             // 等字体的这段时间里玩家可能已经翻到别的页去了
-            const live = this.$panel.querySelector('[data-card]');
+            const live = document.querySelector('[data-card]');
             if (!live) return;
             const url = renderCard({
                 fortune: s.fortune, mark: s.fortuneMark,
