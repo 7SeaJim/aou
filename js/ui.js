@@ -36,6 +36,21 @@ const el = (tag, cls, html) => {
 const TOAST_MS = 2600;
 
 /** 抽屉顶上那行字。和按钮上的名字一致,不然点开会有一瞬间的「我点的是这个吗」 */
+/**
+ * 离招人的季节还有多久。**只说「冬天才行」是不够的** ——
+ * 玩家想知道的是「那要等多久」,而这个数他自己算不出来
+ * (得先知道游戏里的冬天是 11 月到次年 3 月)。
+ */
+function daysToWinter() {
+    const t = now();
+    const y = t.getFullYear();
+    // 今年 11 月 1 号;要是已经过了,那就是明年的(其实这时候已经在冬天了)
+    const win = new Date(y, 10, 1);
+    if (win < t) win.setFullYear(y + 1);
+    const d = Math.ceil((win - t) / 86400_000);
+    return `还有 <strong>${d}</strong> 天。`;
+}
+
 const DRAWER_TITLE = {
     dock: '海埂大坝', service: '出摊', cook: '摊子', hut: '小屋',
     bag: '背包', codex: '图鉴 · 食材和菜谱', postcard: '明信片', achievement: '成就',
@@ -756,9 +771,7 @@ export class UI {
                 <p class="px-muted" style="font-size:12.5px;line-height:1.6;margin-bottom:8px">
                     ${hired || okAff ? c.desc : `好感度 ${c.affinity} 解锁`}
                     ${hired ? `<br>${c.line}` : ''}</p>
-                ${hired ? '' : `<button class="px-btn px-btn--sm" data-act="hire" data-id="${c.id}"
-                    ${season.canHire && okAff && s.coins >= c.cost ? '' : 'disabled'}>
-                    ${icon('coin')} ${c.cost}</button>`}
+                ${hired ? '' : this.hireBtn(c, s, season)}
             </div>`;
         }).join('');
         return `
@@ -767,9 +780,28 @@ export class UI {
         <p class="px-muted" style="margin-bottom:12px;font-size:13px">
             ${season.canHire
                 ? '鸥群这会儿在昆明,可以招人。'
-                : `现在是${season.name}季,鸥群不在 —— <strong>冬天(11 月–次年 3 月)</strong>才招得到人。`}
+                : `现在是${season.name}季,鸥群不在 —— <strong>冬天(11 月–次年 3 月)</strong>才招得到人。
+                   ${daysToWinter()}`}
             好感度越高,哇鸥肯介绍的亲戚越多。</p>
         <div class="px-grid" style="--min:210px;margin-bottom:28px">${cards}</div>`;
+    }
+
+    /**
+     * 招人那个按钮。**按不动的时候要把原因写在按钮上。**
+     *
+     * 原来不管卡在哪一条(季节 / 好感度 / 钱),按钮长得都一样:
+     * 一个标着价钱的灰按钮。玩家点不动,又看不出为什么点不动 ——
+     * 上面那段说明写着「冬天才招得到人」,但没人会把一个灰按钮
+     * 和三行之外的一句话联系起来。
+     */
+    hireBtn(c, s, season) {
+        const why = !season.canHire ? `${season.name}季招不了`
+                  : s.affinity < c.affinity ? `好感度差 ${c.affinity - s.affinity}`
+                  : s.coins < c.cost ? `还差 ${c.cost - s.coins} 鸥币`
+                  : null;
+        return `<button class="px-btn px-btn--sm" data-act="hire" data-id="${c.id}"
+                    ${why ? 'disabled' : ''}>
+                    ${why ?? `${icon('coin')} ${c.cost}`}</button>`;
     }
 
     /* ---------- 小屋 ---------- */

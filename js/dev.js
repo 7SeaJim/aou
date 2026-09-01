@@ -405,10 +405,18 @@ export function installDev({ getState, mutate, storage, fly, getFlight, rules, u
             };
         },
 
-        /** 把月份拨到某个季节。冬天才招得到伙计,不然要等到 11 月。 */
+        /**
+         * 把月份拨到某个季节。冬天才招得到伙计,不然要等到 11 月。
+         * 传 null 恢复真实时间 —— 和 wa.hour(null) 一个规矩。
+         */
         season(name) {
+            if (name === null || name === undefined) {
+                devMonth = null;
+                if (devHour === null) setClock(null);
+                return '恢复真实季节 —— ' + rules.seasonNow().name + '季';
+            }
             const m = { winter: 0, spring: 4, summer: 6, autumn: 9 }[name];
-            if (m === undefined) return "传 'winter' / 'spring' / 'summer' / 'autumn'";
+            if (m === undefined) return "传 'winter' / 'spring' / 'summer' / 'autumn',或 null 恢复";
             devMonth = m;
             setClock(devNow);
             return rules.seasonNow().name + '季';
