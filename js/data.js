@@ -406,12 +406,27 @@ export const DRINK_KEYS = Object.keys(DRINKS);
  * 代价是夏天会冷清好几个月。这是**故意的**:冬天鸥群回来的时候
  * 才有那个「热闹起来了」的落差,一年到头都一样热闹就没有季节了。
  */
+/**
+ * 四季。`hireMul` 是招伙计鸥的价钱倍数。
+ *
+ * **原来非冬天是直接招不了**(canHire: false)。设定上没错 —— 鸥群冬天才来
+ * 昆明 —— 但代价是**一年里七个月这套系统整个碰不到**:六只伙计、六个图标、
+ * 六条被动,夏天打开游戏的人一样都看不着。对一个别人可能只玩一次的游戏
+ * 来说,这个代价太大了。
+ *
+ * 改成加价:门不关死,但冬天依然是划算的时候。价钱按「鸥群离得多远」排 ——
+ * 冬天它们就在坝上,秋天快回来了,春天刚飞走,夏天在西伯利亚。
+ * 非冬天招人的说法是「托人捎信,让它提前飞回来一趟」。
+ */
 export const SEASONS = {
-    winter: { name: '冬', note: '鸥群从西伯利亚来了,大坝上全是人', traffic: 1.4, rare: 1.0, canHire: true },
-    spring: { name: '春', note: '鸥群陆陆续续往北飞',               traffic: 1.0, rare: 1.0, canHire: false },
-    summer: { name: '夏', note: '雨季,菌子疯长,但游客少',           traffic: 0.8, rare: 2.0, canHire: false },
-    autumn: { name: '秋', note: '天高,等着鸥群回来',                 traffic: 1.1, rare: 1.2, canHire: false },
+    winter: { name: '冬', note: '鸥群从西伯利亚来了,大坝上全是人', traffic: 1.4, rare: 1.0, hireMul: 1.0 },
+    spring: { name: '春', note: '鸥群陆陆续续往北飞',               traffic: 1.0, rare: 1.0, hireMul: 2.0 },
+    summer: { name: '夏', note: '雨季,菌子疯长,但游客少',           traffic: 0.8, rare: 2.0, hireMul: 2.5 },
+    autumn: { name: '秋', note: '天高,等着鸥群回来',                 traffic: 1.1, rare: 1.2, hireMul: 1.5 },
 };
+
+/** 这一只这会儿要多少钱。非冬天要托人捎信,贵一截 */
+export const hireCost = (crew, season) => Math.round(crew.cost * season.hireMul);
 
 export function seasonOf(now = new Date()) {
     const m = now.getMonth() + 1;
@@ -422,7 +437,8 @@ export function seasonOf(now = new Date()) {
 }
 
 /**
- * 伙计鸥。冬天鸥群回来时可以招募,一只带一条被动。
+ * 伙计鸥。一只带一条被动。冬天鸥群在昆明,招人最便宜;别的季节也招得到,
+ * 只是要托人捎信,价钱按季节翻(见 SEASONS.hireMul)。
  *
  * 每只只管一件事,不叠加同类效果 —— 六只各管各的,玩家一眼看得出该先招谁。
  * 招募条件卡在好感度上:得先和哇鸥处熟了,它才肯把亲戚介绍给你。

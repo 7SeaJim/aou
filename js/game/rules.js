@@ -11,7 +11,7 @@ import {
     UPGRADES, upgradeCost, upgradeCaps, slotsAt, SERVE_MS,
     SHOWS, SHOW_MS, SHOW_WEATHER, POSTCARDS,
     DRINKS, DRINK_KEYS, SHELL_MARKS, divine, hourSlot, onDam,
-    CREW, crewBonus, SEASONS, seasonOf,
+    CREW, crewBonus, SEASONS, seasonOf, hireCost,
     COSMETICS, EVENTS, ITEMS, MARKET, MARKET_LEVEL, FOODS,
     RECIPE_STEPS, SERVICE,
     KITCHEN, kitchenCost, toolSlots, toolPower, PLATES,
@@ -609,15 +609,15 @@ export function hireCrew(state, id, when = clockNow()) {
     const c = CREW.find(x => x.id === id);
     if (!c) return { ok: false, reason: '没有这只' };
     if (state.crew.includes(id)) return { ok: false, reason: '它已经在摊上了' };
-    if (!SEASONS[seasonOf(when)].canHire) {
-        return { ok: false, reason: '鸥群这会儿不在昆明,冬天再来招' };
-    }
     if (state.affinity < c.affinity) {
         return { ok: false, reason: `好感度还差 ${c.affinity - state.affinity} —— 哇鸥还没熟到肯把亲戚介绍给你` };
     }
-    if (state.coins < c.cost) return { ok: false, reason: `还差 ${c.cost - state.coins} 鸥币` };
+    // 非冬天也招得到,只是要托人捎信,贵一截 —— 见 data.js 里 SEASONS 的注释
+    const season = SEASONS[seasonOf(when)];
+    const cost = hireCost(c, season);
+    if (state.coins < cost) return { ok: false, reason: `还差 ${cost - state.coins} 鸥币` };
 
-    state.coins -= c.cost;
+    state.coins -= cost;
     state.crew.push(id);
     return { ok: true, crew: c, events: [{ type: 'crew', crew: c }, ...checkAchievements(state)] };
 }

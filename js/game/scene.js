@@ -803,6 +803,44 @@ const ONLOOKERS = ['onlooker_a', 'onlooker_b', 'onlooker_c', 'onlooker_d'];
 const FEED_ICONS = ['erkuai', 'potato', 'rice', 'douhua', 'chili'];
 const feedPops = [];
 
+/**
+ * 招进来的伙计鸥站在坝上哪儿。
+ *
+ * **招了人得看得见。** 原来六只只是六条被动加成 —— 花了几千鸥币,
+ * 画面上一点变化都没有,那笔钱花得没有着落。
+ *
+ * 都站**最后那条道**(和木棚同一线,贴着栏杆):
+ * 那一带本来就空着,而且客人和路人都在它们前面,谁也挡不住谁。
+ * 位置按各自干的活儿分:干摊子上的活的挨着摊子,别的散在右半边。
+ * 躲开草棚(172)、木棚(199–245)和三根路灯(20 / 259 / 415)。
+ */
+const CREW_SPOT = {
+    huihui:  104,   // 颠锅的,挨着摊子
+    apang:   126,   // 收钱的,也在摊子这头
+    xiaobai: 150,   // 表演的,离哇鸥近一点
+    dundun:  272,   // 看摊子的,守在另一头
+    laoqiao: 296,   // 老鸟,靠栏杆看水
+    yaya:    320,
+};
+
+/**
+ * 把招来的伙计画出来。用的就是卡片上那六个 16×16 图标 ——
+ * 哇鸥在坝上也是 16×16 的那张,尺度天然对得上。
+ */
+export function drawCrew(ctx, deckY, t, hired = [], phase = 'day') {
+    hired.forEach((id, i) => {
+        const x = CREW_SPOT[id];
+        const key = 'crew_' + id;
+        const grid = ICON_GRIDS[key];
+        if (x === undefined || !grid) return;
+        // 各晃各的 —— 一排整齐地一起动是最假的
+        const bob = Math.sin(t * 0.0014 + i * 2.1) > 0.5 ? 1 : 0;
+        const base = deckY + SHED_Y + bob;
+        shadow(ctx, x, base, 12, 0.16);
+        drawStanding(ctx, shadedSprite(key, grid, phase), x, base);
+    });
+}
+
 /** 小木棚站的位置。草棚(172)和路灯(259)之间那块空地 */
 const SHED_X = 222;
 /**

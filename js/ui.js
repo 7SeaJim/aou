@@ -9,7 +9,7 @@ import {
     FOODS, ITEMS, RECIPES, POSTCARDS, ACHIEVEMENTS, ACH_GROUPS, CAP_VALUE,
     EVENTS,
     TOTAL_CAPS, CHAT_NODES, WEATHER,
-    UPGRADES, upgradeCost, upgradeCaps, SHOWS,
+    UPGRADES, upgradeCost, upgradeCaps, SHOWS, hireCost,
     DRINKS, FORTUNES, HOURS, hourSlot,
     CREW, FOOD_SOURCE, COSMETICS, SLOTS, dayPhase,
     TUTORIAL, TUTORIAL_GIFT, MARKET, MARKET_LEVEL,
@@ -778,10 +778,11 @@ export class UI {
         <h3 style="margin-bottom:6px">伙计鸥
             <span class="px-muted" style="font-size:13px">${s.crew.length} / ${CREW.length}</span></h3>
         <p class="px-muted" style="margin-bottom:12px;font-size:13px">
-            ${season.canHire
-                ? '鸥群这会儿在昆明,可以招人。'
-                : `现在是${season.name}季,鸥群不在 —— <strong>冬天(11 月–次年 3 月)</strong>才招得到人。
-                   ${daysToWinter()}`}
+            ${season.hireMul <= 1
+                ? '鸥群这会儿就在坝上,招人最便宜。'
+                : `现在是${season.name}季,鸥群不在昆明 —— 得托人捎信让它专程飞一趟,
+                   价钱是冬天的 <strong>${season.hireMul}</strong> 倍。
+                   等到<strong>冬天(11 月–次年 3 月)</strong>就是原价,${daysToWinter()}`}
             好感度越高,哇鸥肯介绍的亲戚越多。</p>
         <div class="px-grid" style="--min:210px;margin-bottom:28px">${cards}</div>`;
     }
@@ -795,13 +796,17 @@ export class UI {
      * 和三行之外的一句话联系起来。
      */
     hireBtn(c, s, season) {
-        const why = !season.canHire ? `${season.name}季招不了`
-                  : s.affinity < c.affinity ? `好感度差 ${c.affinity - s.affinity}`
-                  : s.coins < c.cost ? `还差 ${c.cost - s.coins} 鸥币`
+        const cost = hireCost(c, season);
+        const why = s.affinity < c.affinity ? `好感度差 ${c.affinity - s.affinity}`
+                  : s.coins < cost ? `还差 ${cost - s.coins} 鸥币`
                   : null;
         return `<button class="px-btn px-btn--sm" data-act="hire" data-id="${c.id}"
                     ${why ? 'disabled' : ''}>
-                    ${why ?? `${icon('coin')} ${c.cost}`}</button>`;
+                    ${why ?? `${icon('coin')} ${cost}`}</button>
+                ${season.hireMul > 1 && !why
+                    ? `<p class="px-muted" style="font-size:12px;margin-top:6px">
+                         冬天只要 ${c.cost}</p>`
+                    : ''}`;
     }
 
     /* ---------- 小屋 ---------- */

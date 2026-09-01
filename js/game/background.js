@@ -11,7 +11,7 @@ import {
     VW, VH, paintSky, paintPier, drawSea, drawClouds, drawFarGulls,
     drawPierFoam, drawPerformance, drawBoat, drawRain, drawFog, hitShack,
     paintFarDam, drawReeds, drawStrollers, drawStallSteam, drawUpgradePop, drawCat,
-    paintShed, strollerCount,
+    paintShed, strollerCount, drawCrew,
 } from './scene.js';
 import { unlockedShows, serviceOpen } from './rules.js';
 import { dayPhase, onDam } from '../data.js';
@@ -103,6 +103,8 @@ export class Background {
         // 木棚先画:它在最后头,路人和猫都在它前面
         const rainy = weather === 'rainy';
         paintShed(ctx, DECK_Y, phase);
+        // 招来的伙计。和木棚同一条道(最后头),客人和路人都在它们前面
+        drawCrew(ctx, DECK_Y, t, this.getState().crew, phase);
         // 折耳根:不出摊的时候她就在坝上睡觉。出摊时她在柜台后面,这儿就不画了。
         // **画在路人之前** —— 她那条道靠后,人从她前面过
         // 下雨、或者天黑了,她就进棚里睡
