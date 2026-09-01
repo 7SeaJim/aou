@@ -179,6 +179,31 @@ export class Service {
     }
 
     /**
+     * 这个客人点什么。**只点你今天做得出来的。**
+     *
+     * 原来是从「解锁了的菜」里随机抽 —— 于是常常有人点一道你根本缺料的菜,
+     * 那一单就白占一个位子四十多秒,而玩家除了干等什么也做不了。
+     * 这不是难度,是**运气惩罚**:摊子开着的时段本来就短,一个死单能吃掉
+     * 十几分之一的营业时间。
+     *
+     * 现实里的摊子也是这样:今天没有的,牌子上就不写。
+     * 所以候选是「料够,或者出餐台上已经有现成的」。
+     * 这不降低难度,只是把「运气」换成「备料」—— 后者是玩家能提前安排的。
+     *
+     * **兜底还是全部**:一样料都没有的时候还是得来人,不然摊子空着更奇怪;
+     * 那时候点什么都做不了,但那是玩家自己没备料,不是随机坑他。
+     */
+    _pickWant(s) {
+        const open = s.unlockedRecipes.filter(id => RECIPE_STEPS[id]);
+        if (!open.length) return null;
+        const ready = open.filter(id =>
+            (s.stock[id]?.n ?? 0) > 0 ||
+            rules.canAfford(s, RECIPES.find(r => r.id === id).cost));
+        const pool = ready.length ? ready : open;
+        return pool[Math.floor(Math.random() * pool.length)];
+    }
+
+    /**
      * 端走这台上最该端的那一份 —— 走得最靠前的那格。
      *
      * 现在一台上可能同时有三格,但玩家看到的是「灶台上有东西」这一件事,
@@ -246,11 +271,11 @@ export class Service {
         const come = SERVICE.comeMs / Math.max(0.6, rules.stallInfo(s).priceMul);
         if (this.t >= this.nextGuestAt && this.guests.length < SERVICE.queueMax) {
             this.nextGuestAt = this.t + come * (0.7 + Math.random() * 0.6);
-            const open = s.unlockedRecipes.filter(id => RECIPE_STEPS[id]);
-            if (open.length) {
+            const want = this._pickWant(s);
+            if (want) {
                 this.guests.push({
                     id: uid++, at: this.t, face: Math.floor(Math.random() * 4),
-                    want: open[Math.floor(Math.random() * open.length)],
+                    want,
                 });
                 changed = true;
             }
@@ -592,57 +617,120 @@ function paintInterior(ctx, P) {
 
 /** 案子底下那两格敞开的架子。摊子底下堆的东西,不是装饰,是这行的样子 */
 function paintUnderBench(ctx, night) {
-    const dim = c => (night ? '#4a3524' : c);
-    const shelf = (x, y, w, h) => {
-        ctx.fillStyle = '#3a2a1c'; ctx.fillRect(x, y, w, h);
-        ctx.fillStyle = night ? '#5a3d26' : '#84592f';
-        ctx.fillRect(x, y, w, 2); ctx.fillRect(x, y + h - 2, w, 2);
-        ctx.fillRect(x, y, 2, h);  ctx.fillRect(x + w - 2, y, 2, h);
+    const dim = c => (night ? mixHex(c, '#2a1d14', 0.45) : c);
+
+    /**
+     * 案子底下那两格架子。
+     *
+     * 返工过一轮,两个毛病是连着的:
+     *
+     * **一、东西太多太小。** 原来塞了十五件(三摞碗、三个米袋、三个竹筐、
+     * 三层蒸笼、煤气罐),每件只有二十来格,挤在一片暗色里全成了「带条纹的
+     * 方块」。少画几件、每件画大一点,反而看得清是什么。
+     *
+     * **二、透视对不上。** 上面的案面是往前递进的横板,这儿却是完全正面的
+     * 平面 —— 一个说「稍微俯视」,一个说「正对着看」。
+     * 修法是让每层隔板**露出顶面**:先画板的顶面,东西摆在顶面上,
+     * 最后再把板的前沿压在东西的脚上。这一压就是「它站在板子上」那句话。
+     */
+    const top = FRONT_Y + 8, bot = FLOOR_Y - 4;
+    const mid = Math.round((top + bot) / 2);
+
+    const backPanel = (x, w) => {
+        ctx.fillStyle = dim('#2a1d14'); ctx.fillRect(x, top, w, bot - top);
+        ctx.fillStyle = dim('#3d2b1d'); ctx.fillRect(x, top, w, 3);
+        ctx.fillStyle = dim('#6b4a2e');                                   // 立柱
+        ctx.fillRect(x - 3, top - 2, 3, bot - top + 4);
+        ctx.fillRect(x + w, top - 2, 3, bot - top + 4);
+        ctx.fillStyle = dim('#8a6039');
+        ctx.fillRect(x - 3, top - 2, 1, bot - top + 4);
+        ctx.fillRect(x + w, top - 2, 1, bot - top + 4);
     };
-    const bowls = (x, y, n, c) => {          // 摞起来的一叠碗
+    /** 隔板的顶面。东西就摆在这一条上 */
+    const boardTop = (x, y, w) => {
+        ctx.fillStyle = dim('#8a6039'); ctx.fillRect(x, y - 3, w, 3);
+    };
+    /** 隔板的前沿。**最后画**,压住东西的脚 —— 这一压就是「摆在板上」 */
+    const boardLip = (x, y, w) => {
+        ctx.fillStyle = dim('#4e3722'); ctx.fillRect(x, y, w, 3);
+        ctx.fillStyle = '#241a13';      ctx.fillRect(x, y + 3, w, 1);
+    };
+
+    /** 一摞碗。碗口朝上收一格,才不是一叠纸 */
+    const bowls = (x, y, n, c) => {
         for (let i = 0; i < n; i++) {
-            ctx.fillStyle = '#4a3628'; ctx.fillRect(x, y - i * 5, 20, 5);
-            ctx.fillStyle = dim(c);    ctx.fillRect(x + 1, y - i * 5 + 1, 18, 3);
+            const yy = y - i * 6;
+            ctx.fillStyle = '#241a13';      ctx.fillRect(x, yy - 6, 22, 6);
+            ctx.fillStyle = dim(c);         ctx.fillRect(x + 1, yy - 5, 20, 4);
+            ctx.fillStyle = dim('#241a13'); ctx.fillRect(x + 2, yy - 5, 18, 1);
         }
+        ctx.fillStyle = '#241a13';  ctx.fillRect(x + 2, y - n * 6 - 2, 18, 2);
+        ctx.fillStyle = dim('#fffdf4'); ctx.fillRect(x + 3, y - n * 6 - 1, 16, 1);
     };
-    const sack = (x, y, w, h, c) => {        // 一袋米
-        ctx.fillStyle = '#4a3628'; ctx.fillRect(x, y - h, w, h);
-        ctx.fillStyle = dim(c);    ctx.fillRect(x + 1, y - h + 1, w - 2, h - 2);
-        ctx.fillStyle = '#4a3628'; ctx.fillRect(x + w / 2 - 3, y - h - 2, 6, 3);
+    /** 一袋米:上窄下宽,口扎起来 */
+    const sack = (x, y, w, h, c) => {
+        ctx.fillStyle = '#241a13';
+        ctx.fillRect(x, y - h, w, h);
+        ctx.fillRect(x + 3, y - h - 5, w - 6, 5);
+        ctx.fillStyle = dim(c);
+        ctx.fillRect(x + 1, y - h + 1, w - 2, h - 1);
+        ctx.fillRect(x + 4, y - h - 4, w - 8, 4);
+        ctx.fillStyle = dim('#fffdf4'); ctx.fillRect(x + 2, y - h + 2, 3, h - 4);
+        ctx.fillStyle = '#241a13';      ctx.fillRect(x + 2, y - h - 1, w - 4, 2);
+    };
+    /** 装米线的竹筐:竖纹 + 露在外头的一把米线 */
+    const basket = (x, y, w, h) => {
+        ctx.fillStyle = '#241a13';      ctx.fillRect(x, y - h, w, h);
+        ctx.fillStyle = dim('#cf9862'); ctx.fillRect(x + 1, y - h + 1, w - 2, h - 2);
+        ctx.fillStyle = dim('#9c6b43');
+        for (let i = 2; i < w - 2; i += 4) ctx.fillRect(x + i, y - h + 4, 2, h - 6);
+        ctx.fillStyle = dim('#e0b077'); ctx.fillRect(x + 1, y - h + 1, w - 2, 3);
+        ctx.fillStyle = dim('#fffdf4'); ctx.fillRect(x + 4, y - h - 2, w - 8, 3);
+        ctx.fillStyle = '#241a13';      ctx.fillRect(x + 4, y - h - 3, w - 8, 1);
     };
 
-    const top = FRONT_Y + 10, mid = FRONT_Y + 48, bot = FLOOR_Y - 6;
-    shelf(126, top, 96, bot - top);
-    ctx.fillStyle = night ? '#5a3d26' : '#84592f';
-    ctx.fillRect(126, mid, 96, 3);
-    bowls(134, mid - 2, 4, '#f7ecca');
-    bowls(160, mid - 2, 3, '#dfe4e8');
-    bowls(186, mid - 2, 5, '#f7ecca');
-    sack(134, bot - 4, 24, 26, '#dfc98e');
-    sack(164, bot - 4, 22, 22, '#b8b0a0');
-    sack(192, bot - 4, 24, 24, '#dfc98e');
+    /* ---------- 左边那格:碗 + 米袋 ---------- */
+    backPanel(126, 96);
+    boardTop(123, mid, 102);
+    bowls(136, mid - 3, 3, '#f7ecca');
+    bowls(176, mid - 3, 2, '#dfe4e8');
+    boardLip(123, mid, 102);
+    boardTop(123, bot, 102);
+    sack(134, bot - 3, 32, 30, '#dfc98e');
+    sack(176, bot - 3, 30, 26, '#b8b0a0');
+    boardLip(123, bot, 102);
 
-    shelf(232, top, 100, bot - top);
-    ctx.fillStyle = night ? '#5a3d26' : '#84592f';
-    ctx.fillRect(232, mid, 100, 3);
-    // 装米线的竹筐
-    for (const x of [240, 272, 304]) {
-        ctx.fillStyle = '#4a3628'; ctx.fillRect(x, mid - 20, 24, 20);
-        ctx.fillStyle = dim('#cf9862'); ctx.fillRect(x + 1, mid - 19, 22, 18);
-        ctx.fillStyle = '#4a3628';
-        for (let y = mid - 16; y < mid - 2; y += 5) ctx.fillRect(x + 1, y, 22, 1);
-        ctx.fillStyle = dim('#fffdf4'); ctx.fillRect(x + 3, mid - 17, 18, 4);
+    /* ---------- 右边那格:竹筐 + 蒸笼 + 煤气罐 ---------- */
+    backPanel(232, 100);
+    boardTop(229, mid, 106);
+    basket(240, mid - 3, 38, 22);
+    basket(288, mid - 3, 38, 22);
+    boardLip(229, mid, 106);
+    boardTop(229, bot, 106);
+    for (let i = 0; i < 3; i++) {                                       // 一摞蒸笼
+        const yy = bot - 3 - i * 9;
+        ctx.fillStyle = '#241a13';      ctx.fillRect(240, yy - 9, 44, 9);
+        ctx.fillStyle = dim('#cf9862'); ctx.fillRect(241, yy - 8, 42, 7);
+        ctx.fillStyle = dim('#e0b077'); ctx.fillRect(241, yy - 8, 42, 2);
     }
-    // 煤气罐
-    ctx.fillStyle = '#4a3628'; ctx.fillRect(292, bot - 40, 26, 40);
-    ctx.fillStyle = dim('#8a99a3'); ctx.fillRect(293, bot - 38, 24, 37);
-    ctx.fillStyle = dim('#5f6d78'); ctx.fillRect(293, bot - 38, 24, 4);
-    ctx.fillStyle = '#4a3628'; ctx.fillRect(300, bot - 45, 10, 6);
-    // 一摞蒸笼
-    for (let i = 0; i < 3; i++) {
-        ctx.fillStyle = '#4a3628'; ctx.fillRect(242, bot - 8 - i * 9, 40, 9);
-        ctx.fillStyle = dim('#cf9862'); ctx.fillRect(243, bot - 7 - i * 9, 38, 7);
-    }
+    const gx = 294, gy = bot - 3;                                       // 煤气罐
+    ctx.fillStyle = '#241a13';      ctx.fillRect(gx, gy - 34, 28, 34);
+    ctx.fillStyle = '#241a13';      ctx.fillRect(gx + 3, gy - 38, 22, 4);
+    ctx.fillStyle = dim('#8a99a3'); ctx.fillRect(gx + 1, gy - 33, 26, 33);
+    ctx.fillStyle = dim('#8a99a3'); ctx.fillRect(gx + 4, gy - 37, 16, 4);
+    ctx.fillStyle = dim('#dfe4e8'); ctx.fillRect(gx + 3, gy - 33, 4, 32);
+    ctx.fillStyle = dim('#5f6d78'); ctx.fillRect(gx + 1, gy - 20, 26, 3);
+    ctx.fillStyle = '#241a13';      ctx.fillRect(gx + 10, gy - 44, 8, 6);
+    ctx.fillStyle = dim('#5f6d78'); ctx.fillRect(gx + 11, gy - 43, 6, 4);
+    boardLip(229, bot, 106);
+}
+
+/** 两个十六进制色按比例混。夜里把架子上的东西整体压暗一档用 */
+function mixHex(a, b, k) {
+    const p = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+    const [r1, g1, b1] = p(a), [r2, g2, b2] = p(b);
+    const m = (x, y) => Math.round(x + (y - x) * k).toString(16).padStart(2, '0');
+    return `#${m(r1, r2)}${m(g1, g2)}${m(b1, b2)}`;
 }
 
 function bubble(ctx, cx, y, recipeId) {
