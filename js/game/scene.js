@@ -764,7 +764,7 @@ export function drawPerformance(ctx, x, baseY, t, shows = 1, fedNow = false,
         const y = baseY + bob + dz;
         shadow(ctx, x + dx, y, 12, 0.18);
         drawStanding(ctx, shadedSprite(key, SCENERY[key], phase), x + dx, y);
-        if (rainy) drawUmbrella(ctx, x + dx, y - 20, i + 1, phase);
+        if (rainy) drawUmbrella(ctx, x + dx, y - 8, i + 1, phase);
     }
 
     shadow(ctx, x, baseY, 14, 0.2);
@@ -778,7 +778,7 @@ export function drawPerformance(ctx, x, baseY, t, shows = 1, fedNow = false,
     drawWear(ctx, wearing, 'small', x, baseY + hop - (bowing ? 13 : 16), phase);
     // 哇鸥自己也撑一把。**伞画在装扮之后** —— 它得盖在帽子上头,
     // 不然斗笠会从伞面里穿出来
-    if (rainy) drawUmbrella(ctx, x, baseY + hop - 13, 0, phase);
+    if (rainy) drawUmbrella(ctx, x, baseY + hop - 2, 0, phase);
 
     // 有人投喂:冒一个食材出来,飘一下
     if (fedNow) feedPops.push({ x, y: baseY - 20, t0: t, key: FEED_ICONS[(t / 97 | 0) % FEED_ICONS.length] });
@@ -890,7 +890,7 @@ export function drawStrollers(ctx, deckY, t, phase = 'day', opts = {}) {
         const base = deckY + STROLL_Y;
         shadow(ctx, x, base, 12, 0.16);
         drawStanding(ctx, shadedSprite(key, SCENERY[key], phase), Math.round(x), base);
-        if (rainy) drawUmbrella(ctx, Math.round(x), base - 20, i, phase);
+        if (rainy) drawUmbrella(ctx, Math.round(x), base - 8, i, phase);
     }
 }
 
@@ -903,7 +903,9 @@ export const STROLL_Y = -4;
  */
 export function drawUmbrella(ctx, x, y, seed, phase = 'day') {
     const key = UMBRELLAS[seed % UMBRELLAS.length];
-    drawStanding(ctx, shadedSprite(key, SCENERY[key], phase), x, y);
+    // **往右挪五格。** 伞柄在伞面偏右那一侧,整把再往右让开人的中线,
+    // 柄才顺着肩膀往下走 —— 正对着画的话它是从脑门里长出来的
+    drawStanding(ctx, shadedSprite(key, SCENERY[key], phase), x + 5, y);
 }
 
 const UMBRELLAS = ['umbrella_a', 'umbrella_b', 'umbrella_c'];

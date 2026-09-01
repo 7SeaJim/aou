@@ -909,7 +909,12 @@ export class UI {
         const stock = Object.entries(v.stock).filter(([, o]) => o.n > 0).map(([id, o]) => {
             const r = RECIPES.find(x => x.id === id);
             const g = o.q > 0.85 ? 'good' : o.q > 0.6 ? 'raw' : 'burnt';
-            return `<span class="px-chip" style="border-left:4px solid ${QUALITY[g].color}">
+            // 品质用一个小圆点表示,**不要给 px-chip 加 border-left** ——
+            // 那个类的边框是四条 box-shadow 拼的像素边,再叠一条 CSS border
+            // 会把左边挤歪,看着像这块贴图裂了
+            return `<span class="px-chip">
+                <i style="width:6px;height:6px;flex:none;background:${QUALITY[g].color};
+                          box-shadow:0 0 0 1px var(--ink)"></i>
                 ${icon(r.icon)} ${o.n}</span>`;
         }).join('') || '<small class="px-muted">空的</small>';
 

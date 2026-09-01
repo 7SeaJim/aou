@@ -21,7 +21,7 @@
 
 import { PixelScreen, sprite, drawStanding } from './pixmap.js';
 import { SCENERY, ICON_GRIDS } from './pixels.js';
-import { pal, shadow, VW, VH } from './scene.js';
+import { pal, shadow, drawRain, drawFog, VW, VH } from './scene.js';
 import { now } from '../clock.js';
 import { shadedSprite } from './tint.js';
 import {
@@ -296,6 +296,12 @@ export class Service {
         this._drawCat(ctx, phase);
         this._drawStations(ctx);
         this._drawPlates(ctx);
+        // 天气也得下到这一场来。**大坝那边一直有,这边从来没画过** ——
+        // 雨天的出摊界面于是是一整片没有雨的灰,看着就像贴图坏了。
+        // 只下到栏杆那一线为止:柜台以里是棚子底下,淋不着
+        const weather = this.getState().weather ?? 'sunny';
+        if (weather === 'rainy') drawRain(ctx, this.t, RAIL_Y + 6);
+        if (weather === 'foggy') drawFog(ctx, this.t, RAIL_Y + 6);
         this.screen.present();
     }
 
@@ -310,13 +316,15 @@ export class Service {
             drawStanding(ctx, sprite(key, SCENERY[key]), x, DECK_Y - 2);
             const top = DECK_Y - 28;
             bubble(ctx, x, top, g.want);
-            // 耐心条和气泡之间要留空。贴着画的话那条绿的读成气泡顶上的一道边,
-            // 不是一个还在走的计时器
+            // 耐心条**画进气泡里**,贴着它的下沿。
+            // 原来吊在气泡上方三格,那个位置正好压在栏杆上 ——
+            // 一条绿杠浮在栏杆上、和底下的人看不出关系,读起来就是一处坏图。
+            // 它是「这一单还能等多久」,本来就该长在这一单的牌子上。
             const left = Math.max(0, 1 - (this.t - g.at) / SERVICE.patienceMs);
             ctx.fillStyle = '#4a3628';
-            ctx.fillRect(x - 11, top - 29, 22, 4);
+            ctx.fillRect(x - 10, top - 6, 20, 3);
             ctx.fillStyle = left > 0.45 ? '#77b255' : left > 0.2 ? '#f5b83d' : '#e8384f';
-            ctx.fillRect(x - 10, top - 28, Math.round(20 * left), 2);
+            ctx.fillRect(x - 9, top - 5, Math.round(18 * left), 1);
         });
     }
 
