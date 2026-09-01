@@ -111,6 +111,25 @@ const SPEED_0 = 2.0;
  */
 const SPEED_GROW = 0.22;
 /**
+ * 等级每一级把**提速的斜率**加多少,以及生成间隔缩多快。
+ *
+ * 原来等级和天气是乘在 `baseSpeed` 和 `baseInterval` 上的,
+ * 于是「开局多快」这件事跟着等级和天气一起飘:
+ *
+ *     1 级晴天 120px/s   5 级晴天 166   1 级雨天 156   5 级雨天 215
+ *
+ * 玩家什么都没干,升了一级、或者今天下雨,开局就快了三成到八成 ——
+ * **那不是难度设计,那是同一个玩法每次开局都不是同一个游戏。**
+ * 而 2.6 那一档正是之前被判「太急」的那个数。
+ *
+ * 现在等级和天气一律改成加在**斜率**上:谁来飞、什么天,
+ * 第一分钟都一模一样;区别在于它多快变难。
+ * （助跑坡当初也是这么改的 —— 第三次撞上同一件事了。）
+ */
+const LV_GROW = 0.10;
+/** 开局的生成间隔。**也是个常数** —— 理由同上 */
+const SPAWN_0 = 860;
+/**
  * 生成间隔每分钟压缩多少毫秒,以及压到哪儿为止。
  *
  * 底线定在 380ms 而不是 300:**留出来的不是反应时间,是「拍两下」的时间。**
@@ -252,14 +271,18 @@ export class Flight {
             warn: null,       // 窄道的预告:{ y, at }
             spawnTimer: 0,
             // 开局的节奏和速度。往后都是从这两个数按飞行时长推的,见 _difficulty()
-            baseInterval: Math.max(560, 900 - lv * 40),
-            baseSpeed: (SPEED_0 + (lv - 1) * 0.19) * w.speed,
-            spawnInterval: Math.max(560, 900 - lv * 40),
-            speed: (SPEED_0 + (lv - 1) * 0.19) * w.speed,
+            // **开局这一档谁都一样** —— 等级和天气全挪到下面的 grow 上
+            baseInterval: SPAWN_0,
+            baseSpeed: SPEED_0,
+            spawnInterval: SPAWN_0,
+            speed: SPEED_0,
+            // 变难得多急:等级越高、天越糟,来得越快。
+            // 助跑坡照旧减这条斜率(见 _difficulty)
+            grow: SPEED_GROW * (1 + (lv - 1) * LV_GROW) * w.speed * (1 - rw.ramp),
+            denser: SPAWN_GROW * (1 + (lv - 1) * LV_GROW) * w.speed,
             hazard: Math.max(0.08, HAZARD_0 - rw.flag),   // 风向旗:障碍少一些
             flag: rw.flag,
-            // 助跑坡:**不再是全程按比例减速**,减的是提速的斜率 —— 见 _difficulty()
-            ramp: rw.ramp,
+
             hungryMs: HUNGRY_MS * (1 + rw.trough),  // 食槽:肚子撑得更久
             elapsed: 0,
             hunger: 1,        // 肚子。五分钟之后才开始掉,掉光就回巢
@@ -567,14 +590,12 @@ export class Flight {
     _difficulty() {
         const f = this.f;
         const mins = f.elapsed / 60000;
-        // 助跑坡减的是**斜率**,不是速度本身。
-        // 原来它按比例砍 baseSpeed —— 全程一个固定折扣,开局就慢,
-        // 而开局本来已经够慢了;玩家买完只觉得「更飘了」,而且从头到尾
-        // 一个手感,根本看不出这钱花在哪。
-        // 现在它买的是「变快来得晚一点」:同样的开局,同样的手感,
-        // 但你能多撑一程 —— 那正好记在最远距离上,看得见。
-        f.speed = f.baseSpeed * (1 + mins * SPEED_GROW * (1 - f.ramp));
-        f.spawnInterval = Math.max(SPAWN_MIN, f.baseInterval - mins * SPAWN_GROW);
+        // 斜率里已经算进了等级、天气和助跑坡(见 start())。
+        // **开局那一档三样都不碰** —— 它们改的是「多久变难」,
+        // 不是「起点多难」。这两个旋钮混着拧过一次,代价是玩家每局
+        // 开头的手感都不一样,而他根本不知道为什么。
+        f.speed = f.baseSpeed * (1 + mins * f.grow);
+        f.spawnInterval = Math.max(SPAWN_MIN, f.baseInterval - mins * f.denser);
         f.hazard = Math.min(HAZARD_MAX - f.flag, Math.max(0.08, HAZARD_0 - f.flag) + mins * 0.12);
 
         // 每 20 秒报一波。**得让玩家听见、看见它变难了** ——
@@ -636,6 +657,13 @@ export class Flight {
         }
     }
 
+    /** 右边缘那一带还空不空。两个东西的圈都是 30 宽,离得比这近就会压在一起 */
+    _roomAt(y, minDy = 34) {
+        const near = o => o.x > VW - 24 && Math.abs(o.y - y) < minDy;
+        const f = this.f;
+        return !f.obstacles.some(near) && !f.foods.some(near) && !f.powerups.some(near);
+    }
+
     _spawn() {
         const f = this.f;
         const rnd = this.rng;
@@ -652,8 +680,15 @@ export class Flight {
          * 所以并不会变成「张嘴等着」。
          */
         const foodY = () => {
-            const c = f.birdY + (rnd() * 2 - 1) * REACH;
-            return Math.max(top, Math.min(top + span, c));
+            // 试几次,躲开刚放下、还挤在右边缘那几个东西。
+            // **叠在一起的两个圈,红的那个会把下面的食材整个吃掉** ——
+            // 玩家看见的是一个障碍,伸头去撞的是一份饵块
+            for (let i = 0; i < 6; i++) {
+                const c = Math.max(top, Math.min(top + span,
+                                   f.birdY + (rnd() * 2 - 1) * REACH));
+                if (this._roomAt(c)) return c;
+            }
+            return Math.max(top, Math.min(top + span, f.birdY + (rnd() * 2 - 1) * REACH));
         };
         /** 第 i 条道的中间高度 */
         const laneY = i => top + span * (i + 0.5) / LANES;
@@ -683,10 +718,14 @@ export class Flight {
             f.foods.push({ x: VW + 16, y: foodY(), type: pick(FOOD_TYPES) });
         }
 
-        // 天气影响额外生成
-        if (this.state.weather === 'rainy' && rnd() < 0.3) this._hazard(1, laneY);
+        // 天气影响额外生成。**x 要错开半屏** ——
+        // 原来它和上面那一次是同一个 x,雨天/雾天于是常常出现
+        // 一个障碍和一样食材叠在一起:两个圈重在一处,谁也认不出哪个能吃。
+        // 生成节奏本来就靠 x 上的间距做疏密,加塞的那个不错开就是在破坏它
+        const EXTRA_X = VW / 2;
+        if (this.state.weather === 'rainy' && rnd() < 0.3) this._hazard(1, laneY, EXTRA_X);
         if (this.state.weather === 'foggy' && rnd() < 0.25) {
-            f.foods.push({ x: VW + 16, y: foodY(), type: pick(FOOD_TYPES) });
+            f.foods.push({ x: VW + 16 + EXTRA_X, y: foodY(), type: pick(FOOD_TYPES) });
         }
     }
 
@@ -697,7 +736,7 @@ export class Flight {
      * 满屏障碍没有缝,玩家学不到任何东西,只会觉得游戏在耍他。
      * 留的那条道随机,所以还是得看、得躲,只是保证躲得掉。
      */
-    _hazard(n, laneY) {
+    _hazard(n, laneY, dx = 0) {
         const f = this.f, rnd = this.rng;
         const pick = a => a[Math.floor(rnd() * a.length)];
         const gap = Math.floor(rnd() * LANES);
@@ -709,7 +748,7 @@ export class Flight {
             [lanes[i], lanes[j]] = [lanes[j], lanes[i]];
         }
         for (const i of lanes.slice(0, Math.min(n, LANES - 1))) {
-            f.obstacles.push({ x: VW + 16, y: laneY(i), type: pick(OBSTACLES) });
+            f.obstacles.push({ x: VW + 16 + dx, y: laneY(i), type: pick(OBSTACLES) });
         }
     }
 
@@ -834,20 +873,20 @@ export class Flight {
     }
 
     /**
-     * 天上飞的东西分三档,**每一档一个徽记,一眼分得出能不能碰**:
+     * 天上飞的东西分两类,**只给危险的那一类做记号**:
      *
-     *   食材  一圈奶白细边          能吃
-     *   道具  白盘 + 金边            能吃,而且是好东西
-     *   障碍  深底 + 红边            碰不得
+     *   食材  光板一张,什么都不加      能吃
+     *   障碍  四个红直角框住            碰不得
+     *   道具  白盘 + 金边(本来就有)   能吃,而且是好东西
      *
-     * 原来三档都是光秃秃一张 16×16 贴上去,靠「认出这是饵块还是风筝」来判断 ——
-     * 后期一秒钟从眼前过四五个,谁也来不及一个个认。
-     * **该让人认的是「这一类」,不是「这一个」。**
+     * 第一版是「食材白盘 + 障碍红框深底」,两类都加了装饰 —— 辨识度是有了,
+     * 但满屏白块红块,天空全被糊住,画面比玩法还吵。
+     *
+     * **只有一类需要记号。** 「有红角的不能碰,没有的能吃」是一条完整的规则,
+     * 而它只花掉四个直角的墨。红角还正好落在判定框的四角上 ——
+     * 顺带把「看着碰上了」和「算作碰上了」对齐了。
      */
     _drawItem(ctx, name, x, y) {
-        // 奶白细边:图标 16 宽,底盘 18 —— 正好露出一圈 1 像素。
-        // 不用整块盘子,食材要保持轻,重的留给障碍
-        plate(ctx, x, y, 9, '#fffdf4');
         if (this.sprites?.draw(ctx, name, x, y, 16)) return;
         drawSprite(ctx, sprite(name, ICON_GRIDS[name]), x, y);
     }
@@ -922,17 +961,31 @@ export class Flight {
     }
 
     _drawObstacle(ctx, o) {
-        // 深底把它从天上抠出来,红边说明这一类碰不得。
-        // **底色用深蓝灰而不是纯黑** —— 乌云本身是灰的,压在纯黑上反而糊,
-        // 压在比天更暗一档的蓝灰上才跳得出来
-        // 半径就是 HAZARD_R —— **徽记有多大,判定就有多大**。
-        // 原来贴图 16~22 宽、判定 30 宽,红边一画就把这个差补上了:
-        // 现在「看着碰上了」和「算作碰上了」是同一件事
-        plate(ctx, o.x, o.y, HAZARD_R, '#241a13');
-        plate(ctx, o.x, o.y, HAZARD_R - 1, '#e8384f');
-        plate(ctx, o.x, o.y, HAZARD_R - 3, '#2b3a44');
         const grid = SCENERY[OBSTACLE_GRID[o.type]];
         drawSprite(ctx, sprite(OBSTACLE_GRID[o.type], grid), o.x, o.y);
+        this._corners(ctx, o.x, o.y, HAZARD_R);
+    }
+
+    /**
+     * 四个红直角。半径就是 HAZARD_R —— **框有多大,判定就有多大**。
+     *
+     * 每个角先用深色描一遍再压红:红在白天的浅蓝天上够跳,
+     * 但在黄昏那片橙红里会糊掉,底下垫一道深褐就哪种天都站得住。
+     * (整张画面里只有这一处是纯红,它专管一件事:别碰。)
+     */
+    _corners(ctx, cx, cy, r, color = '#e8384f') {
+        const x = Math.round(cx) - r, y = Math.round(cy) - r, d = r * 2;
+        const arm = 6, w = 2;
+        for (const [sx, sy] of [[0, 0], [1, 0], [0, 1], [1, 1]]) {
+            const px = x + (sx ? d - w : 0), py = y + (sy ? d - w : 0);
+            const ax = x + (sx ? d - arm : 0), ay = y + (sy ? d - arm : 0);
+            ctx.fillStyle = '#241a13';
+            ctx.fillRect(ax - 1, py - 1, arm + 2, w + 2);   // 横臂的底
+            ctx.fillRect(px - 1, ay - 1, w + 2, arm + 2);   // 竖臂的底
+            ctx.fillStyle = color;
+            ctx.fillRect(ax, py, arm, w);
+            ctx.fillRect(px, ay, w, arm);
+        }
     }
 
     _drawBird(ctx, f) {
