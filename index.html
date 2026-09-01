@@ -76,6 +76,18 @@
             .fly-key { min-width: 96px; padding: 14px 10px; font-size: 15px; }
             .fly-hud { right: 108px; }
         }
+        /* 开局那三秒的数字。压在画面正中,不吃点击 —— 这三秒里
+           两个键是通的,数字挡住按钮就白给了 */
+        .fly-count {
+            position: absolute; inset: 0; z-index: 26;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 96px; line-height: 1;
+            color: var(--gold, #f5b83d);
+            text-shadow: 4px 4px 0 rgba(36, 26, 19, .85);
+            pointer-events: none;
+        }
+        @media (max-width: 560px) { .fly-count { font-size: 60px; } }
+
         /* 待机界面 */
         .title-screen {
             position: fixed; inset: 0; z-index: 100;
@@ -164,6 +176,7 @@
                     <button class="px-btn px-btn--sm" id="flyPause">⏸ 暂停</button>
                     <button class="px-btn px-btn--sm px-btn--coral" id="flyQuit">收工</button>
                 </div>
+                <div class="fly-count" id="flyCount" hidden></div>
                 <div class="px-mask" id="pauseMask">
                     <h2>暂停</h2>
                     <button class="px-btn" id="flyResume">▶ 继续</button>

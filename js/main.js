@@ -252,6 +252,7 @@ function startFlight(sprites) {
     const flyHud = {
         score: H_('flyScore'), lives: H_('flyLives'), combo: H_('flyCombo'),
         wave: H_('flyWave'), dist: H_('flyDist'), hungry: H_('flyHungry'),
+        count: H_('flyCount'),
     };
 
     // 道具在开局扣除
@@ -280,10 +281,15 @@ function startFlight(sprites) {
             flyHud.dist.textContent = hud.dist;
             // 肚子条画在画布上,这儿只负责把「饿了」这个词摆出来
             flyHud.hungry.hidden = !hud.hungry;
+            // 开局那三秒的大数字。**用 DOM 不用画布** ——
+            // 画布上没有像素字体,写上去就是一团糊
+            flyHud.count.hidden = hud.count <= 0;
+            if (hud.count > 0) flyHud.count.textContent = hud.count;
         },
         onEnd: result => {
             overlay.classList.remove('is-open');
             document.getElementById('pauseMask').classList.remove('is-open');
+            flyHud.count.hidden = true;
             flight = null;
             finishFlight(result);
         },

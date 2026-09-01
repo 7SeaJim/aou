@@ -95,12 +95,13 @@ const OBSTACLE_GRID = { cloud: 'storm', balloon: 'balloon', kite: 'kite' };
 /**
  * 一级、晴天的开局速度(每 60fps 帧走多少虚拟像素)。
  *
- * 原来是 1.25 —— 一秒 75 像素,一个东西横穿 440 宽的画面要走六秒。
- * 那不是飞,那是飘:开局一分钟里玩家几乎不用动手,
- * 而**一个玩法开头的一分钟决定了他要不要玩第二局**。
- * 现在开局就是两秒多穿一次屏,一上来就有事要躲。
+ * 1.25 是飘(横穿一次屏要六秒,开局一分钟几乎不用动手),
+ * 2.6 又太急(还没坐稳东西就到脸上了)。2.0 落在中间:
+ * 一秒 120 像素,横穿一次屏 3.7 秒,从露头到眼前有三秒多。
+ *
+ * **开头这一分钟决定了他要不要玩第二局** —— 太闲和太慌是同一个死法。
  */
-const SPEED_0 = 2.6;
+const SPEED_0 = 2.0;
 
 /**
  * 提速的斜率:每飞一分钟,速度在开局的基础上多涨这么多。
@@ -150,6 +151,18 @@ const CORRIDOR_S = 1.3;         // 穿过去要多久(秒)。宽度按当时的�
 const CORRIDOR_GAP = 32;        // 缝的半高。哇鸥 32 高,判定半径 15
 const CORRIDOR_MIN_W = 220;
 const CORRIDOR_MAX_W = 520;
+
+/**
+ * 开局先数三秒。
+ *
+ * 点完「出发觅食」画面一换,东西就已经在往脸上飞了 —— 玩家还没看清
+ * 自己在哪儿、这局是什么天气、两个键长什么样,第一条命就没了。
+ * **一局的第一秒不该用来找自己。**
+ *
+ * 这三秒里世界照转、两个键照用、水面不扣命,但**不计时、不生成、不判死**:
+ * 距离从 0 开始,难度从 0 分钟开始 —— 它是白送的三秒热身,不是白扣的三秒。
+ */
+const COUNTDOWN_MS = 3000;
 
 /* ---------- 五分钟之后:饿 ---------- */
 /** 从这一刻起开始饿。前五分钟只用管躲 */
@@ -229,15 +242,20 @@ export class Flight {
             glide: false,       // 方向键右按着没有
             flapAt: -1e9,       // 上一次拍翅膀,画翅膀那一下要用
             hurtUntil: 0,
+            countdown: COUNTDOWN_MS,
+            // 画面时间。**和 elapsed 分开** —— elapsed 是「这一局飞了多久」,
+            // 倒计时里它必须是 0(距离、难度、波数全从它推);
+            // 而云、浪、翅膀这些在倒计时里也得动,不然像卡住了
+            vt: 0,
             foods: [], obstacles: [], powerups: [],
             walls: [],        // 窄道。同一时间最多一片
             warn: null,       // 窄道的预告:{ y, at }
             spawnTimer: 0,
             // 开局的节奏和速度。往后都是从这两个数按飞行时长推的,见 _difficulty()
             baseInterval: Math.max(560, 900 - lv * 40),
-            baseSpeed: (SPEED_0 + (lv - 1) * 0.25) * w.speed,
+            baseSpeed: (SPEED_0 + (lv - 1) * 0.19) * w.speed,
             spawnInterval: Math.max(560, 900 - lv * 40),
-            speed: (SPEED_0 + (lv - 1) * 0.25) * w.speed,
+            speed: (SPEED_0 + (lv - 1) * 0.19) * w.speed,
             hazard: Math.max(0.08, HAZARD_0 - rw.flag),   // 风向旗:障碍少一些
             flag: rw.flag,
             // 助跑坡:**不再是全程按比例减速**,减的是提速的斜率 —— 见 _difficulty()
@@ -310,7 +328,7 @@ export class Flight {
     flap() {
         if (!this.running || this.paused) return;
         this.f.vy = FLAP_VY;
-        this.f.flapAt = this.f.elapsed;
+        this.f.flapAt = this.f.vt;
         sfx.play('flap');
     }
 
@@ -348,6 +366,7 @@ export class Flight {
             wave: this.f.wave + 1,
             dist: Math.round(this.f.elapsed / 1000 * M_PER_SEC),
             hungry: this.f.elapsed >= HUNGRY_AT,
+            count: Math.max(0, Math.ceil(this.f.countdown / 1000)),
             hunger: this.f.hunger,
             shield: this.f.shield, magnet: this.f.magnet, double: this.f.double,
         });
@@ -370,6 +389,20 @@ export class Flight {
     _update(dt) {
         const f = this.f;
         const k = dt / 16.7;                 // 以 60fps 为基准的步长系数
+        f.vt += dt;
+
+        // 倒计时:先飞着玩三秒。这里 return 掉的是「计时、生成、判死」,
+        // 不是「动」—— 手上的两个键从第一帧起就是通的
+        if (f.countdown > 0) {
+            const before = Math.ceil(f.countdown / 1000);
+            f.countdown -= dt;
+            const after = Math.ceil(f.countdown / 1000);
+            if (after !== before) sfx.play(after > 0 ? 'tab' : 'event');
+            this._fly(k);
+            this._emit();
+            return;
+        }
+
         f.elapsed += dt;
 
         this._fly(k);
@@ -510,6 +543,7 @@ export class Flight {
         // **这样一次失误只会是一条命** —— 弹得矮的话,还没回过神就又拍下去了,
         // 一个走神扣两三条,那是在罚玩家没盯着屏幕,不是在考他会不会飞
         f.vy = FLAP_VY * 1.6;
+        if (f.countdown > 0) return;          // 倒计时里随便掉,不算
         if (f.elapsed < f.hurtUntil) return;  // 挨打的那几百毫秒里不重复扣
         if (f.shield) { sfx.play('event'); f.shield = false; return; }
         sfx.play('hit');
@@ -702,7 +736,7 @@ export class Flight {
     _draw() {
         const ctx = this.ctx, f = this.f;
         const weather = this.state.weather ?? 'sunny';
-        const t = f.elapsed;
+        const t = f.vt;                      // 背景和翅膀走画面时间,倒计时里也动
 
         this.phase = dayPhase(now());
         this._bakeSky(weather, this.phase);
@@ -873,10 +907,10 @@ export class Flight {
     }
 
     _drawBird(ctx, f) {
-        const t = f.elapsed;
-        // 挨打后闪 450ms:两帧一亮一灭
-        const hurt = t < f.hurtUntil;
-        if (hurt && Math.floor(t / 70) % 2 === 0) {
+        const t = f.vt;                      // 翅膀的节奏走画面时间
+        // 挨打后闪 450ms:这一条是玩法时间,和 hurtUntil 同一把尺子
+        const hurt = f.elapsed < f.hurtUntil;
+        if (hurt && Math.floor(f.elapsed / 70) % 2 === 0) {
             if (f.shield) this._drawShield(ctx, f);
             return;
         }
