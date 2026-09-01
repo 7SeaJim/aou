@@ -803,6 +803,22 @@ const ONLOOKERS = ['onlooker_a', 'onlooker_b', 'onlooker_c', 'onlooker_d'];
 const FEED_ICONS = ['erkuai', 'potato', 'rice', 'douhua', 'chili'];
 const feedPops = [];
 
+/** 跑道站的位置。坝子右头,那一带原来只有芦苇 */
+const RUNWAY_X = 376;
+/**
+ * 跑道台面比甲板高多少(相对 SHED_Y 那条基线)。
+ * 精灵图底边落在 SHED_Y,台面在图里第 15 行 —— 站到台面上就是往上抬这么多。
+ */
+const RUNWAY_TOP = -16;
+
+/** 跑道。没建的时候画地基和两根空杆 —— 让人看得见这儿会有个东西 */
+export function paintRunway(ctx, deckY, built, phase = 'day') {
+    const key = built ? 'runway' : 'runway_off';
+    const base = deckY + SHED_Y;
+    shadow(ctx, RUNWAY_X, base, 40, 0.2);
+    drawStanding(ctx, shadedSprite(key, SCENERY[key], phase), RUNWAY_X, base);
+}
+
 /**
  * 招进来的伙计鸥站在坝上哪儿。
  *
@@ -815,31 +831,108 @@ const feedPops = [];
  * 躲开草棚(172)、木棚(199–245)和三根路灯(20 / 259 / 415)。
  */
 const CREW_SPOT = {
-    huihui:  104,   // 颠锅的,挨着摊子
-    apang:   126,   // 收钱的,也在摊子这头
-    xiaobai: 150,   // 表演的,离哇鸥近一点
-    dundun:  272,   // 看摊子的,守在另一头
-    laoqiao: 296,   // 老鸟,靠栏杆看水
-    yaya:    320,
+    huihui:  104,                            // 颠锅的,挨着摊子
+    apang:   126,                            // 收钱的,也在摊子这头
+    xiaobai: 152,                            // 表演的,自己带俩围观
+    dundun:  { x: STALL_X, onStall: true },   // 看摊子的 —— **站在摊子顶上**
+    laoqiao: { x: 372, dy: RUNWAY_TOP },     // 老鸟,站跑道台面上
+    yaya:    { x: 392, dy: RUNWAY_TOP },
 };
 
 /**
  * 把招来的伙计画出来。用的就是卡片上那六个 16×16 图标 ——
  * 哇鸥在坝上也是 16×16 的那张,尺度天然对得上。
  */
-export function drawCrew(ctx, deckY, t, hired = [], phase = 'day') {
-    hired.forEach((id, i) => {
-        const x = CREW_SPOT[id];
-        const key = 'crew_' + id;
-        const grid = ICON_GRIDS[key];
-        if (x === undefined || !grid) return;
-        // 各晃各的 —— 一排整齐地一起动是最假的
-        const bob = Math.sin(t * 0.0014 + i * 2.1) > 0.5 ? 1 : 0;
-        const base = deckY + SHED_Y + bob;
-        shadow(ctx, x, base, 12, 0.16);
-        drawStanding(ctx, shadedSprite(key, grid, phase), x, base);
-    });
+export function drawCrew(ctx, deckY, t, hired = [], phase = 'day',
+                         runwayBuilt = false, upgrades = null) {
+    for (const id of hired) {
+        const spot = CREW_SPOT[id];
+        const grid = ICON_GRIDS['crew_' + id];
+        if (!spot || !grid) continue;
+        const x = typeof spot === 'number' ? spot : spot.x;
+        let base;
+        if (spot.onStall) {
+            // **摊子的高度跟着升级变**(四个阶段 28~76 高),所以不能写死一个 dy ——
+            // 写死的话升一级它就悬在半空,或者陷进屋顶里
+            base = deckY - 13 - SCENERY[stallStage(upgrades).key].length + 2;
+        } else if (spot.dy === RUNWAY_TOP) {
+            // 跑道没建的时候,老翘和丫丫没地方站,落回甲板
+            base = deckY + SHED_Y + (runwayBuilt ? RUNWAY_TOP : 0);
+        } else {
+            base = deckY + SHED_Y;
+        }
+        if (!spot.onStall && spot.dy !== RUNWAY_TOP) shadow(ctx, x, base, 12, 0.16);
+        CREW_ACT[id](ctx, x, base, t, phase);
+    }
 }
+
+/**
+ * 各人的动作。**一排站着一起晃就是罚站** —— 六只各干各的事,
+ * 而且干的正好是它卡片上写的那件:
+ *
+ *   灰灰  举着锅上下颠           「我翅膀有力,颠锅归我」
+ *   阿胖  身前一枚鸥币转来转去   「我认得出谁兜里有钱」
+ *   小白  在原地翻跟头,还带俩围观「我会翻跟头。真的」
+ *   墩墩  站摊子顶上,纹丝不动    「你不在的时候,我看着摊子」
+ *   老翘  站跑道上望着湖面        飞了十二年
+ *   丫丫  低头嗅,偶尔抬一下      「菌子在哪儿,我闻得到」
+ */
+const CREW_ACT = {
+    huihui(ctx, x, base, t, phase) {
+        // 颠锅:锅上下走,鸟跟着轻轻起伏
+        const p = Math.sin(t * 0.004);
+        const up = Math.round(Math.max(0, p) * 3);
+        drawStanding(ctx, shadedSprite('crew_huihui', ICON_GRIDS.crew_huihui, phase), x, base);
+        // 锅是现画的几个方块,不是拿 kw_pan 那张 —— 那张 36 格宽,
+        // 举在一只 16 格的鸟头上像顶了个锅盖
+        const py = Math.round(base - 19 - up);
+        ctx.fillStyle = '#4a3628';
+        ctx.fillRect(x - 5, py, 10, 4);
+        ctx.fillRect(x + 5, py + 1, 4, 2);
+        ctx.fillStyle = '#7d7668';
+        ctx.fillRect(x - 4, py + 1, 8, 2);
+    },
+    apang(ctx, x, base, t, phase) {
+        drawStanding(ctx, shadedSprite('crew_apang', ICON_GRIDS.crew_apang, phase), x, base);
+        // 一枚鸥币在身前转:靠左右宽度变化装出旋转,不用画正反两面
+        const w = Math.abs(Math.cos(t * 0.003)) * 4 + 1;
+        ctx.fillStyle = '#4a3628';
+        ctx.fillRect(Math.round(x + 8 - w / 2), base - 13, Math.round(w) + 2, 6);
+        ctx.fillStyle = '#f5b83d';
+        ctx.fillRect(Math.round(x + 9 - w / 2), base - 12, Math.round(w), 4);
+    },
+    xiaobai(ctx, x, base, t, phase) {
+        // 翻跟头:一个周期里蹲一下、跳起来、空中转半圈
+        const p = (t % 2600) / 2600;
+        const hop = p < 0.55 ? Math.round(Math.sin(p / 0.55 * Math.PI) * 11) : 0;
+        const key = p < 0.55 && p > 0.15 ? 'crew_xiaobai' : 'crew_apang';
+        // 空中用倒着那张,落地换回正着的 —— 两张图轮着放就是翻跟头
+        const g = ICON_GRIDS[hop > 3 ? 'crew_xiaobai' : 'crew_apang'];
+        drawStanding(ctx, shadedSprite(hop > 3 ? 'crew_xiaobai' : 'crew_apang', g, phase),
+                     x, base - hop);
+        // 俩围观的,站两边看着
+        for (const [dx, who] of [[-20, 'onlooker_b'], [20, 'onlooker_d']]) {
+            const k = hop > 6 ? who + '_wave' : who;
+            shadow(ctx, x + dx, base + 6, 12, 0.16);
+            drawStanding(ctx, shadedSprite(k, SCENERY[k], phase), x + dx, base + 6);
+        }
+    },
+    dundun(ctx, x, base, t, phase) {
+        // 看摊子的不动。**只有它一动不动,这就是它的动作**
+        drawStanding(ctx, shadedSprite('crew_dundun', ICON_GRIDS.crew_dundun, phase), x, base);
+    },
+    laoqiao(ctx, x, base, t, phase) {
+        const bob = Math.sin(t * 0.0011) > 0 ? 0 : 1;
+        drawStanding(ctx, shadedSprite('crew_laoqiao', ICON_GRIDS.crew_laoqiao, phase),
+                     x, base + bob);
+    },
+    yaya(ctx, x, base, t, phase) {
+        // 低头嗅一阵,抬头看一下
+        const down = (t % 3400) < 2200 ? 2 : 0;
+        drawStanding(ctx, shadedSprite('crew_yaya', ICON_GRIDS.crew_yaya, phase),
+                     x, base + down);
+    },
+};
 
 /** 小木棚站的位置。草棚(172)和路灯(259)之间那块空地 */
 const SHED_X = 222;

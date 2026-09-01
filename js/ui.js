@@ -14,6 +14,7 @@ import {
     CREW, FOOD_SOURCE, COSMETICS, SLOTS, dayPhase,
     TUTORIAL, TUTORIAL_GIFT, MARKET, MARKET_LEVEL,
     RECIPE_STEPS, SERVICE, TOOLS, QUALITY, KITCHEN, kitchenCost, PLATES,
+    RUNWAY, RUNWAY_KEYS, runwayCost,
 } from './data.js';
 import { paintWearPreview, paintWearItem } from './game/wear.js';
 import { renderCard } from './game/card.js';
@@ -288,6 +289,21 @@ export class UI {
                 if (!r?.ok) return this.toast(r?.reason ?? '给不了', 'coin');
                 this.toast(`${r.recipe.name} 卖出去了,+${r.coins} 鸥币`, 'coin');
                 this.showEvents(r.events.slice(1));
+                break;
+            }
+
+            case 'buildRunway': {
+                const r = this.mutate(st => rules.buildRunway(st));
+                if (!r.ok) return this.toast(r.reason, 'coin');
+                sfx.play('achieve');
+                this.toast('跑道搭好了 —— 以后从这儿起飞', 'map');
+                break;
+            }
+
+            case 'runway': {
+                const r = this.mutate(st => rules.buyRunway(st, data.key));
+                if (!r.ok) return this.toast(r.reason, 'coin');
+                this.toast(`${RUNWAY[data.key].name} 升到 ${r.level} 级`, 'coin');
                 break;
             }
 
@@ -758,6 +774,55 @@ export class UI {
      * 伙计鸥。只有冬天能招 —— 鸥群不在昆明的时候没人可招,
      * 这条比任何「等级 ≥ N」都自然。
      */
+    /**
+     * 跑道那一栏。**没建的时候也要列出来** ——
+     * 一条玩家看不见的升级线等于不存在;先让他知道有这么个东西、要多少钱。
+     */
+    runwayView() {
+        const s = this.getState();
+        const r = s.runway ?? {};
+        if (!r.built) {
+            return `
+            <h3 style="margin-bottom:6px">跑道</h3>
+            <div class="px-panel px-panel--sea" style="margin-bottom:28px">
+                <p>${icon('map')} 哇鸥每天从坝上起飞去觅食,而那儿现在什么都没有 ——
+                   就地一蹬就走了。</p>
+                <p class="px-muted" style="margin:8px 0 12px">
+                    搭一座小高台:助跑的坡、看风向的旗、出发前垫肚子的食槽。
+                    <strong>三样各管飞行里的一项</strong>,建好之后各自还能升。</p>
+                <button class="px-btn px-btn--sm" data-act="buildRunway"
+                        ${s.coins < RUNWAY.build ? 'disabled' : ''}>
+                    ${s.coins < RUNWAY.build
+                        ? `还差 ${RUNWAY.build - s.coins} 鸥币`
+                        : `${icon('coin')} ${RUNWAY.build} 建起来`}</button>
+            </div>`;
+        }
+        const b = rules.runwayBonus(s);
+        const shown = { ramp: `慢 ${Math.round(b.ramp * 100)}%`,
+                        flag: `障碍 −${Math.round(b.flag * 100)}%`,
+                        trough: `顶饿 +${Math.round(b.trough * 100)}%` };
+        const cards = RUNWAY_KEYS.map(k => {
+            const u = RUNWAY[k];
+            const lv = r[k] ?? 0;
+            const cost = runwayCost(k, lv);
+            return `<div class="px-panel" style="padding:12px 14px">
+                <p style="margin-bottom:4px">${icon(u.icon, 'lg')} ${u.name}
+                   <span class="px-muted">Lv.${lv}</span></p>
+                <p class="px-muted" style="font-size:12px;margin-bottom:10px">
+                    ${u.desc}${lv ? ` · 现在 ${shown[k]}` : ''}</p>
+                ${cost === null
+                    ? '<span class="px-tag px-tag--leaf">已满级</span>'
+                    : `<button class="px-btn px-btn--sm" data-act="runway" data-key="${k}"
+                         ${s.coins < cost ? 'disabled' : ''}>${icon('coin')} ${cost}</button>`}
+            </div>`;
+        }).join('');
+        return `
+        <h3 style="margin-bottom:6px">跑道</h3>
+        <p class="px-muted" style="margin-bottom:12px;font-size:13px">
+            三条线各管觅食里的一项,不叠同类。改这儿只影响飞行,不影响摊子。</p>
+        <div class="px-grid" style="--min:190px;margin-bottom:28px">${cards}</div>`;
+    }
+
     crewView() {
         const s = this.getState();
         const season = rules.seasonNow();
@@ -1452,6 +1517,8 @@ export class UI {
         <div class="px-grid" style="--min:190px;margin-bottom:28px">${ups}</div>
 
         ${this.kitchenShop()}
+
+        ${this.runwayView()}
 
         ${this.crewView()}`;
     }

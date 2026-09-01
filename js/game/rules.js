@@ -15,6 +15,7 @@ import {
     COSMETICS, EVENTS, ITEMS, MARKET, MARKET_LEVEL, FOODS,
     RECIPE_STEPS, SERVICE,
     KITCHEN, kitchenCost, toolSlots, toolPower, PLATES,
+    RUNWAY, RUNWAY_KEYS, RUNWAY_STEP, runwayCost,
 } from '../data.js';
 import { DAILY_TRIES } from '../state.js';
 import { now as clockNow } from '../clock.js';
@@ -620,6 +621,41 @@ export function hireCrew(state, id, when = clockNow()) {
     state.coins -= cost;
     state.crew.push(id);
     return { ok: true, crew: c, events: [{ type: 'crew', crew: c }, ...checkAchievements(state)] };
+}
+
+/* ---------- 跑道 ---------- */
+
+/** 跑道给飞行的加成。没建就全是 0 —— 三条线在建起来之前一概不生效 */
+export function runwayBonus(state) {
+    const r = state.runway ?? {};
+    if (!r.built) return { ramp: 0, flag: 0, trough: 0 };
+    return {
+        ramp:   (r.ramp ?? 0)   * RUNWAY_STEP.ramp,
+        flag:   (r.flag ?? 0)   * RUNWAY_STEP.flag,
+        trough: (r.trough ?? 0) * RUNWAY_STEP.trough,
+    };
+}
+
+export function buildRunway(state) {
+    if (state.runway?.built) return { ok: false, reason: '已经建好了' };
+    if (state.coins < RUNWAY.build) {
+        return { ok: false, reason: `还差 ${RUNWAY.build - state.coins} 鸥币` };
+    }
+    state.coins -= RUNWAY.build;
+    state.runway = { ...state.runway, built: true };
+    return { ok: true, events: [{ type: 'runway' }, ...checkAchievements(state)] };
+}
+
+export function buyRunway(state, key) {
+    if (!RUNWAY[key]) return { ok: false, reason: '没有这一项' };
+    if (!state.runway?.built) return { ok: false, reason: '得先把跑道建起来' };
+    const lv = state.runway[key] ?? 0;
+    const cost = runwayCost(key, lv);
+    if (cost === null) return { ok: false, reason: '已经到顶了' };
+    if (state.coins < cost) return { ok: false, reason: `还差 ${cost - state.coins} 鸥币` };
+    state.coins -= cost;
+    state.runway[key] = lv + 1;
+    return { ok: true, key, level: lv + 1, events: [{ type: 'runwayUp', key, level: lv + 1 }] };
 }
 
 /* ---------- 篆新市场 ---------- */

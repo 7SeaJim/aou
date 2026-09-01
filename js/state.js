@@ -5,7 +5,7 @@
  * 好处:改目录不用写迁移,存档也更小(存档码是要玩家复制的)。
  */
 
-export const SAVE_VERSION = 12;
+export const SAVE_VERSION = 13;
 
 // 食材的键。改这里要同步 data.js 的 FOODS,并且 SAVE_VERSION +1 补一条迁移 ——
 // 这些键是 backpack 的字段名,直接进存档。
@@ -100,6 +100,8 @@ export function createInitialState() {
         stock: {},
         /** 厨具等级 + 用哪个餐盘 */
         kitchen: { board: 1, pan: 1, stove: 1, oven: 1, plate: 'plain', plates: ['plain'] },
+        /** 跑道。built 之前三条线都用不上,见 data.js 的 RUNWAY */
+        runway: { built: false, ramp: 0, flag: 0, trough: 0 },
         /** 已拥有的装扮 id */
         cosmetics: [],
         /** 正戴着的。每个槽位一件,null 表示空着。 */
@@ -347,6 +349,15 @@ const migrations = {
             stats: { ...(old.stats ?? {}), bestDist: 0, bestWave: 0 },
         };
     },
+
+    // v12 -> v13:加跑道。老档一律从「还没建」起 ——
+    // 不能拿别的字段反推「他应该已经建了」,那是替玩家做决定
+    12(old) {
+        return {
+            ...old, version: 13,
+            runway: { built: false, ramp: 0, flag: 0, trough: 0 },
+        };
+    },
 };
 
 /** 把任意版本的存档升到当前版本。无法识别时返回 null,由调用方决定是否开新档。 */
@@ -459,6 +470,15 @@ function normalize(s) {
         .filter(n => Number.isInteger(n) && n >= 0 && n < 8));
     out.eventMs = clampInt(out.eventMs, 0, 60 * 60_000);
     out.tutorial = clampInt(out.tutorial, 0, TUTORIAL_DONE);
+    out.runway = (() => {
+        const r = out.runway ?? {};
+        return {
+            built: !!r.built,
+            ramp: clampInt(r.ramp, 0, 5),
+            flag: clampInt(r.flag, 0, 5),
+            trough: clampInt(r.trough, 0, 5),
+        };
+    })();
     out.stats = (() => {
         const t = {};
         for (const k of STAT_KEYS) t[k] = clampInt(out.stats?.[k], 0, 9_999_999_999);

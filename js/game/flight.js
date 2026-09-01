@@ -10,7 +10,7 @@
  * 本模块不碰存档,只在一局结束后把结果交给 rules.settleFlight()。
  */
 
-import { weatherOf } from './rules.js';
+import { weatherOf, runwayBonus } from './rules.js';
 import * as sfx from '../audio.js';
 import { PixelScreen, sprite, drawSprite } from './pixmap.js';
 import {
@@ -108,6 +108,8 @@ export class Flight {
     start() {
         const w = weatherOf(this.state);
         const lv = this.state.level;
+        // 跑道给的三条加成。没建跑道时全是 0,下面的算式原样退回原来的数
+        const rw = runwayBonus(this.state);
 
         this.f = {
             score: 0,
@@ -119,10 +121,13 @@ export class Flight {
             spawnTimer: 0,
             // 开局的节奏和速度。往后都是从这两个数按飞行时长推的,见 _difficulty()
             baseInterval: Math.max(700, 1100 - lv * 50),
-            baseSpeed: (1.25 + (lv - 1) * 0.2) * w.speed,
+            // 助跑坡:全程慢一档 —— 玩家最先感觉到的就是这个
+            baseSpeed: (1.25 + (lv - 1) * 0.2) * w.speed * (1 - rw.ramp),
             spawnInterval: Math.max(700, 1100 - lv * 50),
             speed: (1.25 + (lv - 1) * 0.2) * w.speed,
-            hazard: HAZARD_0,
+            hazard: Math.max(0.08, HAZARD_0 - rw.flag),   // 风向旗:障碍少一些
+            flag: rw.flag,
+            hungryMs: HUNGRY_MS * (1 + rw.trough),  // 食槽:肚子撑得更久
             elapsed: 0,
             hunger: 1,        // 肚子。五分钟之后才开始掉,掉光就回巢
             hungryFlash: 0,
@@ -313,7 +318,7 @@ export class Flight {
             f.hungryFlash = f.elapsed + 1600;
             sfx.play('hit');
         }
-        f.hunger -= dt / HUNGRY_MS;
+        f.hunger -= dt / f.hungryMs;
         if (f.hunger <= 0) { f.hunger = 0; this._finish('hungry'); }
     }
 
@@ -322,7 +327,7 @@ export class Flight {
         const mins = f.elapsed / 60000;
         f.speed = f.baseSpeed * (1 + mins * 0.9);
         f.spawnInterval = Math.max(260, f.baseInterval - mins * 280);
-        f.hazard = Math.min(HAZARD_MAX, HAZARD_0 + mins * 0.12);
+        f.hazard = Math.min(HAZARD_MAX - f.flag, Math.max(0.08, HAZARD_0 - f.flag) + mins * 0.12);
 
         // 每 20 秒报一波。**得让玩家听见、看见它变难了** ——
         // 悄悄变难只会让人觉得「我怎么突然打不过了」,而不是「又上了一档」

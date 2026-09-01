@@ -12,6 +12,7 @@ from stall import STALLS
 from cat import CAT
 from kitchenware import KITCHENWARE
 from shed import SHED
+from runway import RUNWAY
 
 # ---------- 哇鸥 32×32 ----------
 # 主角。原型是红嘴鸥 —— 每年冬天从西伯利亚飞到滇池越冬的那种,
@@ -938,6 +939,7 @@ SCENERY = {
     **CAT,             # 折耳根,见 tools/cat.py
     **KITCHENWARE,     # 出摊那一场案上的四件家什,见 tools/kitchenware.py
     **SHED,            # 小木棚和三把伞,见 tools/shed.py
+    **RUNWAY,          # 跑道(建好 / 没建),见 tools/runway.py
     'storm':      STORM,
     'boat':       BOAT,
     'cloud_a':    CLOUD_A,
