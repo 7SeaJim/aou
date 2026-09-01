@@ -46,24 +46,35 @@
             touch-action: none;
             overscroll-behavior: contain;
         }
+        /* 状态条让开右上角那两个小按钮,窄屏上自己换行 */
         .fly-hud {
-            position: absolute; top: 12px; left: 12px; right: 12px; z-index: 25;
-            display: flex; justify-content: space-between; gap: 12px; pointer-events: none;
+            position: absolute; top: 12px; left: 12px; right: 128px; z-index: 25;
+            display: flex; flex-wrap: wrap; gap: 8px; pointer-events: none;
         }
         .fly-ctrl {
-            position: absolute; bottom: 14px; right: 14px; z-index: 25;
-            display: flex; gap: 12px;
+            position: absolute; top: 12px; right: 12px; z-index: 25;
+            display: flex; gap: 8px;
         }
-        /* 两个键。**它们同时是操作说明** —— 键盘玩家看一眼就知道按哪儿,
-           手机玩家直接按这两个。画布左右半边也认(见 flight.js 的 _onDown),
-           所以这两个按钮做得下、够大就行,不用占地方。 */
-        .fly-keys {
-            position: absolute; bottom: 14px; left: 14px; z-index: 25;
-            display: flex; gap: 12px;
+        /* 两个键。**左边的键放画面左下,右边的键放右下** ——
+           一个手一个,和键盘上空格在左、方向键在右是同一套位置关系。
+           挤在同一边的话,一只手要横着够两个,而平飞是要一直按住的。
+
+           做得大是因为手机:一个 56px 高的按钮才是拇指点得中的,
+           原来那个 px-btn--sm 在真机上只有指甲盖那么点。 */
+        .fly-key {
+            position: absolute; bottom: 16px; z-index: 25;
+            min-width: 116px; padding: 15px 14px;
+            font-size: 17px; line-height: 1.1;
+            /* 连点几十下的东西,别让它选中文字、别触发双击缩放 */
+            user-select: none; -webkit-user-select: none;
+            touch-action: manipulation;
         }
-        .fly-keys .px-btn { min-width: 92px; }
-        .fly-keys kbd {
-            font: inherit; opacity: .7; margin-right: 4px;
+        .fly-key--l { left: 16px; }
+        .fly-key--r { right: 16px; }
+        .fly-key kbd { font: inherit; opacity: .7; margin-right: 5px; }
+        @media (max-width: 560px) {
+            .fly-key { min-width: 96px; padding: 14px 10px; font-size: 15px; }
+            .fly-hud { right: 108px; }
         }
         /* 待机界面 */
         .title-screen {
@@ -147,10 +158,8 @@
                         <i class="px-icon px-icon--erkuai"></i> 饿了!快吃
                     </span>
                 </div>
-                <div class="fly-keys">
-                    <button class="px-btn px-btn--sm" id="flyFlap"><kbd>空格</kbd>跃起</button>
-                    <button class="px-btn px-btn--sm" id="flyGlide"><kbd>→</kbd>平飞</button>
-                </div>
+                <button class="px-btn fly-key fly-key--l" id="flyFlap"><kbd>空格</kbd>跃起</button>
+                <button class="px-btn fly-key fly-key--r" id="flyGlide"><kbd>→</kbd>平飞</button>
                 <div class="fly-ctrl">
                     <button class="px-btn px-btn--sm" id="flyPause">⏸ 暂停</button>
                     <button class="px-btn px-btn--sm px-btn--coral" id="flyQuit">收工</button>

@@ -97,7 +97,7 @@ const SPEED_0 = 2.6;
  * 底盘抬高之后斜率就得压下来 —— 照旧的 0.9 走,五分钟时会比原来快四成,
  * 反应时间掉到半秒以下,那不是难,是看运气。
  */
-const SPEED_GROW = 0.32;
+const SPEED_GROW = 0.22;
 /**
  * 生成间隔每分钟压缩多少毫秒,以及压到哪儿为止。
  *
@@ -105,8 +105,8 @@ const SPEED_GROW = 0.32;
  * 换两条道要连着拍两下并且提前起手,间隔比这个还短的话,
  * 第二下永远来不及 —— 那时候躲不躲得掉就跟操作没关系了。
  */
-const SPAWN_GROW = 150;
-const SPAWN_MIN = 380;
+const SPAWN_GROW = 110;
+const SPAWN_MIN = 420;
 
 /** 障碍占生成的比例:开局 22%,一路涨到 55% */
 const HAZARD_0 = 0.22;
@@ -120,6 +120,25 @@ const WAVE_MS = 20_000;
 const LANES = 5;
 /** 食材出现在哇鸥当下高度的上下这么多像素之内。约等于两下翅膀 */
 const REACH = 72;
+
+/* ---------- 窄道:唯一一件非平飞不可的事 ----------
+ *
+ * 两个键里,平飞一直是可有可无的那个:躲障碍靠的是「换到空的那条道」,
+ * 而换道用跃起和松手就够了 —— **一个从来不用按的键等于没有。**
+ *
+ * 窄道是专门为它造的局面:一整片乌云横过来,只留一条缝,
+ * 而缝的高度是固定的。你得先飞到那个高度,然后**在里面待住一秒多** ——
+ * 松手就掉出去,多拍一下就撞上顶。这一秒多里,平飞是唯一的解。
+ *
+ * 每三波来一次(约一分钟),提前 1.5 秒在右边缘标出缝在哪 ——
+ * **不预告的话它就不是考验,是埋伏。**
+ */
+const CORRIDOR_EVERY = 3;       // 每几波来一次
+const CORRIDOR_WARN = 1500;     // 提前多久预告
+const CORRIDOR_S = 1.3;         // 穿过去要多久(秒)。宽度按当时的速度换算
+const CORRIDOR_GAP = 32;        // 缝的半高。哇鸥 32 高,判定半径 15
+const CORRIDOR_MIN_W = 220;
+const CORRIDOR_MAX_W = 520;
 
 /* ---------- 五分钟之后:饿 ---------- */
 /** 从这一刻起开始饿。前五分钟只用管躲 */
@@ -200,6 +219,8 @@ export class Flight {
             flapAt: -1e9,       // 上一次拍翅膀,画翅膀那一下要用
             hurtUntil: 0,
             foods: [], obstacles: [], powerups: [],
+            walls: [],        // 窄道。同一时间最多一片
+            warn: null,       // 窄道的预告:{ y, at }
             spawnTimer: 0,
             // 开局的节奏和速度。往后都是从这两个数按飞行时长推的,见 _difficulty()
             baseInterval: Math.max(560, 900 - lv * 40),
@@ -412,6 +433,9 @@ export class Flight {
             f[o.type] = true;
         }
 
+        this._walls(move);
+        if (!this.running) return;       // 撞在窄道上没命了
+
         this._difficulty();
         this._hunger(dt);
 
@@ -430,8 +454,8 @@ export class Flight {
      * 也是同一个速度、同一个障碍密度。**一局的终点应该是撞死了,不是不再变难了。**
      *
      * 现在三样一起涨,而且**不封顶**:
-     *   speed     线性涨,一分钟多涨 45%
-     *   interval  越来越密,底线 300ms —— 再密就成了一堵墙
+     *   speed     线性涨,一分钟多涨 22%
+     *   interval  越来越密,底线 420ms —— 再密就成了一堵墙
      *   hazard    障碍占生成的比例,22% 一路涨到 55%
      *
      * 涨到后面必死,这是故意的:活得越久分越高,但没有「安全地刷」这条路。
@@ -515,6 +539,55 @@ export class Flight {
             f.wave = wave;
             sfx.play('event');
             f.waveFlashUntil = f.elapsed + 900;
+            // 第 2、5、8… 波各来一片窄道 —— 约一分钟一次。
+            // 从第二波起是为了先让人把两个键摸熟,别一上来就考试
+            if (wave >= 2 && wave % CORRIDOR_EVERY === 2) this._announceWall();
+        }
+    }
+
+    /** 排一片窄道。先只放预告,1.5 秒后云才真的推过来 */
+    _announceWall() {
+        const f = this.f;
+        if (f.warn || f.walls.length) return;      // 一片没过去不排下一片
+        const top = 30, span = HORIZON - 60;
+        const lane = Math.floor(this.rng() * LANES);
+        f.warn = { y: top + span * (lane + 0.5) / LANES, at: f.elapsed + CORRIDOR_WARN };
+        sfx.play('event');
+    }
+
+    /**
+     * 窄道的一步:该推出来的推出来,已经在场上的往左走、判碰。
+     *
+     * 宽度按**当时的速度**换算成 CORRIDOR_S 秒 —— 写死一个像素宽度的话,
+     * 开局要在里面待三秒(熬人),后期只要半秒(等于没有)。
+     * 要固定的是「按住多久」,不是「多少像素」。
+     */
+    _walls(move) {
+        const f = this.f;
+        if (f.warn && f.elapsed >= f.warn.at) {
+            const w = Math.max(CORRIDOR_MIN_W,
+                      Math.min(CORRIDOR_MAX_W, f.speed * 60 * CORRIDOR_S));
+            f.walls.push({ x: VW + 8, w: Math.round(w), gapY: f.warn.y });
+            f.warn = null;
+        }
+        for (let i = f.walls.length - 1; i >= 0; i--) {
+            const o = f.walls[i];
+            o.x -= move;
+            if (o.x + o.w < -8) { f.walls.splice(i, 1); continue; }
+            const inX = BIRD_X + HAZARD_R > o.x && BIRD_X - HAZARD_R < o.x + o.w;
+            if (!inX || Math.abs(f.birdY - o.gapY) < CORRIDOR_GAP) continue;
+            if (f.elapsed < f.hurtUntil) continue;
+            if (f.shield) { sfx.play('event'); f.shield = false; continue; }
+            sfx.play('hit');
+            f.lives--;
+            f.combo = 0;
+            f.hurtUntil = f.elapsed + 450;
+            // **撞了就把它卷进缝里。** 一片云要走一秒多,不这么做的话
+            // 挨打的无敌时间一过又撞一下,一片墙能吃掉三条命 ——
+            // 那是在罚「没躲开」这一个错误三次
+            f.birdY = o.gapY;
+            f.vy = 0;
+            if (f.lives <= 0) { this._finish('crash'); return; }
         }
     }
 
@@ -540,6 +613,19 @@ export class Flight {
         /** 第 i 条道的中间高度 */
         const laneY = i => top + span * (i + 0.5) / LANES;
         const pick = a => a[Math.floor(rnd() * a.length)];
+
+        // 窄道在场上的时候不再撒障碍 —— 云已经把天占满了,
+        // 再塞东西就是在一条唯一的路上设伏。
+        // 缝里改放吃的:**按住平飞的那一秒同时也是在进食**,
+        // 这样它不只是一道关卡,还接上了第五分钟之后的肚子条
+        const wall = this.f.walls[0];
+        if (wall) {
+            if (rnd() < 0.55) {
+                f.foods.push({ x: VW + 16, y: wall.gapY, type: pick(FOOD_TYPES) });
+            }
+            return;
+        }
+
         const r = rnd();
 
         if (r < 0.05) {
@@ -618,6 +704,7 @@ export class Flight {
         for (const o of f.foods)     this._drawItem(ctx, o.type, o.x, o.y);
         for (const o of f.powerups)  this._drawPowerup(ctx, o, t);
         for (const o of f.obstacles) this._drawObstacle(ctx, o);
+        this._drawWalls(ctx, f);
 
         this._drawBird(ctx, f);
 
@@ -708,6 +795,65 @@ export class Flight {
         plate(ctx, o.x, o.y, r, '#c98a1e');
         plate(ctx, o.x, o.y, r - 1, '#fffdf4');
         this._drawItem(ctx, o.type, o.x, o.y);
+    }
+
+    /**
+     * 窄道:两片乌云和中间那条缝,外加还没到之前的预告。
+     *
+     * 缝的边缘画成起伏的云疙瘩,但**疙瘩一律往外让,不往缝里长** ——
+     * 判定的缝是平的(±CORRIDOR_GAP),画面上的缝只会比它更宽。
+     * 反过来的话,玩家会撞上一块看着明明没碰到的云,
+     * 而「我看见的和游戏算的不是一回事」是最伤人的一种不公平。
+     */
+    _drawWalls(ctx, f) {
+        // 还没来:一条横穿画面的虚线标出缝在哪,右边缘一个方框
+        if (f.warn) {
+            const y = Math.round(f.warn.y);
+            const blink = Math.floor(f.elapsed / 110) % 2 === 0;
+            ctx.fillStyle = blink ? '#f5b83d' : '#c98a1e';
+            for (let x = 0; x < VW; x += 12) ctx.fillRect(x, y, 6, 1);
+            ctx.fillRect(VW - 10, y - CORRIDOR_GAP, 4, CORRIDOR_GAP * 2);
+            ctx.fillRect(VW - 22, y - CORRIDOR_GAP, 16, 2);
+            ctx.fillRect(VW - 22, y + CORRIDOR_GAP - 2, 16, 2);
+        }
+
+        for (const o of f.walls) this._drawWall(ctx, o);
+    }
+
+    _drawWall(ctx, o) {
+        const x0 = Math.round(o.x);
+        const gTop = Math.round(o.gapY - CORRIDOR_GAP);
+        const gBot = Math.round(o.gapY + CORRIDOR_GAP);
+        for (let dx = 0; dx < o.w; dx += 4) {
+            const x = x0 + dx;
+            if (x + 4 <= 0 || x >= VW) continue;
+            const w = Math.min(4, VW - x, x0 + o.w - x);
+            // 疙瘩按「离云的左边多远」算,不按屏幕坐标 ——
+            // 按屏幕算的话,云一往左走凹凸就在原地抖
+            let b = ((dx * 2654435761) >>> 0) % 3 * 4;
+            // **两头张成喇叭口。** 进口比中间宽,一是云本来就没有刀切的边,
+            // 二是「对准」和「待住」是两件事:让人先进得来,再考他按不按得稳
+            const edge = Math.min(dx, o.w - dx);
+            if (edge < 26) b += (26 - edge) * 0.9;
+            const t = Math.round(gTop - b), u = Math.round(gBot + b);
+
+            ctx.fillStyle = '#8a99a3';
+            if (t > 0) ctx.fillRect(x, 0, w, t);
+            if (u < HORIZON) ctx.fillRect(x, u, w, HORIZON - u);
+            // 云里横着几道暗纹。**没有它就是一块灰板** ——
+            // 这么大一片纯色,在一屏都是渐变天空的画面里最扎眼
+            ctx.fillStyle = '#78868f';
+            for (const d of [16, 30, 48]) {
+                if (t - d > 0) ctx.fillRect(x, t - d, w, 2);
+                if (u + d < HORIZON) ctx.fillRect(x, u + d - 2, w, 2);
+            }
+            ctx.fillStyle = '#5f6d78';                  // 贴着缝的那一面压暗
+            if (t > 6) ctx.fillRect(x, t - 6, w, 6);
+            if (u < HORIZON) ctx.fillRect(x, u, w, Math.min(6, HORIZON - u));
+            ctx.fillStyle = '#4a3628';                  // 描边
+            if (t > 0) ctx.fillRect(x, t - 1, w, 1);
+            if (u < HORIZON) ctx.fillRect(x, u, w, 1);
+        }
     }
 
     _drawObstacle(ctx, o) {
