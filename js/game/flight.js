@@ -27,7 +27,19 @@ export const H = 620;
 
 const HORIZON = 250;          // 飞行视角:海平线压在下面,大半屏是天
 const BIRD_X = 60;
-const HIT_R = 17;
+/**
+ * 命中半径。**吃的判得松,撞的判得紧,这是故意不对称的。**
+ *
+ * 原来食材和障碍共用一个 17。可后期一个东西一帧要走十几像素,
+ * 从看见到擦身而过只剩两三帧 —— 同一个数字下,「差一点没吃到」和
+ * 「差一点没撞上」出现得一样多,但玩家只会记住前者:
+ * **没吃到是我的损失,没撞上是理所当然。**
+ *
+ * 所以食材放到 22(比画面上那颗看着还大一圈,伸头就够得着),
+ * 障碍收到 15(擦着边过去算你过去了)。道具跟食材走。
+ */
+const FOOD_R = 22;
+const HAZARD_R = 15;
 
 /* ---------- 两个键 ----------
  *
@@ -43,14 +55,23 @@ const HIT_R = 17;
  * 三个状态各管一个方向,合起来是完整的上下控制 —— **但每一次改变高度
  * 都要提前一点点**,那一点点就是手感。飞不是「移到那儿」,是「攒够高度」。
  */
-/** 每帧的下坠加速度(以 60fps 为基准,和 move 一样乘 k) */
-const GRAVITY = 0.09;
-/** 拍一下翅膀给的初速度。升到最高约 47 像素 —— 五条道里的一道多一点 */
-const FLAP_VY = -2.9;
+/**
+ * 每帧的下坠加速度(以 60fps 为基准,和 move 一样乘 k)。
+ *
+ * 第一版是 0.09,弧线又高又慢:拍一下要 0.54 秒才到顶,而且**刚拍完
+ * 想往下走,得先花半秒把那股上冲的劲抵消掉**。于是常见的死法是
+ * 「看见了、也知道该往哪躲、就是身子还在往上飘」—— 那不是难,是迟钝。
+ *
+ * 现在把整条弧线按时间压短,高度基本不变(48px):
+ * 到顶 0.30 秒,从静止往下掉 0.30 秒也走 50px。**上下都在三分之一秒内起效。**
+ */
+const GRAVITY = 0.30;
+/** 拍一下翅膀给的初速度。升到最高约 48 像素 —— 五条道里的一道多一点 */
+const FLAP_VY = -5.4;
 /** 下坠的终速。不封的话最后一段快到看不清自己是怎么掉下去的 */
-const MAX_VY = 4.5;
+const MAX_VY = 6.5;
 /** 平飞时把纵向速度按住的力度。不是直接归零 —— 那样切换起来像瞬移 */
-const GLIDE_K = 0.35;
+const GLIDE_K = 0.5;
 /** 能飞的上下边。上面撞天花板只是停住,下面碰水面要挨一下 */
 const SKY_TOP = 22;
 const SEA_TOP = HORIZON - 16;
@@ -76,10 +97,16 @@ const SPEED_0 = 2.6;
  * 底盘抬高之后斜率就得压下来 —— 照旧的 0.9 走,五分钟时会比原来快四成,
  * 反应时间掉到半秒以下,那不是难,是看运气。
  */
-const SPEED_GROW = 0.45;
-/** 生成间隔每分钟压缩多少毫秒,以及压到哪儿为止 */
-const SPAWN_GROW = 170;
-const SPAWN_MIN = 300;
+const SPEED_GROW = 0.32;
+/**
+ * 生成间隔每分钟压缩多少毫秒,以及压到哪儿为止。
+ *
+ * 底线定在 380ms 而不是 300:**留出来的不是反应时间,是「拍两下」的时间。**
+ * 换两条道要连着拍两下并且提前起手,间隔比这个还短的话,
+ * 第二下永远来不及 —— 那时候躲不躲得掉就跟操作没关系了。
+ */
+const SPAWN_GROW = 150;
+const SPAWN_MIN = 380;
 
 /** 障碍占生成的比例:开局 22%,一路涨到 55% */
 const HAZARD_0 = 0.22;
@@ -91,6 +118,8 @@ const WAVE_MS = 20_000;
  * 密度上去之后如果不留道,就成了随机送死,那不叫难,叫不讲理。
  */
 const LANES = 5;
+/** 食材出现在哇鸥当下高度的上下这么多像素之内。约等于两下翅膀 */
+const REACH = 72;
 
 /* ---------- 五分钟之后:饿 ---------- */
 /** 从这一刻起开始饿。前五分钟只用管躲 */
@@ -321,7 +350,7 @@ export class Flight {
         }
 
         const move = f.speed * k;
-        const hit = (o) => Math.abs(BIRD_X - o.x) < HIT_R && Math.abs(f.birdY - o.y) < HIT_R;
+        const hit = (o, r) => Math.abs(BIRD_X - o.x) < r && Math.abs(f.birdY - o.y) < r;
 
         // 食材
         for (let i = f.foods.length - 1; i >= 0; i--) {
@@ -336,7 +365,7 @@ export class Flight {
                     o.y += dy * 0.04 * k;
                 }
             }
-            if (hit(o)) {
+            if (hit(o, FOOD_R)) {
                 sfx.play('pickup');
                 f.foods.splice(i, 1);
                 f.collected[o.type] = (f.collected[o.type] ?? 0) + 1;
@@ -358,7 +387,7 @@ export class Flight {
             const o = f.obstacles[i];
             o.x -= move;
             if (o.x < -24) { f.obstacles.splice(i, 1); continue; }
-            if (!hit(o)) continue;
+            if (!hit(o, HAZARD_R)) continue;
 
             f.obstacles.splice(i, 1);
             if (f.shield) {
@@ -378,7 +407,7 @@ export class Flight {
             const o = f.powerups[i];
             o.x -= move;
             if (o.x < -24) { f.powerups.splice(i, 1); continue; }
-            if (!hit(o)) continue;
+            if (!hit(o, FOOD_R)) continue;
             f.powerups.splice(i, 1);
             f[o.type] = true;
         }
@@ -493,24 +522,40 @@ export class Flight {
         const f = this.f;
         const rnd = this.rng;
         const top = 30, span = HORIZON - 60;
-        const y = () => top + rnd() * span;
+        /**
+         * 食材出在哪个高度。**在够得着的范围里随机,而不是整片天随机。**
+         *
+         * 原来是整片天均匀抽:后期一个东西从露头到擦身而过只有一秒出头,
+         * 抽在另一头的那些**从出生起就吃不到** —— 玩家看着它飘过去,
+         * 学不到任何东西,只觉得这游戏在馋他。
+         *
+         * 现在以哇鸥当下的高度为中心、上下各 REACH 抽。REACH 是两下翅膀
+         * 的距离:够得着,但得动;而它飞过来的这一秒里哇鸥自己也在动,
+         * 所以并不会变成「张嘴等着」。
+         */
+        const foodY = () => {
+            const c = f.birdY + (rnd() * 2 - 1) * REACH;
+            return Math.max(top, Math.min(top + span, c));
+        };
         /** 第 i 条道的中间高度 */
         const laneY = i => top + span * (i + 0.5) / LANES;
         const pick = a => a[Math.floor(rnd() * a.length)];
         const r = rnd();
 
         if (r < 0.05) {
-            f.powerups.push({ x: VW + 16, y: y(), type: pick(POWERUPS) });
+            f.powerups.push({ x: VW + 16, y: foodY(), type: pick(POWERUPS) });
         } else if (r < 0.05 + f.hazard) {
+            // 障碍**不跟着哇鸥走** —— 跟着走就成了追着人扔石头,
+            // 而它靠的是「一簇里必留一条空道」那套规矩
             this._hazard(1 + Math.floor(f.wave / 4), laneY);
         } else {
-            f.foods.push({ x: VW + 16, y: y(), type: pick(FOOD_TYPES) });
+            f.foods.push({ x: VW + 16, y: foodY(), type: pick(FOOD_TYPES) });
         }
 
         // 天气影响额外生成
         if (this.state.weather === 'rainy' && rnd() < 0.3) this._hazard(1, laneY);
         if (this.state.weather === 'foggy' && rnd() < 0.25) {
-            f.foods.push({ x: VW + 16, y: y(), type: pick(FOOD_TYPES) });
+            f.foods.push({ x: VW + 16, y: foodY(), type: pick(FOOD_TYPES) });
         }
     }
 
@@ -688,9 +733,9 @@ export class Flight {
         // 刚拍完那 220ms 一定是扬起的那一帧 —— 反馈得贴着按键,
         // 不能等速度真的变正了才换,那时候手感已经过去了
         let i = Math.floor(t / 1000 * 10) % 4;
-        if (t - f.flapAt < 220 || f.vy < -0.6) i = 0;   // 往上蹿 -> 翅膀扬起
+        if (t - f.flapAt < 180 || f.vy < -1.5) i = 0;  // 往上蹿 -> 翅膀扬起
         else if (f.glide) i = 1;                       // 平飞    -> 摊平
-        else if (f.vy > 1.2) i = 2;                    // 往下掉  -> 翅膀压下
+        else if (f.vy > 2.5) i = 2;                    // 往下掉  -> 翅膀压下
         const key = hurt ? 'waou_hurt' + i : 'waou' + i;
         const cv = hurt
             ? sprite(key, WAOU[i], { remap: { w: '#ffd0c4', V: '#f0b8b0' } })
