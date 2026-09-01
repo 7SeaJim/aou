@@ -818,16 +818,19 @@ const feedPops = [];
 const RUNWAY_X = 396;
 /**
  * 屋子底下那根栖木比甲板高多少(相对 SHED_Y 那条基线)。
- * 精灵图 64 高、底边落在 SHED_Y,栖木在图里第 26 行 —— 64-26 = 38 格。
+ * 精灵图 72 高、底边落在 SHED_Y,栖木在图里第 26 行 —— 72-26 = 46 格。
  * **改跑道的图的时候这个数要跟着改**,不然老翘会陷进屋子里或者浮在半空。
  */
-const RUNWAY_TOP = -38;
+const RUNWAY_TOP = -46;
 
 /** 跑道。没建的时候画地基和两根空杆 —— 让人看得见这儿会有个东西 */
 export function paintRunway(ctx, deckY, built, phase = 'day') {
     const key = built ? 'runway' : 'runway_off';
     const base = deckY + SHED_Y;
-    shadow(ctx, RUNWAY_X, base, 40, 0.2);
+    // 影子的宽度**要跟着落地的那块走**,不是跟着整张图走。
+    // 原来写 40 —— 那是屋子的宽度,可落在甲板上的只有 12 格宽的底座,
+    // 于是一根 4 格宽的杆子底下摊着一片比它宽十倍的影子,一眼就不对。
+    shadow(ctx, RUNWAY_X, base, 14, 0.2);
     drawStanding(ctx, shadedSprite(key, SCENERY[key], phase), RUNWAY_X, base);
 }
 
@@ -853,7 +856,9 @@ const CREW_SPOT = {
     // 老鸟站台面上、挨着旗子;小鸟站坡底下的起点。
     // 「老鸟经验丰富,小鸟胆子更大」—— 一个在高处看,一个在起跑线上
     laoqiao: { x: RUNWAY_X - 12, dy: RUNWAY_TOP },   // 站栖木左端,让开门洞
-    yaya:    { x: RUNWAY_X + 4, dy: 0 },             // 杆子底下,起跑线上
+    // 站杆子**旁边**,不是正前面 —— 正前面会把底座整个挡住,
+    // 「杆子立在甲板上」这句话就没了
+    yaya:    { x: RUNWAY_X - 14, dy: 0 },
 };
 
 /**
