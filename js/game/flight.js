@@ -741,8 +741,15 @@ export class Flight {
         this.phase = dayPhase(now());
         this._bakeSky(weather, this.phase);
         ctx.drawImage(this.sky.cv, 0, 0);
-        // 飞行时云和远处的鸟走得比大坝上快,才有在赶路的感觉
+        // 飞行时云和远处的鸟走得比大坝上快,才有在赶路的感觉。
+        //
+        // **但装饰云在这一场里得退到背景里去** —— 别处它只是天上的云,
+        // 这一场里「云」是会要命的东西(障碍之一就是乌云),
+        // 而入夜之后 shadedSprite 把装饰云也压成灰的,两者在天上一模一样。
+        // 玩家分不清哪朵能穿、哪朵不能,飞一会儿眼睛就花了。
+        ctx.globalAlpha = this.phase === 'night' ? 0.42 : this.phase === 'day' ? 0.8 : 0.6;
         drawClouds(ctx, t * 3, weather, this.phase);
+        ctx.globalAlpha = 1;
         drawFarGulls(ctx, t * 2);
         drawSea(ctx, weather, HORIZON, VH, t * 2, this.phase);
 
@@ -826,8 +833,21 @@ export class Flight {
         paintSky(this.sky.ctx, weather, HORIZON, 0.55, phase);
     }
 
-    /** 食材/道具直接用 UI 图标那批 16×16,捡到的东西和背包里长得一样 */
+    /**
+     * 天上飞的东西分三档,**每一档一个徽记,一眼分得出能不能碰**:
+     *
+     *   食材  一圈奶白细边          能吃
+     *   道具  白盘 + 金边            能吃,而且是好东西
+     *   障碍  深底 + 红边            碰不得
+     *
+     * 原来三档都是光秃秃一张 16×16 贴上去,靠「认出这是饵块还是风筝」来判断 ——
+     * 后期一秒钟从眼前过四五个,谁也来不及一个个认。
+     * **该让人认的是「这一类」,不是「这一个」。**
+     */
     _drawItem(ctx, name, x, y) {
+        // 奶白细边:图标 16 宽,底盘 18 —— 正好露出一圈 1 像素。
+        // 不用整块盘子,食材要保持轻,重的留给障碍
+        plate(ctx, x, y, 9, '#fffdf4');
         if (this.sprites?.draw(ctx, name, x, y, 16)) return;
         drawSprite(ctx, sprite(name, ICON_GRIDS[name]), x, y);
     }
@@ -902,6 +922,15 @@ export class Flight {
     }
 
     _drawObstacle(ctx, o) {
+        // 深底把它从天上抠出来,红边说明这一类碰不得。
+        // **底色用深蓝灰而不是纯黑** —— 乌云本身是灰的,压在纯黑上反而糊,
+        // 压在比天更暗一档的蓝灰上才跳得出来
+        // 半径就是 HAZARD_R —— **徽记有多大,判定就有多大**。
+        // 原来贴图 16~22 宽、判定 30 宽,红边一画就把这个差补上了:
+        // 现在「看着碰上了」和「算作碰上了」是同一件事
+        plate(ctx, o.x, o.y, HAZARD_R, '#241a13');
+        plate(ctx, o.x, o.y, HAZARD_R - 1, '#e8384f');
+        plate(ctx, o.x, o.y, HAZARD_R - 3, '#2b3a44');
         const grid = SCENERY[OBSTACLE_GRID[o.type]];
         drawSprite(ctx, sprite(OBSTACLE_GRID[o.type], grid), o.x, o.y);
     }
