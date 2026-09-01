@@ -454,15 +454,37 @@ export const CREW = [
       effect: { show: 0.25 }, desc: '表演招人,投喂快 25%',
       line: '「我会翻跟头。真的。」' },
     { id: 'laoqiao',name: '老翘', cost: 1800, icon: 'crew_laoqiao', affinity: 30,
-      effect: { haul: 1 },     desc: '每次觅食多带 1 个',
+      effect: { haul: 1 },     desc: '每次觅食多带 1 个 · 飞行时替你盯着障碍',
       line: '「飞了十二年,哪片水下面有什么我都记得。」' },
     { id: 'dundun', name: '墩墩', cost: 2600, icon: 'crew_dundun', affinity: 42,
       effect: { offline: 0.10 }, desc: '离线少亏 10%',
       line: '「你不在的时候,我看着摊子。」' },
     { id: 'yaya',   name: '丫丫', cost: 3800, icon: 'crew_yaya', affinity: 56,
-      effect: { rare: 0.5 },   desc: '稀有食材多出 50%',
+      effect: { rare: 0.5 },   desc: '稀有食材多出 50% · 飞行时隔一阵替你挡一下',
       line: '「菌子在哪儿,我闻得到。」' },
 ];
+
+/**
+ * 两只伙计在飞行里另外管的事。**这是加在原来那条加成上的,不是换掉。**
+ *
+ * 六只伙计原来全在管摊子:出餐快、卖得贵、离线少亏……
+ * 于是觅食那边招不招人一个样,而觅食恰恰是每天都要点开的那个玩法。
+ * 这两条把它接上了,而且各接各的性子:
+ *
+ *   老翘  飞了十二年,一眼看出哪片云能穿 —— 判定缩小,红角标得更长
+ *   丫丫  歪着头四处嗅,总是先一步撞上东西 —— 隔一阵替你挨一下
+ *
+ * **老翘管的是「少撞」,丫丫管的是「撞了不亏」。** 一个在前,一个在后,
+ * 两个都招了也不重叠。
+ */
+export const CREW_FLIGHT = {
+    /** 老翘:障碍的判定半径从 15 缩到这个数 */
+    laoqiaoHazardR: 12,
+    /** 老翘:红角的臂长(没招是 4) */
+    laoqiaoArm: 7,
+    /** 丫丫:多久能再挡一次(毫秒) */
+    yayaMs: 22_000,
+};
 
 /** 招进来的伙计加总。没招人时全是 0。 */
 export function crewBonus(hired = []) {

@@ -17,7 +17,7 @@ import {
     VW, VH, paintSky, drawSea, drawClouds, drawFarGulls, drawRain, drawFog,
 } from './scene.js';
 import { ICON_GRIDS, SCENERY, WAOU } from './pixels.js';
-import { dayPhase } from '../data.js';
+import { dayPhase, CREW_FLIGHT } from '../data.js';
 import { now } from '../clock.js';
 
 /** 显示画布的尺寸。玩法本身跑在 440×310 的虚拟坐标里(见 scene.js), */
@@ -40,6 +40,13 @@ const BIRD_X = 60;
  */
 const FOOD_R = 22;
 const HAZARD_R = 15;
+/**
+ * 红角的臂长。**只要四个角,不要一整个框** ——
+ * 第一版画到 6,四个角快连成一圈,天上全是红方块,比不做记号还吵。
+ * 4 就够:眼睛会自己把四个直角补成一个框(这是白送的),
+ * 而墨水少一半。招了老翘会长到 7,那是另一回事(见下)。
+ */
+const CORNER_ARM = 4;
 
 /* ---------- 两个键 ----------
  *
@@ -250,6 +257,9 @@ export class Flight {
     start() {
         const w = weatherOf(this.state);
         const lv = this.state.level;
+        const crew = this.state.crew ?? [];
+        const laoqiao = crew.includes('laoqiao');
+        const yaya = crew.includes('yaya');
         // 跑道给的三条加成。没建跑道时全是 0,下面的算式原样退回原来的数
         const rw = runwayBonus(this.state);
 
@@ -292,6 +302,15 @@ export class Flight {
             maxCombo: 0,
             collected: {},
             itemCount: 0,
+            /* ---- 伙计鸥 ---- */
+            // 老翘:判定缩一圈,红角画长一点。**这两件事必须一起做** ——
+            // 只缩判定的话玩家根本感觉不到(他看见的还是那么大一块),
+            // 只标清楚的话又只是好看。缩了就得让他看见缩了
+            hazR: laoqiao ? CREW_FLIGHT.laoqiaoHazardR : HAZARD_R,
+            arm: laoqiao ? CREW_FLIGHT.laoqiaoArm : CORNER_ARM,
+            // 丫丫:下一次能替你挡的时刻。-1 = 没招她。开局就是满的
+            yayaAt: yaya ? 0 : -1,
+            yayaFlash: 0,
             // 道具在开局消耗,一局有效
             shield: (this.state.items.shield ?? 0) > 0,
             magnet: (this.state.items.magnet ?? 0) > 0,
@@ -390,6 +409,11 @@ export class Flight {
             dist: Math.round(this.f.elapsed / 1000 * M_PER_SEC),
             hungry: this.f.elapsed >= HUNGRY_AT,
             count: Math.max(0, Math.ceil(this.f.countdown / 1000)),
+            // 丫丫:-1 没招她,0 现在就能挡,>0 还要等几秒。
+            // **得让玩家知道现在有没有这一层** —— 看不见的保命等于没有,
+            // 他要么白白紧张,要么以为还有结果没有
+            yaya: this.f.yayaAt < 0 ? -1
+                : Math.max(0, Math.ceil((this.f.yayaAt - this.f.elapsed) / 1000)),
             hunger: this.f.hunger,
             shield: this.f.shield, magnet: this.f.magnet, double: this.f.double,
         });
@@ -475,14 +499,10 @@ export class Flight {
             const o = f.obstacles[i];
             o.x -= move;
             if (o.x < -24) { f.obstacles.splice(i, 1); continue; }
-            if (!hit(o, HAZARD_R)) continue;
+            if (!hit(o, f.hazR)) continue;
 
             f.obstacles.splice(i, 1);
-            if (f.shield) {
-                sfx.play('event');      // 护盾挡下:响一下但不是挨打那声
-                f.shield = false;
-                continue;
-            }
+            if (this._absorb()) continue;
             sfx.play('hit');
             f.lives--;
             f.combo = 0;
@@ -554,6 +574,25 @@ export class Flight {
     }
 
     /**
+     * 有没有东西替这一下挨了。
+     *
+     * **先花会回来的那个。** 丫丫过一阵就好了,护盾用掉就没了 ——
+     * 反过来花的话,玩家会在丫丫满着的时候白扔一个护盾,
+     * 而那个护盾是他花钱买的。
+     */
+    _absorb() {
+        const f = this.f;
+        if (f.yayaAt >= 0 && f.elapsed >= f.yayaAt) {
+            f.yayaAt = f.elapsed + CREW_FLIGHT.yayaMs;
+            f.yayaFlash = f.elapsed + 800;
+            sfx.play('event');
+            return true;
+        }
+        if (f.shield) { sfx.play('event'); f.shield = false; return true; }
+        return false;
+    }
+
+    /**
      * 掉到水面上。**扣一条命,然后自己蹬水起飞** ——
      * 不直接判死是因为这是只海鸥:落在滇池上再飞起来是它每天干的事,
      * 而一个「碰到底就结束」的下边界,配上重力,会让人不敢往下飞。
@@ -568,6 +607,9 @@ export class Flight {
         f.vy = FLAP_VY * 1.6;
         if (f.countdown > 0) return;          // 倒计时里随便掉,不算
         if (f.elapsed < f.hurtUntil) return;  // 挨打的那几百毫秒里不重复扣
+        // **掉进湖里丫丫不管。** 她挡的是迎面来的东西,
+        // 而沉下去是自己没拍翅膀 —— 一个连自己失误都替你兜的伙计,
+        // 玩家很快就不看屏幕了。护盾是花钱买的,那个照挡
         if (f.shield) { sfx.play('event'); f.shield = false; return; }
         sfx.play('hit');
         f.lives--;
@@ -640,10 +682,10 @@ export class Flight {
             const o = f.walls[i];
             o.x -= move;
             if (o.x + o.w < -8) { f.walls.splice(i, 1); continue; }
-            const inX = BIRD_X + HAZARD_R > o.x && BIRD_X - HAZARD_R < o.x + o.w;
+            const inX = BIRD_X + f.hazR > o.x && BIRD_X - f.hazR < o.x + o.w;
             if (!inX || Math.abs(f.birdY - o.gapY) < CORRIDOR_GAP) continue;
             if (f.elapsed < f.hurtUntil) continue;
-            if (f.shield) { sfx.play('event'); f.shield = false; continue; }
+            if (this._absorb()) continue;
             sfx.play('hit');
             f.lives--;
             f.combo = 0;
@@ -798,6 +840,7 @@ export class Flight {
         this._drawWalls(ctx, f);
 
         this._drawBird(ctx, f);
+        this._drawYaya(ctx, f);
 
         if (weather === 'rainy') drawRain(ctx, t, HORIZON);
         if (weather === 'foggy') drawFog(ctx, t, HORIZON);
@@ -963,28 +1006,40 @@ export class Flight {
     _drawObstacle(ctx, o) {
         const grid = SCENERY[OBSTACLE_GRID[o.type]];
         drawSprite(ctx, sprite(OBSTACLE_GRID[o.type], grid), o.x, o.y);
-        this._corners(ctx, o.x, o.y, HAZARD_R);
+        this._corners(ctx, o.x, o.y, this.f.hazR, this.f.arm);
     }
 
     /**
-     * 四个红直角。半径就是 HAZARD_R —— **框有多大,判定就有多大**。
+     * 四个红直角。**半径就是当前的判定半径** —— 框有多大,判定就有多大,
+     * 所以招了老翘之后框会跟着缩:他把判定缩小这件事是**看得见**的。
      *
-     * 每个角先用深色描一遍再压红:红在白天的浅蓝天上够跳,
-     * 但在黄昏那片橙红里会糊掉,底下垫一道深褐就哪种天都站得住。
+     * 臂长不到半边:眼睛会自己把四个直角补成一个框,这是白送的,
+     * 画满一圈只会把天空糊掉。老翘把臂加长到 7,再压一道亮线 ——
+     * **他缩掉的那一圈,得用更清楚的标记还回来**,不然玩家只觉得「变小了」,
+     * 不觉得「他在帮我」。
+     *
+     * 每个角先用深褐描一遍再压红:红在白天的浅蓝天上够跳,
+     * 在黄昏那片橙红里会糊,垫一道深褐就哪种天都站得住。
      * (整张画面里只有这一处是纯红,它专管一件事:别碰。)
      */
-    _corners(ctx, cx, cy, r, color = '#e8384f') {
+    _corners(ctx, cx, cy, r, arm = CORNER_ARM) {
         const x = Math.round(cx) - r, y = Math.round(cy) - r, d = r * 2;
-        const arm = 6, w = 2;
+        const w = 2;
+        const keen = arm > CORNER_ARM;          // 老翘在
         for (const [sx, sy] of [[0, 0], [1, 0], [0, 1], [1, 1]]) {
             const px = x + (sx ? d - w : 0), py = y + (sy ? d - w : 0);
             const ax = x + (sx ? d - arm : 0), ay = y + (sy ? d - arm : 0);
             ctx.fillStyle = '#241a13';
             ctx.fillRect(ax - 1, py - 1, arm + 2, w + 2);   // 横臂的底
             ctx.fillRect(px - 1, ay - 1, w + 2, arm + 2);   // 竖臂的底
-            ctx.fillStyle = color;
+            ctx.fillStyle = '#e8384f';
             ctx.fillRect(ax, py, arm, w);
             ctx.fillRect(px, ay, w, arm);
+            if (keen) {                                     // 里侧压一道亮线
+                ctx.fillStyle = '#ffd0c4';
+                ctx.fillRect(ax, py + (sy ? 0 : w - 1), arm, 1);
+                ctx.fillRect(px + (sx ? 0 : w - 1), ay, 1, arm);
+            }
         }
     }
 
@@ -1016,6 +1071,24 @@ export class Flight {
         drawSprite(ctx, cv, BIRD_X, f.birdY);
 
         if (f.shield) this._drawShield(ctx, f);
+    }
+
+    /**
+     * 丫丫挡下来的那一下:她自己从哇鸥背后探出来,顶半秒。
+     *
+     * 不画成一圈光效 —— **玩家得知道是谁挡的**。多花的钱要看得见回来,
+     * 一个只在数字上生效的伙计,和没招是一样的。
+     */
+    _drawYaya(ctx, f) {
+        const left = f.yayaFlash - f.elapsed;
+        if (left <= 0) return;
+        const p = left / 800;
+        // 摆在哇鸥**前上方**:她是飞到前头去替你挨的那一下,
+        // 不是从背后冒出来。压在哇鸥头上的话像多长了个脑袋
+        const y = f.birdY - 14 - Math.round(p * 8);
+        drawSprite(ctx, sprite('crew_yaya', ICON_GRIDS.crew_yaya), BIRD_X + 22, y);
+        ctx.fillStyle = `rgba(119, 178, 85, ${(p * 0.9).toFixed(3)})`;
+        ctx.fillRect(BIRD_X - 14, Math.round(f.birdY) + 14, 28, 2);
     }
 
     /** 护盾:一圈像素虚线环,不用 arc(),免得出软边 */

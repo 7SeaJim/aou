@@ -257,6 +257,7 @@ function startFlight(sprites) {
         score: H_('flyScore'), lives: H_('flyLives'), combo: H_('flyCombo'),
         wave: H_('flyWave'), dist: H_('flyDist'), hungry: H_('flyHungry'),
         count: H_('flyCount'),
+        yaya: H_('flyYaya'), yayaText: H_('flyYayaText'),
     };
 
     // 道具在开局扣除
@@ -285,6 +286,12 @@ function startFlight(sprites) {
             flyHud.dist.textContent = hud.dist;
             // 肚子条画在画布上,这儿只负责把「饿了」这个词摆出来
             flyHud.hungry.hidden = !hud.hungry;
+            // 丫丫:-1 是没招她,这条 chip 就一直不出现
+            flyHud.yaya.hidden = hud.yaya < 0;
+            if (hud.yaya >= 0) {
+                flyHud.yayaText.textContent = hud.yaya === 0 ? '护着' : `${hud.yaya}s`;
+                flyHud.yayaText.style.color = hud.yaya === 0 ? 'var(--leaf)' : '';
+            }
             // 开局那三秒的大数字。**用 DOM 不用画布** ——
             // 画布上没有像素字体,写上去就是一团糊
             flyHud.count.hidden = hud.count <= 0;
