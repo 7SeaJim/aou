@@ -59,22 +59,74 @@
            一个手一个,和键盘上空格在左、方向键在右是同一套位置关系。
            挤在同一边的话,一只手要横着够两个,而平飞是要一直按住的。
 
-           做得大是因为手机:一个 56px 高的按钮才是拇指点得中的,
-           原来那个 px-btn--sm 在真机上只有指甲盖那么点。 */
+           做成圆的、做得大,都是为了手机:一个 88px 的圆才是拇指点得中的。
+           **但像素画里没有真圆** —— 用 border-radius 会出一圈抗锯齿的灰边,
+           整张画面里就这两个地方是糊的。所以 clip-path 走的是
+           16×16 像素圆的那条阶梯轮廓:边缘全是直角,放大多少倍都不糊。
+           (和画布上 plate() 用切角方块当「圆」是同一个道理。) */
         .fly-key {
-            position: absolute; bottom: 16px; z-index: 25;
-            min-width: 116px; padding: 15px 14px;
-            font-size: 17px; line-height: 1.1;
+            /* **直径必须是 16 的整数倍。** 阶梯轮廓是按 16 格算的,
+               96/16 = 6 —— 每一级正好 6 个 CSS 像素,边缘落在整数上不会糊。
+               88 的话每级 5.5px,浏览器会给每一级抹一道抗锯齿的灰。
+               里面那圈同理:缩 8px 之后是 80,80/16 = 5,还是整数。 */
+            --d: 96px;
+            --ring: 8px;
+            position: absolute; bottom: 18px; z-index: 25;
+            width: var(--d); height: var(--d); padding: 0;
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center; gap: 3px;
+            border: none; background: var(--ink); cursor: pointer;
+            font-family: var(--font-pixel); color: var(--ink); line-height: 1;
+            clip-path: polygon(
+                68.75% 0%, 68.75% 6.25%, 81.25% 6.25%, 81.25% 12.5%, 87.5% 12.5%,
+                87.5% 18.75%, 93.75% 18.75%, 93.75% 31.25%, 100% 31.25%, 100% 68.75%,
+                93.75% 68.75%, 93.75% 81.25%, 87.5% 81.25%, 87.5% 87.5%, 81.25% 87.5%,
+                81.25% 93.75%, 68.75% 93.75%, 68.75% 100%, 31.25% 100%, 31.25% 93.75%,
+                18.75% 93.75%, 18.75% 87.5%, 12.5% 87.5%, 12.5% 81.25%, 6.25% 81.25%,
+                6.25% 68.75%, 0% 68.75%, 0% 31.25%, 6.25% 31.25%, 6.25% 18.75%,
+                12.5% 18.75%, 12.5% 12.5%, 18.75% 12.5%, 18.75% 6.25%, 31.25% 6.25%,
+                31.25% 0%);
+            /* 厚底。**不能用 box-shadow** —— clip-path 会把它一起剪掉;
+               drop-shadow 是跟着剪完的形状走的,所以圆边下面才有那一道厚 */
+            filter: drop-shadow(0 6px 0 var(--ink));
             /* 连点几十下的东西,别让它选中文字、别触发双击缩放 */
             user-select: none; -webkit-user-select: none;
             touch-action: manipulation;
         }
-        .fly-key--l { left: 16px; }
-        .fly-key--r { right: 16px; }
-        .fly-key kbd { font: inherit; opacity: .7; margin-right: 5px; }
+        /* 里面那块金色。父元素是描边色,这一层往里缩一圈就是那道边。
+           **明暗用 linear-gradient 不用 inset box-shadow** ——
+           inset 阴影是贴着方盒子画的,剪成圆之后就成了顶上一道平盖、
+           底下一道平托,像给硬币扣了个盒盖;渐变是先铺满再一起剪,
+           亮暗跟着圆边走,才像个球。 */
+        .fly-key::before {
+            content: ''; position: absolute; inset: var(--ring);
+            clip-path: inherit;
+            background: linear-gradient(
+                var(--gold-l) 0 14%, var(--gold) 14% 78%, var(--gold-d) 78% 100%);
+        }
+        .fly-key > * { position: relative; z-index: 1; }
+        .fly-key:hover { filter: drop-shadow(0 6px 0 var(--ink)) brightness(1.08); }
+        .fly-key:active {
+            transform: translateY(6px);
+            filter: none;
+        }
+        .fly-key--l { left: 18px; }
+        .fly-key--r { right: 18px; }
+        .fly-key kbd { font: inherit; font-size: 13px; opacity: .6; }
+        .fly-key b { font-weight: normal; font-size: 20px; }
         @media (max-width: 560px) {
-            .fly-key { min-width: 96px; padding: 14px 10px; font-size: 15px; }
-            .fly-hud { right: 108px; }
+            .fly-key { --d: 80px; }        /* 80/16 = 5,里圈 64/16 = 4,都是整数 */
+            .fly-key kbd { font-size: 11px; }
+            .fly-key b { font-size: 16px; }
+            /* 窄屏上画面只有两百多像素高,五个状态条按原尺寸要占三行 ——
+               **状态条吃掉的是能飞的地方**。收紧到两行 */
+            .fly-hud { right: 116px; gap: 5px; }
+            .fly-hud .px-chip { padding: 3px 7px; font-size: 12px; gap: 5px; }
+            .fly-hud .px-icon { width: 12px; height: 12px; }
+            /* 右上角那两个也收一收 —— 状态条让开的那一截就是按它们算的,
+               它们不收,最后一个 chip 就会钻到「暂停」底下 */
+            .fly-ctrl { gap: 6px; }
+            .fly-ctrl .px-btn { padding: 5px 8px; font-size: 12px; }
         }
         /* 开局那三秒的数字。压在画面正中,不吃点击 —— 这三秒里
            两个键是通的,数字挡住按钮就白给了 */
@@ -170,8 +222,8 @@
                         <i class="px-icon px-icon--erkuai"></i> 饿了!快吃
                     </span>
                 </div>
-                <button class="px-btn fly-key fly-key--l" id="flyFlap"><kbd>空格</kbd>跃起</button>
-                <button class="px-btn fly-key fly-key--r" id="flyGlide"><kbd>→</kbd>平飞</button>
+                <button class="fly-key fly-key--l" id="flyFlap"><kbd>空格</kbd><b>跃起</b></button>
+                <button class="fly-key fly-key--r" id="flyGlide"><kbd>→</kbd><b>平飞</b></button>
                 <div class="fly-ctrl">
                     <button class="px-btn px-btn--sm" id="flyPause">⏸ 暂停</button>
                     <button class="px-btn px-btn--sm px-btn--coral" id="flyQuit">收工</button>

@@ -366,6 +366,9 @@ wa.stall(0, 'shao_erkuai')   // 第 0 格摆烧饵块
 wa.maxUp()         // 四条升级线拉满,看数值天花板
 wa.shows()         // 表演:解锁了哪些节目、多久投喂一次
 wa.hour(20)        // 把时钟拨到 20 点 —— 小屋按时段开门,不然得真等到晚上
+wa.nextDay()       // 跳到第二天。觅食 5 次、每日一杯、占卜、市场限量一起重置
+                   // wa.nextDay(3) 跳三天,wa.nextDay(null) 回到今天
+                   // 它只挪时钟,不动 lastSeen —— 离线结算是 wa.away(h) 的事
 wa.drink('puer')   // 再发一杯,反复试「请哇鸥喝」
 wa.reFortune()     // 清掉今日占卜,好再转一卦
 wa.season('winter')// 拨季节 —— 冬天才招得到伙计,不然要等到 11 月

@@ -412,13 +412,13 @@ export function installDev({ getState, mutate, storage, fly, getFlight, rules, u
         season(name) {
             if (name === null || name === undefined) {
                 devMonth = null;
-                if (devHour === null) setClock(null);
+                syncClock();
                 return '恢复真实季节 —— ' + rules.seasonNow().name + '季';
             }
             const m = { winter: 0, spring: 4, summer: 6, autumn: 9 }[name];
             if (m === undefined) return "传 'winter' / 'spring' / 'summer' / 'autumn',或 null 恢复";
             devMonth = m;
-            setClock(devNow);
+            syncClock();
             return rules.seasonNow().name + '季';
         },
 
@@ -430,11 +430,35 @@ export function installDev({ getState, mutate, storage, fly, getFlight, rules, u
             return this.s.crew;
         },
 
+        /**
+         * 跳到第二天(传 n 就跳 n 天,负数往回,null 回到今天)。
+         *
+         * 每天重置的东西有一串:觅食 5 次、每日一杯、每日一卦、市场限量。
+         * 它们全都拿 `toDateString()` 当钥匙,所以**只要时钟往前挪一天,
+         * 这几样自己就过期了** —— 不用一个个去清字段,那样漏一个就是
+         * 「我明明跳天了,市场怎么还是卖光的」。
+         *
+         * 不动 `lastSeen`:离线结算是另一回事,那个用 `wa.away(h)`。
+         * 两个搅在一起的话,想看「新的一天」就会顺带吃到一笔离线收入,
+         * 分不清哪个数是哪来的。
+         */
+        nextDay(n = 1) {
+            if (n === null) { devDay = 0; syncClock(); return '回到今天 —— ' + devNow().toLocaleDateString('zh-CN'); }
+            devDay += n;
+            syncClock();
+            let rolled = false;
+            mutate(st => { rolled = rules.refreshDaily(st, devNow()); });
+            const st = getState();
+            return `${devNow().toLocaleDateString('zh-CN')}(偏移 ${devDay} 天)`
+                 + ` · 觅食 ${st.dailyTries} 次 · 今日饮品 ${st.drink ?? '无'}`
+                 + ` · 占卜和市场${rolled ? '已重开' : '没变(同一天)'}`;
+        },
+
         /** 小屋:把时钟拨到某个时段看效果。传 null 恢复真实时间。 */
         hour(h) {
-            if (h === null || h === undefined) { devHour = null; setClock(null); return '恢复真实时间'; }
+            if (h === null || h === undefined) { devHour = null; syncClock(); return '恢复真实时间'; }
             devHour = h;
-            setClock(devNow);
+            syncClock();
             return `时钟按 ${h} 点算 —— ${['深夜','','','','','','出去了','出去了','出去了','出去了','出去了','晌午','晌午','晌午','出去了','出去了','出去了','出去了','晚上','晚上','晚上','晚上','深夜','深夜'][h] || '出去了'}`;
         },
 
@@ -532,6 +556,7 @@ export function installDev({ getState, mutate, storage, fly, getFlight, rules, u
                 'wa.maxUp()':      '四条升级线拉满',
                 'wa.shows()':      '表演:解锁了哪些节目、多久投喂一次',
                 'wa.hour(h)':      '把时钟拨到 h 点(小屋按时段开门)',
+                'wa.nextDay(n)':   '跳到第二天(觅食次数/每日一杯/占卜/市场全部重置);null 回到今天',
                 'wa.drink(k)':     "再发一杯 —— 'puer' / 'coffee'",
                 'wa.reFortune()':  '清掉今日占卜,好再转一次',
                 'wa.season(s)':    "拨季节 — 'winter' / 'summer' …(冬天才招得到伙计)",
@@ -539,7 +564,7 @@ export function installDev({ getState, mutate, storage, fly, getFlight, rules, u
                 'wa.flight':       '当前这一局(可改 .f.lives / .f.speed)',
                 'wa.code()':       '导出存档码',
             });
-            console.log('URL 参数(打开就生效):?scene=mid  ?seed=42  ?tries=99  ?weather=rainy  ?time=night(待机界面时段)');
+            console.log('URL 参数(打开就生效):?scene=mid  ?seed=42  ?tries=99  ?weather=rainy  ?day=1  ?time=night(待机界面时段)');
             return '';
         },
     };
@@ -553,10 +578,11 @@ export function installDev({ getState, mutate, storage, fly, getFlight, rules, u
     /* ---------- URL 参数:把常用的调试起点做成可以直接分享的链接 ---------- */
     const q = new URLSearchParams(location.search);
     if (q.has('seed')) devSeed = Number(q.get('seed'));
-    if (q.has('hour')) { devHour = Number(q.get('hour')); setClock(devNow); }
+    if (q.has('hour')) { devHour = Number(q.get('hour')); syncClock(); }
+    if (q.has('day')) { devDay = Number(q.get('day')) || 0; syncClock(); }
     if (q.has('season')) {
         devMonth = { winter: 0, spring: 4, summer: 6, autumn: 9 }[q.get('season')] ?? null;
-        if (devMonth !== null) setClock(devNow);
+        syncClock();
     }
     if (q.has('tries')) mutate(s => { s.dailyTries = Number(q.get('tries')); });
     if (q.has('weather')) mutate(s => { s.weather = q.get('weather'); s.weatherAt = Date.now(); });
@@ -576,13 +602,25 @@ let devSeed = null;
 let devHour = null;
 /** 调试用的月份覆盖。null = 用真实月份 */
 let devMonth = null;
+/** 调试用的天数偏移。0 = 用真实日期 */
+let devDay = 0;
 
-/** 全游戏读时间都走 clock.js,dev 把它换成这个,好拨小时和月份 */
+/** 全游戏读时间都走 clock.js,dev 把它换成这个,好拨小时、日子和月份 */
 export function devNow() {
     const d = new Date();
+    if (devDay) d.setDate(d.getDate() + devDay);
     if (devHour !== null) d.setHours(devHour, 0, 0, 0);
     if (devMonth !== null) d.setMonth(devMonth);
     return d;
+}
+
+/**
+ * 三个覆盖任意一个还开着,时钟就得留在 devNow 上。
+ * **每处各写一遍 `if (devHour === null) setClock(null)` 迟早会漏一个** ——
+ * 漏了的后果是「我明明只关了小时,日子怎么也跳回去了」。
+ */
+function syncClock() {
+    setClock(devHour !== null || devMonth !== null || devDay !== 0 ? devNow : null);
 }
 
 /** main.js 用它拿飞行的随机源;没设种子就返回 undefined,Flight 用默认的 Math.random */

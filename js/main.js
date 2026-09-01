@@ -62,8 +62,12 @@ async function boot() {
 
     state = dev?.devScene() ?? await storage.load();
 
-    // 跨天重置 / 天气轮换
-    let dirty = rules.refreshDaily(state);
+    // 跨天重置 / 天气轮换。
+    // **日期要从 clock.js 拿**,不能用 refreshDaily 默认的 new Date() ——
+    // 全游戏别处判「今天」都走这口井(占卜、市场、每日饮品),
+    // 这一处偷偷用真实时间的话,?day=1 打开会看到「次数没重置,
+    // 但占卜和市场重开了」这种半截状态
+    let dirty = rules.refreshDaily(state, now());
     dirty = rules.refreshWeather(state) || dirty;
 
     // 离线结算要在天气刷新**之后**:摊位的客单价吃天气系数,
