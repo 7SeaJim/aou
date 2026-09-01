@@ -22,6 +22,7 @@ python3 tools/emit.py     # 或 npm run icons
 | `dishes.py` | 九道料理的图标 |
 | `upgrades.py` | 摊位那四条升级线(炉子/招牌/货架/保温箱)+ 重画的辣椒 |
 | `kitchen.py` | 厨房那四件家什(砧板/煎盘/灶台/烤箱) |
+| `crew.py` | 六只伙计鸥。共用一副骨架(`gull()`),一鸟一个记号 |
 | `scenery.py` | 游戏画面用的图:海鸥四帧、乌云/气球/风筝、木桶、灯塔、小船 |
 | `stall.py` `stallparts.py` | 小摊的四个阶段,和拼它的零件 |
 | `people.py` | 大坝上的游客,四个人 × 三个姿势 |

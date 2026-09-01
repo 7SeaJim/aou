@@ -750,7 +750,8 @@ export class UI {
             const hired = s.crew.includes(c.id);
             const okAff = s.affinity >= c.affinity;
             return `<div class="px-panel ${hired ? 'px-panel--gold' : ''}" style="padding:12px 14px">
-                <p style="margin-bottom:4px">${icon('waou', 'lg')} <strong>${hired || okAff ? c.name : '???'}</strong>
+                <p style="margin-bottom:4px">${icon(hired || okAff ? c.icon : 'waou', 'lg')}
+                   <strong>${hired || okAff ? c.name : '???'}</strong>
                    ${hired ? '<span class="px-tag px-tag--leaf">在摊上</span>' : ''}</p>
                 <p class="px-muted" style="font-size:12.5px;line-height:1.6;margin-bottom:8px">
                     ${hired || okAff ? c.desc : `好感度 ${c.affinity} 解锁`}

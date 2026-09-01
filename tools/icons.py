@@ -496,6 +496,11 @@ ICONS.update(DISHES)
 from upgrades import UPGRADE_ICONS
 ICONS.update(UPGRADE_ICONS)
 
+# 六只伙计鸥,见 tools/crew.py。
+# 原来这六个人在界面上全用 waou 那一个图标 —— 连主角和员工都分不开。
+from crew import CREW_ICONS
+ICONS.update(CREW_ICONS)
+
 # 厨房那四件家什,见 tools/kitchen.py。
 # 和升级线那四条分开:摊位的「炉子」管你不在时赚多少,厨房的「灶台」管你在时多快,
 # 是两条升级线,不能共用一个图标。

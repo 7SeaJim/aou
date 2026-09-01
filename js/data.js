@@ -428,22 +428,22 @@ export function seasonOf(now = new Date()) {
  * 招募条件卡在好感度上:得先和哇鸥处熟了,它才肯把亲戚介绍给你。
  */
 export const CREW = [
-    { id: 'huihui', name: '灰灰', cost: 400,  affinity: 6,
+    { id: 'huihui', name: '灰灰', cost: 400, icon: 'crew_huihui',  affinity: 6,
       effect: { stove: 0.20 }, desc: '出餐快 20%',
       line: '「我翅膀有力,颠锅归我。」' },
-    { id: 'apang',  name: '阿胖', cost: 700,  affinity: 12,
+    { id: 'apang',  name: '阿胖', cost: 700, icon: 'crew_apang',  affinity: 12,
       effect: { price: 0.15 }, desc: '每份贵 15%',
       line: '「我认得出谁兜里有钱。」' },
-    { id: 'xiaobai',name: '小白', cost: 1100, affinity: 20,
+    { id: 'xiaobai',name: '小白', cost: 1100, icon: 'crew_xiaobai', affinity: 20,
       effect: { show: 0.25 }, desc: '表演招人,投喂快 25%',
       line: '「我会翻跟头。真的。」' },
-    { id: 'laoqiao',name: '老翘', cost: 1800, affinity: 30,
+    { id: 'laoqiao',name: '老翘', cost: 1800, icon: 'crew_laoqiao', affinity: 30,
       effect: { haul: 1 },     desc: '每次觅食多带 1 个',
       line: '「飞了十二年,哪片水下面有什么我都记得。」' },
-    { id: 'dundun', name: '墩墩', cost: 2600, affinity: 42,
+    { id: 'dundun', name: '墩墩', cost: 2600, icon: 'crew_dundun', affinity: 42,
       effect: { offline: 0.10 }, desc: '离线少亏 10%',
       line: '「你不在的时候,我看着摊子。」' },
-    { id: 'yaya',   name: '丫丫', cost: 3800, affinity: 56,
+    { id: 'yaya',   name: '丫丫', cost: 3800, icon: 'crew_yaya', affinity: 56,
       effect: { rare: 0.5 },   desc: '稀有食材多出 50%',
       line: '「菌子在哪儿,我闻得到。」' },
 ];
