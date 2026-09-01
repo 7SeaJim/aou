@@ -423,6 +423,9 @@ tr.hi td.n { color: var(--waou); }
   letter-spacing: 0.04em;
 }
 .open li span { display: block; color: var(--ink-2); font-size: 14px; margin-top: 2px; }
+/* 已经拍完的那几条:问号换成对勾色的记号,题目本身不变色 ——
+   题目和记号一起变绿的话,反而看不出「记号」是记号 */
+.open li.done::before { content: "OK"; color: var(--leaf); }
 
 footer {
   border-top: 1px solid var(--line);
@@ -450,15 +453,15 @@ footer {
 <header class="hero">
   <canvas id="sky" width="1520" height="464" aria-label="滇池天空,哇鸥在飞"></canvas>
   <div class="wrap hero__plate">
-    <p class="eyebrow">形象稿 + 策划稿 · v0.7</p>
+    <p class="eyebrow">形象稿 + 策划稿 · v1.0</p>
     <h1>哇鸥<span class="dim"> · 滇池</span></h1>
     <p class="lede">
       在昆明滇池边,陪一只没跟着鸥群飞回西伯利亚的红嘴鸥,慢慢把一个小吃摊做起来。
     </p>
     <div class="meta">
-      <span class="now">P0 – P4 全部完成</span>
-      <span>存档 v7</span>
-      <span>下一步:看 todo</span>
+      <span class="now">P0 – P6 全部完成</span>
+      <span>存档 v14</span>
+      <span>下一步:美术</span>
     </div>
   </div>
 </header>
@@ -539,7 +542,14 @@ footer {
       </table>
     </div>
 
+    <div class="fact">
+      <span class="tag">素材已冻结</span>
+      <p><strong>哇鸥本体的像素图一张都不改。</strong><code>tools/scenery.py</code> 的 <code>WAOU</code> 四帧、<code>WAOU_WING</code>、<code>WAOU_BOW</code>、<code>GULL_BIG</code>、小屋那两张,以及 <code>icons.py</code> 的 <code>waou</code> —— 形象的主人正拿着这批图做参考动画,底下一动,那边就得重来。</p>
+      <p>不受影响的:装扮(<code>tools/wear.py</code>)、背景、UI、别的角色的图标。要解冻得形象的主人明说。</p>
+    </div>
+
     <h3>后续要补的动作</h3>
+    <p class="sub" style="margin-top:-6px">下面这五个动作<strong>卡在上面这条冻结上</strong>,等解冻再画。</p>
     <div class="scroll">
       <table>
         <thead><tr><th>优先级</th><th>动作</th><th>用在哪</th></tr></thead>
@@ -632,6 +642,12 @@ footer {
       <div class="card"><b>南屏街</b><span></span></div>
       <div class="card"><b>石林</b><span>远足 · 后期解锁</span></div>
     </div>
+
+    <div class="fact">
+      <span class="tag">还没画 · 现在最大的美术缺口</span>
+      <p>十张明信片<strong>到现在还是「名字 + 一句短评 + 一个借来的图标」</strong> —— 翠湖和斗南花市甚至共用同一个「鲜花」图标。</p>
+      <p>明信片是整条收集线的终点(觅食掉落 → 收集 → 解锁装扮),<em>终点长这样,整条线就立不住</em>。这是玩法这边帮不上忙的一块:代码全通了,缺的是十张画。</p>
+    </div>
   </section>
 
   <section>
@@ -670,12 +686,12 @@ footer {
           <text x="374" y="45">回来收一波</text>
           <text x="524" y="45">投进升级</text>
           <text x="655" y="45">出得更快</text>
-          <text x="350" y="152" class="note">飞行小游戏降级为「加速器」:想要菌子、乳扇这类稀有食材才去飞一趟</text>
+          <text x="350" y="152" class="note">觅食是「拿材料 + 跟自己较劲」的地方 —— 一分鸥币都不给,给了它就变成刷钱路线</text>
         </g>
       </svg>
     </div>
 
-    <h3>要新增的系统(除伙计鸥和季节外均已落地)</h3>
+    <h3>要新增的系统 · 全部落地</h3>
     <div class="scroll">
       <table>
         <thead><tr><th>系统</th><th>说明</th></tr></thead>
@@ -683,8 +699,8 @@ footer {
           <tr><td class="n">离线结算</td><td>按离线时长补产出。设上限(建议 8 小时),避免挂机一周回来一次性通关</td></tr>
           <tr><td class="n">摊位产能</td><td>每种料理有「每分钟产出」,受灶台、招牌、天气、季节影响</td></tr>
           <tr><td class="n">升级树</td><td>灶(产速)、招牌(客单价)、货架(离线上限)、保温箱(离线衰减)</td></tr>
-          <tr class="hi"><td class="n">伙计鸥</td><td>其他红嘴鸥来打工,每只带一条被动加成 + 一段对话。<strong>养成线的主体 · P3</strong></td></tr>
-          <tr><td class="n">季节</td><td>冬天鸥群在:客流 ×1.5,可招募伙计;夏天客流低,但雨季菌子多</td></tr>
+          <tr class="hi"><td class="n">伙计鸥</td><td>其他红嘴鸥来打工,每只一条被动加成 + 一段对话。<strong>后来改成要发工钱 —— 见下面「养成」</strong></td></tr>
+          <tr><td class="n">季节</td><td>冬天鸥群在:客流 ×1.4,安家费最便宜;夏天客流低,但雨季菌子多</td></tr>
         </tbody>
       </table>
     </div>
@@ -752,9 +768,17 @@ footer {
         <div class="step__id"><span class="dot"></span>P3</div>
         <div><b>养成 · 已完成</b><p>表演玩法、待机界面、小屋(占卜 / 四子棋 / 请喝)、伙计鸥、季节循环、食材图鉴。存档迁到 v6</p></div>
       </div>
-      <div class="step next">
+      <div class="step done">
         <div class="step__id"><span class="dot"></span>P4</div>
-        <div><b>长线 · 已完成</b><p>成就重做(28 条 / 分五组 / 给瓶盖)、装扮(5 件 / 两个槽 / 瓶盖买)、大坝随机事件(18 条 / 有好有坏 / 离线封顶)。存档迁到 v7</p></div>
+        <div><b>长线 · 已完成</b><p>成就重做(32 条 / 分五组 / 给瓶盖)、装扮(5 件 / 两个槽 / 瓶盖买)、大坝随机事件(18 条 / 有好有坏 / 离线封顶)。存档迁到 v7</p></div>
+      </div>
+      <div class="step done">
+        <div class="step__id"><span class="dot"></span>P5</div>
+        <div><b>出摊 · 已完成</b><p>主动做菜:拖食材到厨具、看火候、端给客人。四件厨具 + 升级 + 餐盘、篆新市场、折耳根。<strong>把「挂机」和「上手玩」分成了两条线</strong>。存档迁到 v11</p></div>
+      </div>
+      <div class="step done">
+        <div class="step__id"><span class="dot"></span>P6</div>
+        <div><b>觅食重做 · 已完成</b><p>从「拖着哇鸥走」改成两个键 + 重力、窄道、跑道升级线、伙计接进飞行、开局倒计时。存档迁到 v14</p></div>
       </div>
     </div>
 
@@ -776,6 +800,100 @@ footer {
       联机与排行榜(存档码玩家可读可改,榜单数据不可信)、付费。
       明信片是像素画的再创作,不用实景照片。
     </p>
+  </section>
+
+  <section>
+    <h2>出摊 <span class="en">Cooking</span></h2>
+    <p class="sub">摊子自动出餐是「你不在的时候」;出摊是「你亲手做」。同一个摊,两条线不打架。</p>
+
+    <p>
+      自动出餐卖给坝上溜达的野猫、麻雀、别的海鸥 —— 它们不挑,给什么吃什么,所以价钱低。
+      出摊卖给真正来买的游客:<strong>人挑嘴、要等,但一份能卖上价(×1.8)</strong>。
+      <em>自动出餐是底,出摊是你愿意花时间就能拿到的上限。</em>
+    </p>
+
+    <p><strong>只在白天出摊。</strong>哇鸥中午和晚上回小屋,晚上坝上也没人买 —— 时段本身就是这个玩法的节制,不用再加「每天几次」的计数器。</p>
+
+    <div class="scroll">
+      <table>
+        <thead><tr><th>厨具</th><th>管什么</th><th>性格</th></tr></thead>
+        <tbody>
+          <tr><td class="n">砧板</td><td>切</td><td>快,不怕过火,新手最先学会的一步</td></tr>
+          <tr><td class="n">煎盘</td><td>煎</td><td>窗口最窄,最考手速</td></tr>
+          <tr><td class="n">灶台</td><td>炒和煮</td><td>中等</td></tr>
+          <tr><td class="n">烤箱</td><td>烤和蒸</td><td>慢,窗口最宽 —— 「游客不在时提前做」靠的就是它</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="fact">
+      <span class="tag">火候:两头都要夹住</span>
+      <p>第一版的「刚好」窗口是<strong>时长的一个比例</strong>,两头都失控:切辣椒 1.5 秒的那一步,窗口只有 0.6 秒,<em>同时开三四样根本够不着</em>;而上汽蒸 24 秒的那一步,窗口算下来有二十多秒,<em>等于根本不用看火</em>。于是出现一条反过来的规律 —— <strong>越贵越慢的菜,火候反而越不用管。</strong></p>
+      <p>现在夹上下限:一步最短 2.4 秒、「刚好」最短 1.1 秒最长 2.6 秒。<strong>长的是「你能走开多久」,紧的是「回来那一下要多准」</strong> —— 这两件事方向得相反,反过来做就成了一个不停催你、又怎么点都对的玩法。</p>
+      <p>还有一条:<strong>判定和画进度条必须共用一个函数。</strong>两边各算一套的话,玩家会遇到「明明停在绿带子里却判了生的」—— 那是最让人下头的一种不公平。</p>
+    </div>
+
+    <div class="fact">
+      <span class="tag">客人点什么</span>
+      <p>原来从「解锁了的菜」里随机抽,于是常常有人点一道你根本缺料的菜 —— 那一单白占一个位子四十多秒,而玩家除了干等什么也做不了。<strong>那不是难度,是运气惩罚。</strong></p>
+      <p>现在<strong>七成点你做得出来的,三成随便点</strong>。全给做得出来的太顺,出摊就成了照着单子做,没有「哎呀这个没料了」那一下。现实里的摊子也是这样:今天没有的,牌子上大半不写,但总有人进来问一句「有没有那个谁」。</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>觅食 <span class="en">Foraging</span></h2>
+    <p class="sub">每天都要点开的那个玩法。它只管两件事:<strong>拿材料</strong>,和<strong>跟自己较劲</strong>。</p>
+
+    <p><strong>一分鸥币都不给。</strong>给了的话它立刻变成一条刷钱路线,而摊子那一整套(定价、升级、招人)的意义正好建立在「钱难赚」上 —— 一个三分钟能刷一轮的小游戏会把它整个架空。结算只出食材、经验、明信片,和一条最远距离纪录。</p>
+
+    <h3>两个键</h3>
+    <p>原来是<strong>拖着哇鸥走</strong>:手指在哪它就在哪。够直观,但位置直接归你,不存在「来不及」,所谓难度就只剩眼力好不好 —— 而这个玩法的速度和密度一路涨,涨的正是「留给你的时间」,拖拽根本不消耗时间。<em>两头是拧着的。</em></p>
+
+    <div class="scroll">
+      <table>
+        <thead><tr><th>键</th><th>做什么</th></tr></thead>
+        <tbody>
+          <tr><td class="n">跃起 · 空格 / 屏幕左半</td><td>拍一下翅膀,往上蹿 48px 再落回来(0.28 秒到顶)</td></tr>
+          <tr><td class="n">平飞 · 方向键右 / 右半按住</td><td>按住的时候不掉,横着飘</td></tr>
+          <tr><td class="n">什么都不按</td><td>加速下坠。碰到水面扣一条命,然后自己蹬水起飞</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>三个状态各管一个方向,合起来是完整的上下控制 —— <strong>但每一次改变高度都要提前一点点,那一点点就是手感</strong>。飞不再是「移到那儿」,是「攒够高度」。一次跃起 48px、五条道每道 38px:换一条道靠一下,换两条要连着两下并且提前起手。</p>
+
+    <div class="fact">
+      <span class="tag">窄道:唯一一件非平飞不可的事</span>
+      <p>两个键里,平飞一直是可有可无的那个 —— 躲障碍靠换道,而换道用跃起和松手就够了。<strong>一个从来不用按的键等于没有</strong>,两个键的设计只落地了一半。</p>
+      <p>所以造一个非它不可的局面:一整片乌云横过来只留一条固定高度的缝,得在里面<strong>待住 1.3 秒</strong>。松手就掉出去(掉 32px 只要 0.24 秒),多拍一下就撞上顶。每三波(约一分钟)来一次,<em>提前 1.5 秒用一条金色虚线标出缝在哪</em> —— 不预告的话它就不是考验,是埋伏。</p>
+    </div>
+
+    <div class="fact">
+      <span class="tag">开局速度必须是个常数</span>
+      <p>等级和天气原来是<strong>乘在开局速度上</strong>的:1 级晴天 120px/s、5 级晴天 166、1 级雨天 156、5 级雨天 215。玩家什么都没干,升了一级或者今天下雨,开局就快了三成到八成 —— <strong>那不是难度设计,是同一个玩法每次开局都不是同一个游戏</strong>,更糟的是他找不到原因,只会觉得手感不稳。</p>
+      <p>现在等级、天气、跑道<strong>一律只加在「变难的速度」上</strong>。谁飞、什么天、有没有跑道,前一分钟都一模一样。<em>玩家能分辨的是变化,不是绝对值 —— 开局那一下他没有参照物,只有和上一局比。</em></p>
+      <p>开局还先数三秒:世界照转、两个键照用、水面不扣命,但不计时不生成。<strong>一局的第一秒不该用来找自己。</strong></p>
+    </div>
+
+    <div class="fact">
+      <span class="tag">只给危险的那一类做记号</span>
+      <p>后期一秒钟从眼前过四五个东西,要判断能不能碰得先<em>认出这是饵块还是风筝</em> —— 谁也来不及一个个认。<strong>该让人认的是「这一类」,不是「这一个」。</strong></p>
+      <p>第一版给三类都加了徽记(食材白盘、道具金边、障碍红框深底),辨识度是有了,代价是满屏白块红块、天空全被糊住。<strong>两边都加就等于都没加。</strong>现在只有障碍带四个红直角,食材光板一张 —— 「有红角的不能碰,没有的能吃」是一条完整的规则,只花掉四个直角的墨。</p>
+      <p>红角落在<strong>判定框的四角</strong>上:看着碰上了,和算作碰上了,是同一件事。食材反过来 —— 判定 44 宽而画面上什么都没有,<em>白占便宜不用告诉玩家,吃亏才要</em>。</p>
+    </div>
+
+    <h3>跑道</h3>
+    <p>觅食是每天都点的玩法,但它一直<strong>没有任何可投入的东西</strong> —— 鸥币全花在摊子和厨房上。跑道是一根竖杆 + 鸟屋 + 风向标,建起来 3000 鸥币,建好之后三条线各自升级。</p>
+    <div class="scroll">
+      <table>
+        <tbody>
+          <tr><td class="n">助跑坡</td><td>提速的斜率 −3% / 级(满级 −15%)—— <small>变快来得晚一点</small></td></tr>
+          <tr><td class="n">风向旗</td><td>障碍占比 −2 个点 / 级</td></tr>
+          <tr><td class="n">食槽</td><td>肚子条 +15% / 级 —— <small>管的是第五分钟之后那一段</small></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p><small><strong>助跑坡减的是斜率,不是速度本身。</strong>第一版按比例砍开局速度,结果是全程一个固定折扣 —— 从头到尾一个手感,玩家买完根本看不出这钱花在哪。<em>一个从不变化的加成,和没有加成是同一种体感。</em></small></p>
   </section>
 
   <section>
@@ -813,31 +931,59 @@ footer {
 
     <div class="scroll">
       <table>
-        <thead><tr><th>季节</th><th>客流</th><th>稀有食材</th><th>招伙计</th></tr></thead>
+        <thead><tr><th>季节</th><th>客流</th><th>稀有食材</th><th>安家费</th></tr></thead>
         <tbody>
-          <tr class="hi"><td class="n">冬 11–3 月</td><td>×1.4</td><td>×1.0</td><td>可以</td></tr>
-          <tr><td class="n">春 4–5 月</td><td>×1.0</td><td>×1.0</td><td>—</td></tr>
-          <tr><td class="n">夏 6–8 月</td><td>×0.8</td><td><strong>×2.0</strong> 雨季菌子疯长</td><td>—</td></tr>
-          <tr><td class="n">秋 9–10 月</td><td>×1.1</td><td>×1.2</td><td>—</td></tr>
+          <tr class="hi"><td class="n">冬 11–3 月</td><td>×1.4</td><td>×1.0</td><td>原价</td></tr>
+          <tr><td class="n">春 4–5 月</td><td>×1.0</td><td>×1.0</td><td>×2.0</td></tr>
+          <tr><td class="n">夏 6–8 月</td><td>×0.8</td><td><strong>×2.0</strong> 雨季菌子疯长</td><td>×2.5</td></tr>
+          <tr><td class="n">秋 9–10 月</td><td>×1.1</td><td>×1.2</td><td>×1.5</td></tr>
         </tbody>
       </table>
     </div>
 
     <h3>伙计鸥</h3>
-    <p>六只,<strong>一只管一件事、不叠加同类效果</strong> —— 玩家一眼看得出该先招谁。两道门槛都是从设定里长出来的,不是硬塞的数值墙:好感度(得先和哇鸥处熟了,它才肯把亲戚介绍给你)、<em>只有冬天招得到</em>(鸥群不在昆明的时候没人可招)。</p>
+    <p>六只,<strong>一只管一件事、不叠加同类效果</strong> —— 玩家一眼看得出该先招谁。门槛是好感度:得先和哇鸥处熟了,它才肯把亲戚介绍给你。</p>
+
+    <div class="fact">
+      <span class="tag">改过一次:冬天限定 → 别的季节贵</span>
+      <p>原来只有冬天招得到(鸥群不在昆明的时候没人可招)。设定上很顺,<strong>但代价是一年里七个月这套系统整个碰不到</strong> —— 六只伙计、六个图标、六条被动,九月入坑的玩家要等到十一月。对只玩一次的人(比如比赛评委)代价太大。</p>
+      <p>改成加价:门不关死,冬天依然是划算的时候。非冬天的说法是「托人捎信,让它专程飞回来一趟」。</p>
+    </div>
+
+    <h3>安家费 + 工钱:伙计要养,不是买断</h3>
+    <p>原来招人只有一笔钱,六只全招齐一万零四百 —— 数值模拟里休闲玩法<strong>第三天就够了</strong>。于是伙计不是一个「要不要养」的决定,是一个「早晚都会点」的按钮:<em>一次性的支出,再贵也只贵那一天。</em></p>
 
     <div class="scroll">
       <table>
-        <thead><tr><th>伙计</th><th>管什么</th><th>好感门槛</th></tr></thead>
+        <thead><tr><th>伙计</th><th>管什么</th><th>好感</th><th>安家费</th><th>工钱 / 天</th></tr></thead>
         <tbody>
-          <tr><td class="n">灰灰</td><td>出餐快 20%</td><td class="k">6</td></tr>
-          <tr><td class="n">阿胖</td><td>每份贵 15%</td><td class="k">12</td></tr>
-          <tr><td class="n">小白</td><td>表演招人,投喂快 25%</td><td class="k">20</td></tr>
-          <tr><td class="n">老翘</td><td>每次觅食多带 1 个</td><td class="k">30</td></tr>
-          <tr><td class="n">墩墩</td><td>离线少亏 10%</td><td class="k">42</td></tr>
-          <tr><td class="n">丫丫</td><td>稀有食材多出 50%</td><td class="k">56</td></tr>
+          <tr><td class="n">灰灰</td><td>出餐快 20%</td><td class="k">6</td><td class="k">2 000</td><td class="k">80</td></tr>
+          <tr><td class="n">阿胖</td><td>每份贵 15%</td><td class="k">12</td><td class="k">3 500</td><td class="k">140</td></tr>
+          <tr><td class="n">小白</td><td>表演招人,投喂快 25%</td><td class="k">20</td><td class="k">6 000</td><td class="k">240</td></tr>
+          <tr class="hi"><td class="n">老翘</td><td>每次觅食多带 1 个 · <strong>飞行时障碍判定 15→12,红角标得更长更亮</strong></td><td class="k">30</td><td class="k">10 000</td><td class="k">400</td></tr>
+          <tr><td class="n">墩墩</td><td>离线少亏 10%</td><td class="k">42</td><td class="k">15 000</td><td class="k">600</td></tr>
+          <tr class="hi"><td class="n">丫丫</td><td>稀有食材多出 50% · <strong>飞行时每 30 秒替你挡一次</strong></td><td class="k">56</td><td class="k">22 000</td><td class="k">880</td></tr>
         </tbody>
       </table>
+    </div>
+
+    <p>安家费大约是工钱的 <strong>25 倍</strong> —— 招进来那一下相当于先垫了一个月,之后这只伙计就一直挂在你的日常开销上,和摊子一样要养。六只全在:安家费 58 500,每天 2 340。<br>
+    <small><strong>季节只加安家费,不加工钱。</strong>贵的那部分是「捎信让它专程飞一趟」的路费,工钱是干活的钱,和它当初怎么来的没关系。</small></p>
+
+    <div class="fact">
+      <span class="tag">发不出工钱怎么办:请假,不是辞职</span>
+      <p>三种做法:辞退(狠,而且会雪崩 —— <em>你正是靠他们赚钱的</em>)、记成欠债(玩家看不见,还完之前一直闷着)、<strong>请假</strong>。</p>
+      <p>选请假:没发出工钱的那几只今天不来上工,所有加成都不算,<strong>坝上也看不见它们</strong> —— 加成关了人还站在那儿的话,玩家会以为是 bug。第二天照常回来,一个都不会丢。</p>
+      <p><strong>按招进来的先后发,先来的先拿到。</strong>钱不够时得有个说法,而「先来先得」是最好解释的一种;换成「贵的先发」或者随机,玩家都会觉得被算计了。顺带它也让人数最大化。</p>
+      <p><strong>有个「补发」按钮。</strong>「今天没钱」不该等于「今天白过」:出一趟摊挣到钱,马上就能把人叫回来,不用干等到明天。<em>惩罚要有出口。</em></p>
+      <p><strong>扣了钱必须说一声。</strong>一觉醒来少了两千鸥币而屏幕上什么都没说,那和 bug 没区别。</p>
+    </div>
+
+    <div class="fact">
+      <span class="tag">把伙计接到觅食上</span>
+      <p>六只原来<strong>全在管摊子</strong>(出餐快、卖得贵、离线少亏……),于是觅食那边招不招人一个样 —— 而觅食恰恰是每天都要点开的那个玩法。老翘和丫丫各接一条,而且各接各的性子:<em>老翘管「少撞」,丫丫管「撞了不亏」</em>,一个在前一个在后,两个都招也不重叠。</p>
+      <p><strong>判定缩小和标记加长必须一起做。</strong>只缩判定,玩家根本感觉不到(他看见的还是那么大一块);只标清楚,又只是好看。因为「框有多大判定就有多大」,招了老翘框会跟着缩 —— 他帮的忙是<em>看得见</em>的。</p>
+      <p><strong>先花会回来的那个。</strong>撞上时先用丫丫再用护盾 —— 反过来的话,玩家会在丫丫满着的时候白扔一个护盾,而那个护盾是他花钱买的。<strong>掉进湖里丫丫不管</strong>:她挡的是迎面来的东西,沉下去是自己没拍翅膀,一个连自己失误都替你兜的伙计,玩家很快就不看屏幕了。</p>
     </div>
 
     <div class="fact">
@@ -849,19 +995,61 @@ footer {
 
   <section>
     <h2>待定 <span class="en">Open questions</span></h2>
-    <p class="sub">三个需要你拍板的,拍完 P1 就能开工。</p>
+    <p class="sub">四条全部拍完了。留着不删 —— <strong>划掉的那条本身也是信息</strong>:下次想改同一个地方时,知道上次为什么这么定。</p>
     <ol class="open">
-      <li>「鸥币」这个货币名要不要换?<span>和「鸥」谐音其实挺好,但容易和欧元混。</span></li>
-      <li>季节按现实时间走,还是游戏内自有节奏?<span>现实时间更有陪伴感,但夏天会冷清好几个月。</span></li>
-      <li>飞行玩法留几分?<span>完全砍掉最省事,但它是目前唯一的「操作乐趣」。</span></li>
-      <li><s>料理要不要各画各的图标?</s> <span><b>已定:各画各的。</b>九道菜全画了自己的图标,顺带重画了饵块 / 米 / 红糖 / 豆花 / 乳扇 —— 撞图清零。</span></li>
+      <li class="done"><b>「鸥币」这个货币名要不要换?</b>
+        <span><b>已定:改成「鸥币」。</b>跟「鸥」同字,不再和欧元混。存档字段还是 <code>coins</code>,所以这次改名没有迁移。</span></li>
+      <li class="done"><b>季节按现实时间走,还是游戏内自有节奏?</b>
+        <span><b>已定:保持现实时间</b>,但把「冬天才招得到伙计」改成「别的季节贵」。现实时间更有陪伴感,那个落差正是季节的意义;但不能让一年里七个月碰不到整套伙计系统。</span></li>
+      <li class="done"><b>飞行玩法留几分?</b>
+        <span><b>已定:一分不给。</b>飞行只是拿食材和跟自己较劲的地方 —— 给鸥币的话它立刻变成刷钱路线,把摊子那一整套架空。<em>实现上本来就没给过,这一条是把它写死成设计,别哪天顺手加上去。</em></span></li>
+      <li class="done"><b>料理要不要各画各的图标?</b>
+        <span><b>已定:各画各的。</b>九道菜全画了自己的图标,顺带重画了饵块 / 米 / 红糖 / 豆花 / 乳扇 / 鲜花 / 鲜花饼 / 辣椒 —— 撞图清零。</span></li>
     </ol>
+  </section>
+
+  <section>
+    <h2>现在还差什么 <span class="en">What's left</span></h2>
+    <p class="sub">玩法这边基本到头了。剩下的 20 多条只剩两类,而且<strong>都不是「继续写代码」</strong>。</p>
+
+    <h3>一 · 只有玩才能定的数</h3>
+    <p>这些是我按推算拍的,数值模拟覆盖不到「手感」这一层 —— <em>机器没有手</em>。</p>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>在哪</th><th>拍的是什么</th></tr></thead>
+        <tbody>
+          <tr><td class="n">火候</td><td>收紧之后手感对不对。数上是「晚 0.4 秒还行,晚 1.2 秒必糊」</td></tr>
+          <tr><td class="n">飞行难度</td><td>提速多猛、多密、障碍占多少(<code>SPEED_0</code> / <code>SPEED_GROW</code> / <code>SPAWN_GROW</code>)</td></tr>
+          <tr><td class="n">窄道</td><td>每 3 波一次 / 缝半高 32 / 穿过去 1.3 秒 / 提前 1.5 秒预告 —— 来得太勤还是太稀</td></tr>
+          <tr><td class="n">饿</td><td>五分钟起 / 空条撑 13 秒 / 吃一个补 0.17</td></tr>
+          <tr><td class="n">伙计</td><td>老翘判定 12、丫丫 30 秒。丫丫会不会太顶</td></tr>
+          <tr><td class="n">工钱</td><td>前中期立住了(招齐六只从第 4 天推到第 11 天),<strong>但后期是噪声</strong> —— 第 30 天两百多万鸥币,一天 2 340 等于不存在</td></tr>
+          <tr class="hi"><td class="n">真手机</td><td><strong>一次都没测过。</strong>做菜的拖拽手感、飞行的触屏,逻辑在浏览器里通了,手感是另一回事</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>二 · 美术</h3>
+    <p>这一类<strong>本来就不是一个人的活</strong>。玩法这边能做的都做完了,缺的是画。</p>
+    <div class="cards">
+      <div class="card"><b>十张明信片</b><span>还是「名字 + 借来的图标」· 收集线的终点</span></div>
+      <div class="card"><b>游客形象</b><span>横着走 · 区分度不够 · 画风太简单</span></div>
+      <div class="card"><b>大坝的纵深</b><span>甲板分了三条道,但远近没有大小差别</span></div>
+      <div class="card"><b>表演动作</b><span>卡在哇鸥素材冻结上 · 等解冻</span></div>
+      <div class="card"><b>厨具升级的样子</b><span>升到多格了,画面上还是一个灶眼一块砧板</span></div>
+      <div class="card"><b>折耳根</b><span>只是站在柜台后面端盘子,没动作没台词</span></div>
+    </div>
+
+    <div class="fact">
+      <span class="tag">上赛场之前</span>
+      <p>两条和玩法无关但不能忘:<strong>分成协议还是初版</strong>,没更新成谈好的阶梯分成;<strong><code>合同/</code> 整个目录在 <code>.gitignore</code> 里,别让它进公开的比赛仓库</strong> —— 推之前再确认一次。</p>
+    </div>
   </section>
 
 </main>
 
 <footer class="wrap">
-  哇鸥 · 去大坝整点饵块 · 策划稿 v0.6 &nbsp;·&nbsp; 仓库内同步版本 DESIGN.md
+  哇鸥 · 去大坝整点饵块 · 策划稿 v1.0 &nbsp;·&nbsp; 仓库内同步版本 DESIGN.md(更详细,含每个决定的理由)
 </footer>
 
 <script type="module">
