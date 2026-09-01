@@ -573,10 +573,10 @@ export const HELPER = {
  *               「游客不在时提前做」靠的就是它
  */
 export const TOOLS = {
-    board: { name: '砧板', icon: 'board', spot: 'mid',  window: 0.55 },
-    pan:   { name: '煎盘', icon: 'pan',   spot: 'mid',  window: 0.22 },
-    stove: { name: '灶台', icon: 'wok',   spot: 'mid',  window: 0.34 },
-    oven:  { name: '烤箱', icon: 'oven',  spot: 'left', window: 0.75 },
+    board: { name: '砧板', icon: 'board', spot: 'mid',  window: 0.60 },
+    pan:   { name: '煎盘', icon: 'pan',   spot: 'mid',  window: 0.38 },
+    stove: { name: '灶台', icon: 'wok',   spot: 'mid',  window: 0.48 },
+    oven:  { name: '烤箱', icon: 'oven',  spot: 'left', window: 0.80 },
 };
 
 /**
@@ -668,6 +668,28 @@ export function kitchenCost(key, lv) {
 /** 某件厨具在 lv 级时的格数和火力 */
 export const toolSlots = lv => 1 + Math.floor((lv - 1) / 2);
 export const toolPower = lv => 1 + (lv - 1) * 0.18;
+
+/**
+ * 一步最短要多久。**升级只能快到这儿为止。**
+ *
+ * 火力提高会把时长按 1/power 缩短,而「刚好」的窗口是时长的一个比例 ——
+ * 于是升级同时把窗口也按比例缩掉了。满级之后最短的一步只有 0.7 秒,
+ * 窗口 0.6 秒:**玩家花钱买到的是「更难点中」**,这是反过来的。
+ * 一个休闲玩法里,升级该让人更轻松,不是更手忙脚乱。
+ *
+ * 到了这个下限之后,再升级换来的是**格子数**(能同时开几样),
+ * 而不是继续压缩反应时间 —— 那才是「产能变大」该有的样子。
+ */
+export const MIN_STEP_MS = 1600;
+
+/**
+ * 「刚好」那一段最少要有多久(毫秒)。
+ *
+ * 光有 MIN_STEP_MS 还不够:一步 1.6 秒、煎盘的窗口占 38%,
+ * 算下来「刚好」只有 1 秒出头。**同时开三四样的时候,这一秒是不够用的** ——
+ * 手指还在拖上一样,这一锅就糊了。所以再兜一道绝对下限。
+ */
+export const GOOD_MIN_MS = 1800;
 
 /**
  * 餐盘。纯外观 + 一点点加价 —— **加价必须小**,

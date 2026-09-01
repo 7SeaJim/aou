@@ -25,7 +25,8 @@ import { pal, shadow, drawRain, drawFog, VW, VH } from './scene.js';
 import { now } from '../clock.js';
 import { shadedSprite } from './tint.js';
 import {
-    RECIPES, RECIPE_STEPS, TOOLS, QUALITY, BURN_MS, SERVICE, HELPER, FOODS, dayPhase,
+    RECIPES, RECIPE_STEPS, TOOLS, QUALITY, BURN_MS, SERVICE, HELPER, FOODS,
+    GOOD_MIN_MS, MIN_STEP_MS, dayPhase,
 } from '../data.js';
 import * as rules from './rules.js';
 
@@ -137,7 +138,7 @@ export class Service {
         const p = (this.t - j.at) / j.ms;
         return {
             dishId: j.dishId, recipe: j.recipe, ing: j.ing, name: j.name,
-            p: Math.min(1.6, p),
+            p: Math.min(1.6, p), ms: j.ms,
             grade: gradeOf(p, TOOLS[j.tool].window, j.ms),
         };
     }
@@ -168,7 +169,9 @@ export class Service {
         const power = rules.toolInfo(this.getState(), toolKey).power;
         line[slot] = {
             dishId, recipe: d.recipe, ing: step.ing, name: step.name,
-            tool: toolKey, at: this.t, ms: step.ms / power,
+            // **升级只能快到 MIN_STEP_MS 为止。** 再往下压的话,
+            // 「刚好」那一段跟着缩,花钱买来的是更难点中 —— 见 data.js 的注释
+            tool: toolKey, at: this.t, ms: Math.max(MIN_STEP_MS, step.ms / power),
         };
         d.busy = true;
         this.onChange?.();
@@ -394,10 +397,13 @@ export class Service {
         ctx.fillStyle = '#5f6d78';
         ctx.fillRect(x, y, w, 5);
         const j = jobs.reduce((a, b) => (b.p > a.p ? b : a));
-        const win = TOOLS[key].window;
+        // **绿带子必须和 gradeOf 算的是同一段。** 这儿要是还按原始 window 画,
+        // 玩家瞄的位置和实际判定就对不上 —— 明明卡在绿带子里却判了个「生的」,
+        // 那是最让人下头的一种不公平。所以这两处共用一套算法。
+        const win = goodBand(TOOLS[key].window, j.ms);
         ctx.fillStyle = 'rgba(119,178,85,.85)';
         ctx.fillRect(x + Math.round(w * (1 - win) / 1.6), y,
-                     Math.round(w * win * 1.6 / 1.6), 5);
+                     Math.round(w * win * 1.8 / 1.6), 5);
         ctx.fillStyle = QUALITY[j.grade].color;
         ctx.fillRect(x, y, Math.round(w * Math.min(1, j.p / 1.6)), 5);
         // 刚好的时候给条子镶一道金边,余光里也能看见
@@ -439,9 +445,24 @@ export class Service {
  * 火候判定。进度 p 从 0 走到 1;`window` 是「刚好」那一段占的比例,贴着 1 结束。
  * 走过 1 开始糊,再过 BURN_MS 彻底焦。
  */
+/**
+ * 这一步实际的「刚好」半宽。
+ *
+ * 窗口本来是时长的一个比例,短的那几步算下来只有半秒多 ——
+ * **同时开三四样的时候根本够不着**。所以兜一道绝对下限:
+ * 不管这一步多快,「刚好」那一段都不短于 GOOD_MIN_MS。
+ * 一整段的宽度是 1.8w(早 1.0w + 晚 0.8w),由此反解出保底的 w。
+ *
+ * **判定和画条子共用这一个函数** —— 两边各算一套的话,
+ * 玩家会遇到「明明停在绿带子里却判了生的」,那是最让人下头的不公平。
+ */
+export const goodBand = (window, ms) =>
+    Math.max(window, GOOD_MIN_MS / (1.8 * Math.max(1, ms)));
+
 export function gradeOf(p, window, ms) {
-    if (p < 1 - window) return 'raw';          // 还没到
-    if (p <= 1 + window * 0.6) return 'good';  // 刚好那一段,跨过 1 一点还来得及
+    const w = goodBand(window, ms);
+    if (p < 1 - w) return 'raw';               // 还没到
+    if (p <= 1 + w * 0.8) return 'good';       // 刚好那一段,跨过 1 一点还来得及
     return 'burnt';                            // 过了就糊
 }
 
