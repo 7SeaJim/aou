@@ -12,7 +12,7 @@
 import { createInitialState, FOOD_KEYS, ITEM_KEYS, TUTORIAL_DONE } from './state.js';
 import {
     RECIPES, POSTCARDS, ACHIEVEMENTS, UPGRADES, DRINK_KEYS, COSMETICS, EVENTS,
-    FORTUNES, SHELL_MARKS,
+    FORTUNES, SHELL_MARKS, CREW,
 } from './data.js';
 import { seeded } from './game/rng.js';
 import { setClock } from './clock.js';
@@ -201,6 +201,19 @@ export function installDev({ getState, mutate, storage, fly, getFlight, rules, u
                 s.cosmetics = COSMETICS.map(c => c.id);
             });
             return '全解锁';
+        },
+
+        /**
+         * 设好感度(不填给 60)。
+         *
+         * 好感度卡着好几条线:装扮里的小铜铃要 30、六只伙计鸥分别要
+         * 6/12/20/30/42/56 —— 想看伙计那一页长什么样,靠请喝茶一杯一杯攒
+         * 太慢了。**60 是「全解锁」那个点**,所以当默认值。
+         */
+        aff(n = 60) {
+            mutate(s => { s.affinity = Math.max(0, Math.min(9999, Math.round(n))); });
+            const open = CREW.filter(c => this.s.affinity >= c.affinity).map(c => c.name);
+            return `好感度 ${this.s.affinity} —— 招得到:${open.join('、') || '还没有'}`;
         },
 
         /** 瓶盖 +n(不填给 99)。买装扮用的。 */
@@ -491,6 +504,7 @@ export function installDev({ getState, mutate, storage, fly, getFlight, rules, u
                 'wa.weather(w)':   "天气 — 'sunny' / 'rainy' / 'foggy'",
                 'wa.unlockAll()':  '食谱/明信片/成就/装扮全开',
                 'wa.caps(n)':  '设瓶盖数(默认 99)',
+                'wa.aff(n)':       '设好感度(默认 60,够招齐六只伙计鸥)',
                 'wa.wear(id)':     '直接戴上某件装扮;不传参数列出全部 id',
                 'wa.bare()':       '把装扮全脱了',
                 'wa.event(id)':    "触发一件大坝事件;不传列出全部,传 'roll' 随机",
