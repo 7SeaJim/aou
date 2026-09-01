@@ -218,6 +218,14 @@ export class UI {
                 break;
             }
 
+            case 'payWages': {
+                const r = this.mutate(st => rules.payBackWages(st));
+                if (!r.ok) return this.toast(r.reason, 'coin');
+                sfx.play('coin');
+                this.toast(`补了 ${r.cost} 鸥币 —— ${r.back.map(c => c.name).join('、')}回来了`, 'waou');
+                break;
+            }
+
             case 'hire': {
                 const r = this.mutate(st => rules.hireCrew(st, data.id));
                 if (!r.ok) return this.toast(r.reason, 'coin');
@@ -402,6 +410,15 @@ export class UI {
             if (e.type === 'affinity')    this.toast(`好感度 +${e.by}`, 'waou');
             if (e.type === 'event')       { sfx.play('event'); this.toast(this.eventLine(e), 'map'); }
             if (e.type === 'crew')        this.toast(`${e.crew.name} 加入了摊子`, 'waou');
+            if (e.type === 'wage') {
+                if (e.unpaid.length) {
+                    sfx.play('hit');
+                    const who = CREW.filter(c => e.unpaid.includes(c.id)).map(c => c.name).join('、');
+                    this.toast(`工钱不够 —— ${who}今天没来上工`, 'coin');
+                } else {
+                    this.toast(`发了今天的工钱 −${e.cost} 鸥币`, 'coin');
+                }
+            }
             if (e.type === 'many')        { sfx.play('achieve'); this.toast(e.text, 'trophy'); }
             if (e.type === 'record')      {
                 sfx.play('achieve');
@@ -830,29 +847,51 @@ export class UI {
     crewView() {
         const s = this.getState();
         const season = rules.seasonNow();
+        const idle = s.crewIdle ?? [];
         const cards = CREW.map(c => {
             const hired = s.crew.includes(c.id);
+            const off = idle.includes(c.id);
             const okAff = s.affinity >= c.affinity;
-            return `<div class="px-panel ${hired ? 'px-panel--gold' : ''}" style="padding:12px 14px">
+            return `<div class="px-panel ${hired && !off ? 'px-panel--gold' : ''}" style="padding:12px 14px">
                 <p style="margin-bottom:4px">${icon(hired || okAff ? c.icon : 'waou', 'lg')}
                    <strong>${hired || okAff ? c.name : '???'}</strong>
-                   ${hired ? '<span class="px-tag px-tag--leaf">在摊上</span>' : ''}</p>
+                   ${off ? '<span class="px-tag px-tag--coral">今天请假</span>'
+                         : hired ? '<span class="px-tag px-tag--leaf">在摊上</span>' : ''}</p>
                 <p class="px-muted" style="font-size:12.5px;line-height:1.6;margin-bottom:8px">
                     ${hired || okAff ? c.desc : `好感度 ${c.affinity} 解锁`}
+                    ${hired || okAff ? `<br>工钱 ${icon('coin')} ${c.wage} / 天` : ''}
                     ${hired ? `<br>${c.line}` : ''}</p>
                 ${hired ? '' : this.hireBtn(c, s, season)}
             </div>`;
         }).join('');
+        const wage = rules.wageOf(s);
+        const owed = CREW.filter(c => idle.includes(c.id));
         return `
         <h3 style="margin-bottom:6px">伙计鸥
             <span class="px-muted" style="font-size:13px">${s.crew.length} / ${CREW.length}</span></h3>
         <p class="px-muted" style="margin-bottom:12px;font-size:13px">
+            招人付的是<strong>安家费</strong> —— 让它从鸥群里专程飞过来落脚,一次性的。
+            之后<strong>每天还要发一份工钱</strong>,一觉醒来自动扣。
+            ${wage ? `现在摊上这几只,一天 ${icon('coin')} <strong>${wage}</strong>。` : ''}
             ${season.hireMul <= 1
-                ? '鸥群这会儿就在坝上,招人最便宜。'
+                ? '鸥群这会儿就在坝上,安家费最便宜。'
                 : `现在是${season.name}季,鸥群不在昆明 —— 得托人捎信让它专程飞一趟,
-                   价钱是冬天的 <strong>${season.hireMul}</strong> 倍。
+                   安家费是冬天的 <strong>${season.hireMul}</strong> 倍(工钱不变)。
                    等到<strong>冬天(11 月–次年 3 月)</strong>就是原价,${daysToWinter()}`}
             好感度越高,哇鸥肯介绍的亲戚越多。</p>
+        ${owed.length ? `
+        <div class="px-panel" style="padding:12px 14px;margin-bottom:12px">
+            <p style="margin-bottom:6px">${icon('coin', 'lg')}
+               <strong>今天的工钱还欠着</strong></p>
+            <p class="px-muted" style="font-size:12.5px;line-height:1.6;margin-bottom:10px">
+                ${owed.map(c => c.name).join('、')}没来上工,这几只的加成今天都不算。
+                补上就回来 —— <strong>不用等到明天</strong>。</p>
+            <button class="px-btn px-btn--sm" data-act="payWages"
+                ${s.coins < owed[0].wage ? 'disabled' : ''}>
+                ${s.coins < owed[0].wage
+                    ? `还差 ${owed[0].wage - s.coins} 鸥币`
+                    : `${icon('coin')} ${owed.reduce((n, c) => n + c.wage, 0)} 补发`}</button>
+        </div>` : ''}
         <div class="px-grid" style="--min:210px;margin-bottom:28px">${cards}</div>`;
     }
 

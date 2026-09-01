@@ -444,25 +444,46 @@ export function seasonOf(now = new Date()) {
  * 招募条件卡在好感度上:得先和哇鸥处熟了,它才肯把亲戚介绍给你。
  */
 export const CREW = [
-    { id: 'huihui', name: '灰灰', cost: 400, icon: 'crew_huihui',  affinity: 6,
+    { id: 'huihui', name: '灰灰', cost: 2000, wage: 80, icon: 'crew_huihui',  affinity: 6,
       effect: { stove: 0.20 }, desc: '出餐快 20%',
       line: '「我翅膀有力,颠锅归我。」' },
-    { id: 'apang',  name: '阿胖', cost: 700, icon: 'crew_apang',  affinity: 12,
+    { id: 'apang',  name: '阿胖', cost: 3500, wage: 140, icon: 'crew_apang',  affinity: 12,
       effect: { price: 0.15 }, desc: '每份贵 15%',
       line: '「我认得出谁兜里有钱。」' },
-    { id: 'xiaobai',name: '小白', cost: 1100, icon: 'crew_xiaobai', affinity: 20,
+    { id: 'xiaobai',name: '小白', cost: 6000, wage: 240, icon: 'crew_xiaobai', affinity: 20,
       effect: { show: 0.25 }, desc: '表演招人,投喂快 25%',
       line: '「我会翻跟头。真的。」' },
-    { id: 'laoqiao',name: '老翘', cost: 1800, icon: 'crew_laoqiao', affinity: 30,
+    { id: 'laoqiao',name: '老翘', cost: 10000, wage: 400, icon: 'crew_laoqiao', affinity: 30,
       effect: { haul: 1 },     desc: '每次觅食多带 1 个 · 飞行时替你盯着障碍',
       line: '「飞了十二年,哪片水下面有什么我都记得。」' },
-    { id: 'dundun', name: '墩墩', cost: 2600, icon: 'crew_dundun', affinity: 42,
+    { id: 'dundun', name: '墩墩', cost: 15000, wage: 600, icon: 'crew_dundun', affinity: 42,
       effect: { offline: 0.10 }, desc: '离线少亏 10%',
       line: '「你不在的时候,我看着摊子。」' },
-    { id: 'yaya',   name: '丫丫', cost: 3800, icon: 'crew_yaya', affinity: 56,
+    { id: 'yaya',   name: '丫丫', cost: 22000, wage: 880, icon: 'crew_yaya', affinity: 56,
       effect: { rare: 0.5 },   desc: '稀有食材多出 50% · 飞行时隔一阵替你挡一下',
       line: '「菌子在哪儿,我闻得到。」' },
 ];
+
+/**
+ * 两笔钱:**安家费**(招的时候一次性)和**工钱**(往后每天)。
+ *
+ * 原来只有一笔,而且便宜 —— 六只全招齐一万零四百,休闲玩法第三天就够了。
+ * 于是伙计不是一个「要不要养」的决定,是一个「早晚都会点」的按钮:
+ * **一次性的支出,再贵也只贵那一天。**
+ *
+ * 现在第一笔是安家费(让它专程从鸥群里飞过来落脚),往后每天再付一份工钱。
+ * 安家费大约是工钱的 25 倍 —— 招进来那一下相当于先垫了一个月,
+ * 之后这只伙计就一直挂在你的日常开销上,和摊子一样要养。
+ *
+ *     灰灰 2000/80   阿胖 3500/140   小白 6000/240
+ *     老翘 10000/400  墩墩 15000/600  丫丫 22000/880
+ *     六只全在:安家费 58500,每天 2340
+ *
+ * **季节只加安家费,不加工钱。** 贵的那部分是「捎信让它专程飞一趟」的路费,
+ * 而工钱是干活的钱,和它当初怎么来的没关系。
+ */
+export const crewWage = (hired = []) =>
+    CREW.reduce((n, c) => n + (hired.includes(c.id) ? c.wage : 0), 0);
 
 /**
  * 两只伙计在飞行里另外管的事。**这是加在原来那条加成上的,不是换掉。**
@@ -483,7 +504,7 @@ export const CREW_FLIGHT = {
     /** 老翘:红角的臂长(没招是 4) */
     laoqiaoArm: 7,
     /** 丫丫:多久能再挡一次(毫秒) */
-    yayaMs: 22_000,
+    yayaMs: 30_000,
 };
 
 /** 招进来的伙计加总。没招人时全是 0。 */

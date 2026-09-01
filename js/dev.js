@@ -422,6 +422,21 @@ export function installDev({ getState, mutate, storage, fly, getFlight, rules, u
             return rules.seasonNow().name + '季';
         },
 
+        /** 工钱:看一眼要发多少、谁请假;传 true 立刻补发 */
+        wage(pay = false) {
+            if (pay) {
+                let r; mutate(st => { r = rules.payBackWages(st); });
+                return r.ok ? `补了 ${r.cost} —— ${r.back.map(c => c.name).join('、')}回来了` : r.reason;
+            }
+            const st = getState();
+            const idle = st.crewIdle ?? [];
+            return {
+                '每天': rules.wageOf(st),
+                '在摊上': rules.activeCrew(st).join(' ') || '(没人)',
+                '请假': idle.join(' ') || '(没有)',
+            };
+        },
+
         /** 招一只伙计(跳过季节和好感度检查,纯看数值) */
         hire(id) {
             mutate(s => {
@@ -446,12 +461,14 @@ export function installDev({ getState, mutate, storage, fly, getFlight, rules, u
             if (n === null) { devDay = 0; syncClock(); return '回到今天 —— ' + devNow().toLocaleDateString('zh-CN'); }
             devDay += n;
             syncClock();
-            let rolled = false;
+            let rolled = null;
             mutate(st => { rolled = rules.refreshDaily(st, devNow()); });
             const st = getState();
+            const w = rolled?.wage;
             return `${devNow().toLocaleDateString('zh-CN')}(偏移 ${devDay} 天)`
                  + ` · 觅食 ${st.dailyTries} 次 · 今日饮品 ${st.drink ?? '无'}`
-                 + ` · 占卜和市场${rolled ? '已重开' : '没变(同一天)'}`;
+                 + ` · 占卜和市场${rolled ? '已重开' : '没变(同一天)'}`
+                 + (w ? ` · 工钱 −${w.cost}${w.unpaid.length ? `,${w.unpaid.length} 只请假` : ''}` : '');
         },
 
         /** 小屋:把时钟拨到某个时段看效果。传 null 恢复真实时间。 */
@@ -560,7 +577,8 @@ export function installDev({ getState, mutate, storage, fly, getFlight, rules, u
                 'wa.drink(k)':     "再发一杯 —— 'puer' / 'coffee'",
                 'wa.reFortune()':  '清掉今日占卜,好再转一次',
                 'wa.season(s)':    "拨季节 — 'winter' / 'summer' …(冬天才招得到伙计)",
-                'wa.hire(id)':     '直接招一只伙计,跳过条件',
+                'wa.hire(id)':     '直接招一只伙计,跳过条件(不收安家费)',
+                'wa.wage()':       '看每天要发多少工钱、谁在请假;wa.wage(true) 立刻补发',
                 'wa.flight':       '当前这一局(可改 .f.lives / .f.speed)',
                 'wa.code()':       '导出存档码',
             });

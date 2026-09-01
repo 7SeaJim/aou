@@ -372,7 +372,8 @@ wa.nextDay()       // 跳到第二天。觅食 5 次、每日一杯、占卜、�
 wa.drink('puer')   // 再发一杯,反复试「请哇鸥喝」
 wa.reFortune()     // 清掉今日占卜,好再转一卦
 wa.season('winter')// 拨季节 —— 冬天才招得到伙计,不然要等到 11 月
-wa.hire('huihui')  // 直接招一只,跳过季节和好感度检查
+wa.hire('huihui')  // 直接招一只,跳过季节和好感度检查(不收安家费)
+wa.wage()          // 每天要发多少工钱、谁在请假;wa.wage(true) 立刻补发
 wa.lv(5)           // 直接跳到 5 级,食谱跟着解锁
 wa.tries(99)       // 觅食次数管够
 wa.fill()          // 背包装满

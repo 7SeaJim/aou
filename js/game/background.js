@@ -13,7 +13,7 @@ import {
     paintFarDam, drawReeds, drawStrollers, drawStallSteam, drawUpgradePop, drawCat,
     paintShed, strollerCount, drawCrew, paintRunway,
 } from './scene.js';
-import { unlockedShows, serviceOpen } from './rules.js';
+import { unlockedShows, serviceOpen, activeCrew } from './rules.js';
 import { dayPhase, onDam } from '../data.js';
 import { now } from '../clock.js';
 
@@ -105,7 +105,9 @@ export class Background {
         paintShed(ctx, DECK_Y, phase);
         paintRunway(ctx, DECK_Y, !!this.getState().runway?.built, phase);
         // 招来的伙计。和木棚同一条道(最后头),客人和路人都在它们前面
-        drawCrew(ctx, DECK_Y, t, this.getState().crew, phase,
+        // 请假的那几只不画 —— **没发工钱就没来上工,坝上就该看不见它**。
+        // 加成关了但人还站在那儿的话,玩家会以为是 bug
+        drawCrew(ctx, DECK_Y, t, activeCrew(this.getState()), phase,
                  !!this.getState().runway?.built, this.getState().upgrades);
         // 折耳根:不出摊的时候她就在坝上睡觉。出摊时她在柜台后面,这儿就不画了。
         // **画在路人之前** —— 她那条道靠后,人从她前面过

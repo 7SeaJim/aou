@@ -5,7 +5,7 @@
  * 好处:改目录不用写迁移,存档也更小(存档码是要玩家复制的)。
  */
 
-export const SAVE_VERSION = 13;
+export const SAVE_VERSION = 14;
 
 // 食材的键。改这里要同步 data.js 的 FOODS,并且 SAVE_VERSION +1 补一条迁移 ——
 // 这些键是 backpack 的字段名,直接进存档。
@@ -81,6 +81,8 @@ export function createInitialState() {
         // ---- 养成 ----
         /** 招进来的伙计鸥 id */
         crew: [],
+        /** 今天没发出工钱、因此没来上工的那几只。发了工钱就回来 */
+        crewIdle: [],
         /** 图鉴:每样食材**累计**见过多少个。花掉了也不减 —— 图鉴记的是见闻,不是库存。 */
         codex: {},
 
@@ -358,6 +360,15 @@ const migrations = {
             runway: { built: false, ramp: 0, flag: 0, trough: 0 },
         };
     },
+
+    // v13 -> v14:伙计要发工钱了。
+    // **老档一个子儿都不补收,也不退安家费。** 他当初是按旧价招的,
+    // 那笔买卖已经成交;新规矩从下一次跨天开始生效。
+    // crewIdle 起手是空的 —— 不能让人一读档就发现半个摊子在请假,
+    // 而他昨天关游戏的时候一切正常。
+    13(old) {
+        return { ...old, version: 14, crewIdle: [] };
+    },
 };
 
 /** 把任意版本的存档升到当前版本。无法识别时返回 null,由调用方决定是否开新档。 */
@@ -442,6 +453,9 @@ function normalize(s) {
     out.fortuneMark = typeof out.fortuneMark === 'string' ? out.fortuneMark : '';
     out.fortuneDate = typeof out.fortuneDate === 'string' ? out.fortuneDate : '';
     out.crew = uniq(asArray(out.crew).filter(x => typeof x === 'string')).slice(0, 20);
+    // 请假的必须是招进来的那几只之一 —— 存档码玩家能改,
+    // 塞一个不存在的 id 进去会让「谁在摊上」和「谁在请假」对不上
+    out.crewIdle = uniq(asArray(out.crewIdle).filter(x => out.crew.includes(x)));
     out.codex = (() => {
         const c = {};
         for (const k of FOOD_KEYS) c[k] = clampInt(out.codex?.[k], 0, 9_999_999);

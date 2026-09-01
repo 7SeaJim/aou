@@ -10,7 +10,7 @@
  * 本模块不碰存档,只在一局结束后把结果交给 rules.settleFlight()。
  */
 
-import { weatherOf, runwayBonus } from './rules.js';
+import { weatherOf, runwayBonus, activeCrew } from './rules.js';
 import * as sfx from '../audio.js';
 import { PixelScreen, sprite, drawSprite } from './pixmap.js';
 import {
@@ -257,7 +257,9 @@ export class Flight {
     start() {
         const w = weatherOf(this.state);
         const lv = this.state.level;
-        const crew = this.state.crew ?? [];
+        // **只算今天真来上工的。** 没发出工钱的那几只在别处也不生效,
+        // 飞行这边跟着一样,不然会出现「大坝上没看见丫丫,天上她却在挡」
+        const crew = activeCrew(this.state);
         const laoqiao = crew.includes('laoqiao');
         const yaya = crew.includes('yaya');
         // 跑道给的三条加成。没建跑道时全是 0,下面的算式原样退回原来的数

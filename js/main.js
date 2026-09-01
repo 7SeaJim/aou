@@ -67,7 +67,8 @@ async function boot() {
     // 全游戏别处判「今天」都走这口井(占卜、市场、每日饮品),
     // 这一处偷偷用真实时间的话,?day=1 打开会看到「次数没重置,
     // 但占卜和市场重开了」这种半截状态
-    let dirty = rules.refreshDaily(state, now());
+    const rolled = rules.refreshDaily(state, now());
+    let dirty = !!rolled;
     dirty = rules.refreshWeather(state) || dirty;
 
     // 离线结算要在天气刷新**之后**:摊位的客单价吃天气系数,
@@ -120,8 +121,13 @@ async function boot() {
 
     startStallLoop();
 
-    // 离线收益先攒着,等玩家点了「开始游戏」再弹 —— 否则它会在标题画面背后弹完
+    // 离线收益先攒着,等玩家点了「开始游戏」再弹 —— 否则它会在标题画面背后弹完。
+    // 工钱那一条也一起排队:**扣了钱就必须说一声**,
+    // 一觉醒来少了两千鸥币而屏幕上什么都没说,那和 bug 没区别
     pendingEvents = offlineEvents;
+    if (rolled?.wage && (rolled.wage.cost || rolled.wage.unpaid.length)) {
+        pendingEvents.push({ type: 'wage', ...rolled.wage });
+    }
 
     // 点大坝画面上的草棚就进小屋。判定用同一份坐标(scene.js 的 SHACK_HIT),
     // 画一处、点一处地各写一份的话,挪个位置就会「看着在这儿、点不到」。

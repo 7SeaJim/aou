@@ -11,7 +11,7 @@ import {
     UPGRADES, upgradeCost, upgradeCaps, slotsAt, SERVE_MS,
     SHOWS, SHOW_MS, SHOW_WEATHER, POSTCARDS,
     DRINKS, DRINK_KEYS, SHELL_MARKS, divine, hourSlot, onDam,
-    CREW, crewBonus, SEASONS, seasonOf, hireCost,
+    CREW, crewBonus, crewWage, SEASONS, seasonOf, hireCost,
     COSMETICS, EVENTS, ITEMS, MARKET, MARKET_LEVEL, FOODS,
     RECIPE_STEPS, SERVICE,
     KITCHEN, kitchenCost, toolSlots, toolPower, PLATES,
@@ -31,7 +31,7 @@ const WEATHER_MS = 5 * 60 * 1000;
  */
 export function refreshDaily(state, now = new Date()) {
     const today = now.toDateString();
-    if (state.lastDate === today) return false;
+    if (state.lastDate === today) return null;
     state.lastDate = today;
     state.dailyTries = DAILY_TRIES;
 
@@ -39,8 +39,67 @@ export function refreshDaily(state, now = new Date()) {
     // 昨天那杯没送出去就作废 —— 攒一星期一次性灌进去没什么意思。
     state.drink = DRINK_KEYS[Math.floor(Math.random() * DRINK_KEYS.length)];
     state.drinkDate = today;
-    return true;
+
+    // **发工钱也是跨天的一部分,不能拆出去让调用方自己记得叫。**
+    // 现在有三处会跨天(主流程、数值模拟、wa.nextDay),
+    // 拆出去迟早漏一处,而漏了的表现是「有的时候不用发工资」。
+    const wage = payWages(state);
+    state.crewIdle = wage.unpaid;
+    return { wage };
 }
+
+/* ---------- 伙计的工钱 ---------- */
+
+/**
+ * 发工钱。**按招进来的先后发,先来的先拿到。**
+ *
+ * 钱不够的时候得有个说法,而「先来先得」是最好解释的一种 ——
+ * 换成「贵的先发」或者「随机」,玩家都会觉得被算计了。
+ * 顺带它也让人数最大化:先发的都是便宜的。
+ *
+ * @returns {{paid: string[], unpaid: string[], cost: number}}
+ */
+export function payWages(state, ids = state.crew) {
+    const paid = [], unpaid = [];
+    let cost = 0;
+    for (const c of CREW) {
+        if (!ids.includes(c.id)) continue;
+        if (state.coins >= c.wage) {
+            state.coins -= c.wage;
+            cost += c.wage;
+            paid.push(c.id);
+        } else {
+            unpaid.push(c.id);
+        }
+    }
+    return { paid, unpaid, cost };
+}
+
+/**
+ * 补发今天欠的工钱,把请假的叫回来。
+ *
+ * 有这个按钮,是因为「今天没钱」不该等于「今天白过」——
+ * 玩家出一趟摊挣到钱,应该马上就能把人叫回来,
+ * 而不是干等到明天。**惩罚要有出口。**
+ */
+export function payBackWages(state) {
+    const owed = state.crewIdle ?? [];
+    if (!owed.length) return { ok: false, reason: '大家都在摊上' };
+    const r = payWages(state, owed);
+    state.crewIdle = r.unpaid;
+    if (!r.paid.length) {
+        const next = CREW.find(c => owed.includes(c.id));
+        return { ok: false, reason: `还差 ${next.wage - state.coins} 鸥币` };
+    }
+    return { ok: true, ...r, back: CREW.filter(c => r.paid.includes(c.id)) };
+}
+
+/** 今天真正在摊上干活的。没发出工钱的那几只不算 —— 所有加成都从这儿取 */
+export const activeCrew = state =>
+    (state.crew ?? []).filter(id => !(state.crewIdle ?? []).includes(id));
+
+/** 全员一天要多少工钱 */
+export const wageOf = state => crewWage(state.crew ?? []);
 
 export function refreshWeather(state, now = Date.now()) {
     if (now - state.weatherAt < WEATHER_MS) return false;
@@ -261,7 +320,7 @@ const WEATHER_TRADE = { sunny: 1.0, rainy: 0.8, foggy: 0.9 };
 /** 当前的摊位参数,UI 和结算都从这儿取,别各算各的 */
 export function stallInfo(state, when = clockNow()) {
     const up = state.upgrades;
-    const b = crewBonus(state.crew);
+    const b = crewBonus(activeCrew(state));
     const season = SEASONS[seasonOf(when)];
 
     const serveMs = Math.round(SERVE_MS / (UPGRADES.stove.mul(up.stove) * (1 + b.stove)));
@@ -481,7 +540,7 @@ export function showInfo(state) {
     const shows = unlockedShows(state);
     const weather = SHOW_WEATHER[state.weather] ?? 1;
     // 节目越多围观越多,投喂越勤
-    const b = crewBonus(state.crew);
+    const b = crewBonus(activeCrew(state));
     const interval = Math.round(
         SHOW_MS / (1 + 0.15 * (shows.length - 1)) / weather / (1 + b.show));
     const pool = [...new Set(shows.flatMap(sh => sh.pool))];
@@ -603,8 +662,8 @@ function gain(state, key, n) {
 export const seasonNow = (when = clockNow()) => ({ key: seasonOf(when), ...SEASONS[seasonOf(when)] });
 
 /**
- * 招一只伙计鸥。
- * 只有冬天能招 —— 鸥群不在昆明的时候,没人可招,这条比任何解锁条件都自然。
+ * 招一只伙计鸥。**付的是安家费,不是买断** —— 从明天起每天还要发工钱。
+ * 非冬天贵一截:鸥群不在昆明,得托人捎信让它专程飞一趟。
  */
 export function hireCrew(state, id, when = clockNow()) {
     const c = CREW.find(x => x.id === id);
@@ -866,12 +925,12 @@ export function settleFlight(state, result) {
     const events = [];
     state.stats.flights++;
 
-    const haul = haulPerPickup(state.level, state.crew);
+    const haul = haulPerPickup(state.level, activeCrew(state));
     // 稀有食材吃季节和伙计的加成 —— 雨季的菌子是真的多
     // seasonOf() 要传时间。不传的话它用的是**真实**系统时间,
     // 而全游戏其它地方都走 clock.js —— wa.season('summer') 拨了季节,
     // 偏偏这里(雨季稀有食材翻倍,季节最要紧的一处)拨不动。
-    const rare = SEASONS[seasonOf(clockNow())].rare * (1 + crewBonus(state.crew).rare);
+    const rare = SEASONS[seasonOf(clockNow())].rare * (1 + crewBonus(activeCrew(state)).rare);
     for (const [k, n] of Object.entries(result.collected)) {
         const isRare = k === 'mushroom' || k === 'rusan';
         gain(state, k, Math.round(n * haul * (isRare ? rare : 1)));
