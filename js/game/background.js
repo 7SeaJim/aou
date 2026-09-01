@@ -105,7 +105,8 @@ export class Background {
         paintShed(ctx, DECK_Y, phase);
         // 折耳根:不出摊的时候她就在坝上睡觉。出摊时她在柜台后面,这儿就不画了。
         // **画在路人之前** —— 她那条道靠后,人从她前面过
-        if (!serviceOpen(when)) drawCat(ctx, DECK_Y, t, phase, rainy);
+        // 下雨、或者天黑了,她就进棚里睡
+        if (!serviceOpen(when)) drawCat(ctx, DECK_Y, t, phase, rainy || phase === 'night');
 
         const up = this.getState().upgrades;
         drawStallSteam(ctx, DECK_Y, t, up);

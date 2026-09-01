@@ -177,26 +177,68 @@ def sleeping():
 
 
 def working():
-    """上班的橘猫。坐着,尾巴支在身侧 —— 一副「我在干活」的样子"""
-    g = canvas(18, 24)
-    blob(g, 9, 17, 6, 6, 'Y')              # 身子
-    blob(g, 9, 8, 5.5, 5, 'Y')             # 脑袋
-    # 耳朵
-    rect(g, 4, 2, 2, 4, 'Y'); rect(g, 5, 1, 1, 2, 'Y')
-    rect(g, 12, 2, 2, 4, 'Y'); rect(g, 12, 1, 1, 2, 'Y')
-    # 额头的条纹
-    rect(g, 7, 4, 1, 2, 't'); rect(g, 10, 4, 1, 2, 't')
-    # 脸
-    rect(g, 6, 8, 2, 2, 'K'); rect(g, 10, 8, 2, 2, 'K')     # 眼睛
-    rect(g, 8, 11, 2, 1, 'p')                                # 鼻子
-    rect(g, 7, 12, 1, 1, 'K'); rect(g, 10, 12, 1, 1, 'K')    # 嘴
-    # 白围嘴和肚皮
-    blob(g, 9, 18, 3.5, 4, 'w')
-    # 前爪
-    rect(g, 5, 21, 3, 2, 'w'); rect(g, 10, 21, 3, 2, 'w')
-    # 尾巴支在右边
-    for i, y in enumerate(range(21, 11, -1)):
-        rect(g, 15 + (i // 4), y, 2, 1, 'o')
+    """上班的橘猫。坐在柜台后面,尾巴支在身侧。
+
+    **比睡着那只小归小,但不能小成一撮。** 原来 18×24,站在 13×25 的客人
+    旁边看着还没人家一个脑袋大 —— 一只坐着的猫本来就该比站着的人矮,
+    但矮不等于瘦一圈。现在 24×32:坐高和人差不多齐肩,横过来比人宽,
+    这才是猫的比例。
+
+    脸沿用睡姿那一版的骨架:**钻石形、收口带弧度、耳朵小而矮**。
+    两只都看得见(正面朝你),所以左右各一只。
+    """
+    g = canvas(24, 32)
+    # 身子:坐着的猫是一个下宽上窄的梯形,不是一个圆
+    for j, w in enumerate([10, 12, 14, 15, 16, 17, 17, 18, 18, 18, 18, 17]):
+        rect(g, 12 - w // 2, 18 + j, w, 1, 'Y')
+    # 脑袋:和睡姿同一套写法 —— 脑门宽而平,颧骨最宽连三行,收口带弧度
+    for j, w in enumerate([9, 11, 13, 13, 13, 12, 11, 10, 8]):
+        rect(g, 12 - w // 2, 8 + j, w, 1, 'Y')
+    # 耳朵:小、矮、往两边靠。正面能看见两只
+    for cx in (7, 16):
+        for j, w in enumerate([2, 3, 3]):
+            rect(g, cx - w // 2, 5 + j, w, 1, 'Y')
+        rect(g, cx, 6, 1, 2, 'o')
+    # 额头的纹
+    rect(g, 10, 10, 1, 2, 't'); rect(g, 14, 10, 1, 2, 't')
+    # 肩上的纹。**画在白胸之前**,而且靠两边 ——
+    # 画在后面会横穿过白胸,读成胸口挂了两根棍
+    for x, y in ((5, 20), (18, 20), (4, 24), (19, 24)):
+        rect(g, x, y, 1, 3, 't')
+    # 脸:上班时候眼睛是睁着的 —— 睡姿那只闭眼,这只得醒着
+    rect(g, 8, 13, 2, 2, 'K'); rect(g, 14, 13, 2, 2, 'K')
+    rect(g, 11, 15, 2, 1, 'p')             # 鼻头
+    # 白围嘴 + 胸前那一片
+    for j, w in enumerate([6, 8, 8, 7]):
+        rect(g, 12 - w // 2, 16 + j, w, 1, 'w')
+    for j, w in enumerate([8, 10, 10, 9, 8]):
+        rect(g, 12 - w // 2, 21 + j, w, 1, 'w')
+    # 前爪:两只并在身前
+    rect(g, 6, 27, 4, 3, 'w'); rect(g, 14, 27, 4, 3, 'w')
+    rect(g, 6, 30, 4, 1, 'K'); rect(g, 14, 30, 4, 1, 'K')
+    # 尾巴:从右边身侧支出来,**根粗梢细**,只描外沿
+    tail = [(19, 28), (21, 26), (22, 23), (22, 20), (21, 18)]
+    path = []
+    for i in range(len(tail) - 1):
+        (x0, y0), (x1, y1) = tail[i], tail[i + 1]
+        steps = max(abs(x1 - x0), abs(y1 - y0))
+        for t in range(steps + 1):
+            path.append((round(x0 + (x1 - x0) * t / steps),
+                         round(y0 + (y1 - y0) * t / steps)))
+    cells = set()
+    for i, (x, y) in enumerate(path):
+        w = 3 if i < len(path) * 0.5 else 2
+        for dx in range(w):
+            for dy in range(w):
+                cells.add((x + dx, y + dy))
+    for x, y in cells:
+        rect(g, x, y, 1, 1, 'o')
+    # 外沿逐格推出来 —— 斜着走的地方不补拐角
+    for x, y in sorted(cells):
+        if (x + 1, y) not in cells:
+            rect(g, x + 1, y, 1, 1, 'K')
+        if (x, y - 1) not in cells:
+            rect(g, x, y - 1, 1, 1, 'K')
     return rows(outline(g))
 
 

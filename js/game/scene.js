@@ -733,11 +733,19 @@ export function drawPerformance(ctx, x, baseY, t, shows = 1, fedNow = false,
     // 这正是路人和围观混在一起时踩过的那个坑,同一个道理。
     const DZ = [0, 4, 1, 5, 2, 6, 3];
     const line = [];
+    let leftmost = x;
     for (let i = 0; i < crowd; i++) {
         const side = i % 2 ? 1 : -1;
         // 最近的一对也要离哇鸥 28 格 —— 人是 24 格高、哇鸥只有 16 格,
         // 围太近的话主角直接淹没在一排人腿里
-        line.push({ i, dx: side * (28 + Math.floor(i / 2) * 15), dz: DZ[i % DZ.length] });
+        let dx = side * (28 + Math.floor(i / 2) * 15);
+        // **右边到头了就挪到左边去。** 右下角那丛芦苇是画在所有人之上的前景,
+        // 占着 x≥374 那一带;解锁的节目一多,围观的人排到七个,
+        // 最外面那两个正好站进芦苇后面 —— 时不时有人被草挡住半个身子。
+        // 画面右边本来就窄(哇鸥站在 336),左边还宽着,让过去就行。
+        if (x + dx > CROWD_RIGHT) { leftmost -= 15; dx = leftmost - x; }
+        else if (x + dx < leftmost) leftmost = x + dx;
+        line.push({ i, dx, dz: DZ[i % DZ.length] });
     }
     line.sort((a, b) => a.dz - b.dz);
     for (const { i, dx, dz } of line) {
@@ -776,6 +784,13 @@ export function drawPerformance(ctx, x, baseY, t, shows = 1, fedNow = false,
     }
 }
 
+/**
+ * 围观的人最远能站到哪儿。再往右就钻进右下角那丛芦苇后面了 ——
+ * 芦苇是画在所有人之上的前景(那是纵深的来源),所以只能让人躲开它。
+ * 374 = 芦苇最左那根(386)减去叶片甩出去的一截,再留一个人的半身。
+ */
+const CROWD_RIGHT = 374;
+
 /** 四个路人。素材在 tools/people.py。 */
 const ONLOOKERS = ['onlooker_a', 'onlooker_b', 'onlooker_c', 'onlooker_d'];
 
@@ -808,8 +823,9 @@ export function paintShed(ctx, deckY, phase = 'day') {
 /**
  * 睡在大坝上的折耳根。**不上班的时候她就在这儿摊着。**
  *
- * 晴天摊在木棚门口,下雨躲进棚里 —— 原来不管下雨打雷都直挺挺躺在露天,
- * 天气改了一层雨丝,底下的猫一动不动,看着比没有雨还怪。
+ * 晴天白天摊在木棚门口;**下雨、或者天黑了,就进棚里睡** ——
+ * 原来不管下雨打雷都直挺挺躺在露天,天气改了一层雨丝、底下的猫一动不动,
+ * 看着比没有雨还怪;而夜里她当然是回自己窝里睡,不是睡在门口。
  *
  * 位置比路人那条道靠后(SHED_Y):原来两边同一条基线,
  * 路人经过的时候和猫重在一起,分不出谁在前谁在后。
@@ -817,14 +833,14 @@ export function paintShed(ctx, deckY, phase = 'day') {
  * 会呼吸(一格),偶尔冒个 Z。猫睡觉不是完全不动的,
  * 完全不动就成了摆件。
  */
-export function drawCat(ctx, deckY, t, phase = 'day', rainy = false) {
+export function drawCat(ctx, deckY, t, phase = 'day', inside = false) {
     const cv = shadedSprite('cat_sleep', SCENERY.cat_sleep, phase);
     const breathe = Math.sin(t * 0.0011) > 0 ? 0 : 1;
     // 躲雨的时候往棚里挪:靠里、靠上,踩在棚里那层干草上
-    // 下雨躲进棚里(靠里、靠上,踩在那层干草上),晴天摊在棚门口
-    const x = rainy ? SHED_X + 1 : SHED_X - 2;
-    const base = deckY + (rainy ? SHED_Y - 4 : CAT_Y);
-    if (!rainy) shadow(ctx, x, base, 26, 0.18);
+    // 进棚里睡(靠里、靠上,踩在那层干草上),或者摊在棚门口
+    const x = inside ? SHED_X + 1 : SHED_X - 2;
+    const base = deckY + (inside ? SHED_Y - 4 : CAT_Y);
+    if (!inside) shadow(ctx, x, base, 26, 0.18);
     drawStanding(ctx, cv, x, base + breathe);
     // 每隔一阵冒个 Z
     const p = (t * 0.00022) % 1;
