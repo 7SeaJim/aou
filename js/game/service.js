@@ -38,6 +38,13 @@ const RAIL_Y = 70;
 const DECK_Y = 124;      // 游客脚下
 const COUNTER_Y = 138;   // 柜台面
 
+/**
+ * 客人里有多大比例点「你现在做得出来的」。
+ * 剩下那三成留给压力 —— 全给做得出来的,出摊就成了照着单子做。
+ * **这是个可以调的旋钮**:嫌被问倒得太多就调高,嫌太顺就调低。
+ */
+const READY_BIAS = 0.7;
+
 // 队伍只排在左边 —— 右边那 200px 被食谱面板盖着,排过去的人看不见
 const QUEUE_X = [52, 108, 164, 220, 276];
 
@@ -186,20 +193,28 @@ export class Service {
      * 这不是难度,是**运气惩罚**:摊子开着的时段本来就短,一个死单能吃掉
      * 十几分之一的营业时间。
      *
-     * 现实里的摊子也是这样:今天没有的,牌子上就不写。
-     * 所以候选是「料够,或者出餐台上已经有现成的」。
-     * 这不降低难度,只是把「运气」换成「备料」—— 后者是玩家能提前安排的。
+     * 现实里的摊子也是这样:今天没有的,牌子上大半不写 —— 但也总有人进来
+     * 问一句「有没有那个谁」。所以是**七成点得出来的、三成随便点**(READY_BIAS)。
      *
-     * **兜底还是全部**:一样料都没有的时候还是得来人,不然摊子空着更奇怪;
-     * 那时候点什么都做不了,但那是玩家自己没备料,不是随机坑他。
+     * 全给做得出来的太顺:出摊就成了照着单子做,没有「哎呀这个没料了」那一下。
+     * 留三成是留压力,但它现在是**可以准备的压力** —— 玩家知道备料越全、
+     * 被问倒的次数越少,这就和纯运气不一样了。
+     *
+     * 两头都兜底:没有能做的就全抽做不出来的,没有做不出来的就只抽能做的。
      */
     _pickWant(s) {
         const open = s.unlockedRecipes.filter(id => RECIPE_STEPS[id]);
         if (!open.length) return null;
-        const ready = open.filter(id =>
-            (s.stock[id]?.n ?? 0) > 0 ||
-            rules.canAfford(s, RECIPES.find(r => r.id === id).cost));
-        const pool = ready.length ? ready : open;
+        const ready = [], missing = [];
+        for (const id of open) {
+            const ok = (s.stock[id]?.n ?? 0) > 0 ||
+                       rules.canAfford(s, RECIPES.find(r => r.id === id).cost);
+            (ok ? ready : missing).push(id);
+        }
+        // **先按比例挑池子,再看池子空不空。** 反过来写的话,
+        // 「没有做不出来的菜」那种情况会白白吃掉三成的抽签
+        let pool = Math.random() < READY_BIAS ? ready : missing;
+        if (!pool.length) pool = ready.length ? ready : missing;
         return pool[Math.floor(Math.random() * pool.length)];
     }
 
