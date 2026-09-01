@@ -521,7 +521,7 @@ export function runwayCost(key, lv) {
 }
 
 /** 每一级各给多少。**改这儿要回去看 flight.js 的 _difficulty 和 _hunger** */
-export const RUNWAY_STEP = { ramp: 0.05, flag: 0.02, trough: 0.15 };
+export const RUNWAY_STEP = { ramp: 0.03, flag: 0.02, trough: 0.15 };
 
 /* ============================================================
    新手引导
@@ -545,7 +545,7 @@ export const TUTORIAL = [
     {
         tab: 'dock',
         title: '先去坝上转一圈',
-        text: '点「出发觅食」。拖着哇鸥飞,吃到的东西就是摊子的材料。',
+        text: '点「出发觅食」。空格拍翅膀往上蹿,方向键右按住就平飞 —— 吃到的东西就是摊子的材料。',
         done: s => s.stats.flights >= 1,
     },
     {

@@ -137,6 +137,18 @@ async function boot() {
         canvas.style.cursor = bg.hitShack(e.clientX, e.clientY) ? 'pointer' : '';
     });
 
+    // 两个飞行键。**pointerdown 不是 click** —— 平飞要的是「按住多久」,
+    // click 到松手才发,那就永远只按得住 0 毫秒。
+    // preventDefault 挡的是按下去之后按钮抢走焦点:抢走了,空格就落到按钮上
+    // 变成「再点一次这个按钮」,键盘和屏幕两套操作会打架
+    const flap = document.getElementById('flyFlap');
+    const glide = document.getElementById('flyGlide');
+    flap.addEventListener('pointerdown', e => { e.preventDefault(); flight?.flap(); });
+    glide.addEventListener('pointerdown', e => { e.preventDefault(); flight?.setGlide(true); });
+    for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) {
+        glide.addEventListener(ev, () => flight?.setGlide(false));
+    }
+
     document.getElementById('flyQuit').addEventListener('click', () => flight?.quit());
     document.getElementById('flyPause').addEventListener('click', togglePause);
     document.getElementById('flyResume').addEventListener('click', togglePause);

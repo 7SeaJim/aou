@@ -54,6 +54,17 @@
             position: absolute; bottom: 14px; right: 14px; z-index: 25;
             display: flex; gap: 12px;
         }
+        /* 两个键。**它们同时是操作说明** —— 键盘玩家看一眼就知道按哪儿,
+           手机玩家直接按这两个。画布左右半边也认(见 flight.js 的 _onDown),
+           所以这两个按钮做得下、够大就行,不用占地方。 */
+        .fly-keys {
+            position: absolute; bottom: 14px; left: 14px; z-index: 25;
+            display: flex; gap: 12px;
+        }
+        .fly-keys .px-btn { min-width: 92px; }
+        .fly-keys kbd {
+            font: inherit; opacity: .7; margin-right: 4px;
+        }
         /* 待机界面 */
         .title-screen {
             position: fixed; inset: 0; z-index: 100;
@@ -135,6 +146,10 @@
                           style="color:var(--coral)">
                         <i class="px-icon px-icon--erkuai"></i> 饿了!快吃
                     </span>
+                </div>
+                <div class="fly-keys">
+                    <button class="px-btn px-btn--sm" id="flyFlap"><kbd>空格</kbd>跃起</button>
+                    <button class="px-btn px-btn--sm" id="flyGlide"><kbd>→</kbd>平飞</button>
                 </div>
                 <div class="fly-ctrl">
                     <button class="px-btn px-btn--sm" id="flyPause">⏸ 暂停</button>

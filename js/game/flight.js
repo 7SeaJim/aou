@@ -28,6 +28,32 @@ export const H = 620;
 const HORIZON = 250;          // 飞行视角:海平线压在下面,大半屏是天
 const BIRD_X = 60;
 const HIT_R = 17;
+
+/* ---------- 两个键 ----------
+ *
+ * 原来是**拖着哇鸥走**:手指在哪它就在哪。够直观,但没有手感可言 ——
+ * 位置直接归你,不存在「来不及」,飞行的难度就只剩下眼力。
+ *
+ * 现在改成两个键,中间隔着一层重力:
+ *
+ *   跃起(空格 / 屏幕左半)   拍一下翅膀,往上蹿一段再落回来
+ *   平飞(方向键右 / 右半)   按住的时候不掉,横着飘
+ *   什么都不按               掉
+ *
+ * 三个状态各管一个方向,合起来是完整的上下控制 —— **但每一次改变高度
+ * 都要提前一点点**,那一点点就是手感。飞不是「移到那儿」,是「攒够高度」。
+ */
+/** 每帧的下坠加速度(以 60fps 为基准,和 move 一样乘 k) */
+const GRAVITY = 0.09;
+/** 拍一下翅膀给的初速度。升到最高约 47 像素 —— 五条道里的一道多一点 */
+const FLAP_VY = -2.9;
+/** 下坠的终速。不封的话最后一段快到看不清自己是怎么掉下去的 */
+const MAX_VY = 4.5;
+/** 平飞时把纵向速度按住的力度。不是直接归零 —— 那样切换起来像瞬移 */
+const GLIDE_K = 0.35;
+/** 能飞的上下边。上面撞天花板只是停住,下面碰水面要挨一下 */
+const SKY_TOP = 22;
+const SEA_TOP = HORIZON - 16;
 // 飞行里会掉的食材。稀有的(菌子、乳扇)不放常规掉落池,靠天气加成出
 const FOOD_TYPES = ['erkuai', 'potato', 'rice', 'douhua', 'chili', 'sugar'];
 const OBSTACLES = ['cloud', 'balloon', 'kite'];
@@ -122,7 +148,11 @@ export class Flight {
         this.rafId = null;
         this.lastTs = 0;
 
-        this._onMove = this._onMove.bind(this);
+        this._onDown = this._onDown.bind(this);
+        this._onUp = this._onUp.bind(this);
+        this._onKeyDown = this._onKeyDown.bind(this);
+        this._onKeyUp = this._onKeyUp.bind(this);
+        this._onBlur = this._onBlur.bind(this);
         this._loop = this._loop.bind(this);
     }
 
@@ -136,7 +166,9 @@ export class Flight {
             score: 0,
             lives: 3,
             birdY: VH / 2,
-            targetY: VH / 2,
+            vy: 0,
+            glide: false,       // 方向键右按着没有
+            flapAt: -1e9,       // 上一次拍翅膀,画翅膀那一下要用
             hurtUntil: 0,
             foods: [], obstacles: [], powerups: [],
             spawnTimer: 0,
@@ -164,7 +196,7 @@ export class Flight {
             double: (this.state.items.double ?? 0) > 0,
         };
 
-        this.canvas.addEventListener('pointermove', this._onMove);
+        this._bind();
         this.running = true;
         this.paused = false;
         this.lastTs = 0;
@@ -185,16 +217,69 @@ export class Flight {
     destroy() {
         this.running = false;
         if (this.rafId) cancelAnimationFrame(this.rafId);
-        this.canvas.removeEventListener('pointermove', this._onMove);
+        this._unbind();
     }
 
     /* ---------- 内部 ---------- */
 
-    _onMove(e) {
-        const rect = this.canvas.getBoundingClientRect();
-        const y = (e.clientY - rect.top) * (VH / rect.height);
-        this.f.targetY = Math.max(22, Math.min(HORIZON - 14, y));
+    _bind() {
+        // 画布上按下也算:**左半边点一下 = 跃起,右半边按住 = 平飞**。
+        // 手机上没有键盘,而满屏可点比去够一个小按钮靠谱得多 ——
+        // 屏幕下面那两个按钮同时也是「告诉你有这两个键」的说明。
+        this.canvas.addEventListener('pointerdown', this._onDown);
+        this.canvas.addEventListener('pointerup', this._onUp);
+        this.canvas.addEventListener('pointercancel', this._onUp);
+        window.addEventListener('keydown', this._onKeyDown);
+        window.addEventListener('keyup', this._onKeyUp);
+        // 切走的时候浏览器不会补一个 keyup —— 不听 blur 的话,
+        // 回来会发现平飞一直按着,而玩家手上什么都没按
+        window.addEventListener('blur', this._onBlur);
     }
+
+    _unbind() {
+        this.canvas.removeEventListener('pointerdown', this._onDown);
+        this.canvas.removeEventListener('pointerup', this._onUp);
+        this.canvas.removeEventListener('pointercancel', this._onUp);
+        window.removeEventListener('keydown', this._onKeyDown);
+        window.removeEventListener('keyup', this._onKeyUp);
+        window.removeEventListener('blur', this._onBlur);
+    }
+
+    /** 拍一下翅膀。暂停时不响应 —— 暂停界面上还有按钮要点 */
+    flap() {
+        if (!this.running || this.paused) return;
+        this.f.vy = FLAP_VY;
+        this.f.flapAt = this.f.elapsed;
+        sfx.play('flap');
+    }
+
+    /** 平飞按住 / 松开。UI 上那两个按钮也走这两个口 */
+    setGlide(on) {
+        if (!this.running) return;
+        this.f.glide = !!on && !this.paused;
+    }
+
+    _onDown(e) {
+        const rect = this.canvas.getBoundingClientRect();
+        if (e.clientX - rect.left < rect.width / 2) this.flap();
+        else this.setGlide(true);
+    }
+
+    _onUp() { this.setGlide(false); }
+
+    _onKeyDown(e) {
+        // **按住空格不能变成无重力。** 系统的自动重复会一秒发几十个 keydown,
+        // 每个都拍一下翅膀的话,压着不放就直接飞上天了
+        if (e.repeat) return;
+        if (e.code === 'Space' || e.code === 'ArrowUp') { e.preventDefault(); this.flap(); }
+        else if (e.code === 'ArrowRight') { e.preventDefault(); this.setGlide(true); }
+    }
+
+    _onKeyUp(e) {
+        if (e.code === 'ArrowRight') this.setGlide(false);
+    }
+
+    _onBlur() { this.setGlide(false); }
 
     _emit() {
         this.onTick?.({
@@ -226,7 +311,7 @@ export class Flight {
         const k = dt / 16.7;                 // 以 60fps 为基准的步长系数
         f.elapsed += dt;
 
-        f.birdY += (f.targetY - f.birdY) * Math.min(1, 0.12 * k);
+        this._fly(k);
 
         // 生成
         f.spawnTimer += dt;
@@ -333,6 +418,43 @@ export class Flight {
      * 吃到一样补一截,大约每两秒得吃到一个。**从这一刻起,躲和吃得同时办**,
      * 而这两件事是打架的 —— 食材和障碍在同一片天上。
      */
+    /**
+     * 纵向的一步。平飞不是把速度直接归零 —— 那样一按一松像瞬移,
+     * 而且从下坠切到平飞会「咔」一下停在半空。按住的是**阻力**,
+     * 半个巴掌的时间飘平,看着才像一只鸟在借风。
+     */
+    _fly(k) {
+        const f = this.f;
+        if (f.glide) f.vy += (0 - f.vy) * Math.min(1, GLIDE_K * k);
+        else f.vy = Math.min(MAX_VY, f.vy + GRAVITY * k);
+        f.birdY += f.vy * k;
+
+        if (f.birdY < SKY_TOP) { f.birdY = SKY_TOP; f.vy = 0; }   // 顶到天,停住
+        else if (f.birdY > SEA_TOP) this._splash();
+    }
+
+    /**
+     * 掉到水面上。**扣一条命,然后自己蹬水起飞** ——
+     * 不直接判死是因为这是只海鸥:落在滇池上再飞起来是它每天干的事,
+     * 而一个「碰到底就结束」的下边界,配上重力,会让人不敢往下飞。
+     * 下半屏的食材本来就该有人去捡。
+     */
+    _splash() {
+        const f = this.f;
+        f.birdY = SEA_TOP;
+        // 蹬水比空中拍一下有力得多(升 120px 而不是 45px)。
+        // **这样一次失误只会是一条命** —— 弹得矮的话,还没回过神就又拍下去了,
+        // 一个走神扣两三条,那是在罚玩家没盯着屏幕,不是在考他会不会飞
+        f.vy = FLAP_VY * 1.6;
+        if (f.elapsed < f.hurtUntil) return;  // 挨打的那几百毫秒里不重复扣
+        if (f.shield) { sfx.play('event'); f.shield = false; return; }
+        sfx.play('hit');
+        f.lives--;
+        f.combo = 0;
+        f.hurtUntil = f.elapsed + 450;
+        if (f.lives <= 0) this._finish('crash');
+    }
+
     _hunger(dt) {
         const f = this.f;
         if (f.elapsed < HUNGRY_AT) return;
@@ -562,11 +684,13 @@ export class Flight {
             return;
         }
 
-        // 爬升/下降时挑对应的翅膀帧,飞行手感看得见
-        const dy = f.targetY - f.birdY;
+        // 挑翅膀帧:**按的是哪个键要能从画面上看出来**。
+        // 刚拍完那 220ms 一定是扬起的那一帧 —— 反馈得贴着按键,
+        // 不能等速度真的变正了才换,那时候手感已经过去了
         let i = Math.floor(t / 1000 * 10) % 4;
-        if (dy < -6) i = 0;                       // 往上拉 -> 翅膀扬起
-        else if (dy > 6) i = 2;                   // 往下扎 -> 翅膀压下
+        if (t - f.flapAt < 220 || f.vy < -0.6) i = 0;   // 往上蹿 -> 翅膀扬起
+        else if (f.glide) i = 1;                       // 平飞    -> 摊平
+        else if (f.vy > 1.2) i = 2;                    // 往下掉  -> 翅膀压下
         const key = hurt ? 'waou_hurt' + i : 'waou' + i;
         const cv = hurt
             ? sprite(key, WAOU[i], { remap: { w: '#ffd0c4', V: '#f0b8b0' } })
