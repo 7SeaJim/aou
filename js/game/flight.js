@@ -34,6 +34,27 @@ const OBSTACLES = ['cloud', 'balloon', 'kite'];
 const POWERUPS = ['shield', 'magnet', 'double'];
 const OBSTACLE_GRID = { cloud: 'storm', balloon: 'balloon', kite: 'kite' };
 
+/**
+ * 一级、晴天的开局速度(每 60fps 帧走多少虚拟像素)。
+ *
+ * 原来是 1.25 —— 一秒 75 像素,一个东西横穿 440 宽的画面要走六秒。
+ * 那不是飞,那是飘:开局一分钟里玩家几乎不用动手,
+ * 而**一个玩法开头的一分钟决定了他要不要玩第二局**。
+ * 现在开局就是两秒多穿一次屏,一上来就有事要躲。
+ */
+const SPEED_0 = 2.6;
+
+/**
+ * 提速的斜率:每飞一分钟,速度在开局的基础上多涨这么多。
+ *
+ * 底盘抬高之后斜率就得压下来 —— 照旧的 0.9 走,五分钟时会比原来快四成,
+ * 反应时间掉到半秒以下,那不是难,是看运气。
+ */
+const SPEED_GROW = 0.45;
+/** 生成间隔每分钟压缩多少毫秒,以及压到哪儿为止 */
+const SPAWN_GROW = 170;
+const SPAWN_MIN = 300;
+
 /** 障碍占生成的比例:开局 22%,一路涨到 55% */
 const HAZARD_0 = 0.22;
 const HAZARD_MAX = 0.55;
@@ -120,13 +141,14 @@ export class Flight {
             foods: [], obstacles: [], powerups: [],
             spawnTimer: 0,
             // 开局的节奏和速度。往后都是从这两个数按飞行时长推的,见 _difficulty()
-            baseInterval: Math.max(700, 1100 - lv * 50),
-            // 助跑坡:全程慢一档 —— 玩家最先感觉到的就是这个
-            baseSpeed: (1.25 + (lv - 1) * 0.2) * w.speed * (1 - rw.ramp),
-            spawnInterval: Math.max(700, 1100 - lv * 50),
-            speed: (1.25 + (lv - 1) * 0.2) * w.speed,
+            baseInterval: Math.max(560, 900 - lv * 40),
+            baseSpeed: (SPEED_0 + (lv - 1) * 0.25) * w.speed,
+            spawnInterval: Math.max(560, 900 - lv * 40),
+            speed: (SPEED_0 + (lv - 1) * 0.25) * w.speed,
             hazard: Math.max(0.08, HAZARD_0 - rw.flag),   // 风向旗:障碍少一些
             flag: rw.flag,
+            // 助跑坡:**不再是全程按比例减速**,减的是提速的斜率 —— 见 _difficulty()
+            ramp: rw.ramp,
             hungryMs: HUNGRY_MS * (1 + rw.trough),  // 食槽:肚子撑得更久
             elapsed: 0,
             hunger: 1,        // 肚子。五分钟之后才开始掉,掉光就回巢
@@ -294,8 +316,8 @@ export class Flight {
      * 也是同一个速度、同一个障碍密度。**一局的终点应该是撞死了,不是不再变难了。**
      *
      * 现在三样一起涨,而且**不封顶**:
-     *   speed     线性涨,一分钟大约快一倍
-     *   interval  越来越密,底线 260ms —— 再密就成了一堵墙
+     *   speed     线性涨,一分钟多涨 45%
+     *   interval  越来越密,底线 300ms —— 再密就成了一堵墙
      *   hazard    障碍占生成的比例,22% 一路涨到 55%
      *
      * 涨到后面必死,这是故意的:活得越久分越高,但没有「安全地刷」这条路。
@@ -325,8 +347,14 @@ export class Flight {
     _difficulty() {
         const f = this.f;
         const mins = f.elapsed / 60000;
-        f.speed = f.baseSpeed * (1 + mins * 0.9);
-        f.spawnInterval = Math.max(260, f.baseInterval - mins * 280);
+        // 助跑坡减的是**斜率**,不是速度本身。
+        // 原来它按比例砍 baseSpeed —— 全程一个固定折扣,开局就慢,
+        // 而开局本来已经够慢了;玩家买完只觉得「更飘了」,而且从头到尾
+        // 一个手感,根本看不出这钱花在哪。
+        // 现在它买的是「变快来得晚一点」:同样的开局,同样的手感,
+        // 但你能多撑一程 —— 那正好记在最远距离上,看得见。
+        f.speed = f.baseSpeed * (1 + mins * SPEED_GROW * (1 - f.ramp));
+        f.spawnInterval = Math.max(SPAWN_MIN, f.baseInterval - mins * SPAWN_GROW);
         f.hazard = Math.min(HAZARD_MAX - f.flag, Math.max(0.08, HAZARD_0 - f.flag) + mins * 0.12);
 
         // 每 20 秒报一波。**得让玩家听见、看见它变难了** ——

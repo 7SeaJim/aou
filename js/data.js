@@ -508,7 +508,7 @@ export const FOOD_SOURCE = {
  */
 export const RUNWAY = {
     build: 3000,
-    ramp:   { name: '助跑坡', icon: 'map',      desc: '起飞更稳,全程慢一档', base: 900,  max: 5 },
+    ramp:   { name: '助跑坡', icon: 'map',      desc: '起飞更稳,提速来得更慢', base: 900,  max: 5 },
     flag:   { name: '风向旗', icon: 'star',     desc: '看得清风,障碍少一些', base: 1400, max: 5 },
     trough: { name: '食槽',   icon: 'erkuai',   desc: '出发前垫饱,饿得慢',   base: 1100, max: 5 },
 };
@@ -621,14 +621,15 @@ export const HELPER = {
  *   board 砧板  切。快,不怕过火,是新手最先学会的一步
  *   pan   煎盘  煎。窗口窄,最考手速
  *   stove 灶台  炒和煮。中等
- *   oven  烤箱  烤和蒸。慢,但**窗口特别宽**,所以能一边烤一边干别的 ——
- *               「游客不在时提前做」靠的就是它
+ *   oven  烤箱  烤和蒸。慢,窗口也最宽 —— 能一边烤一边干别的,
+ *               「游客不在时提前做」靠的就是它。但宽是有上限的
+ *               (GOOD_MAX_MS),到点还是得回来看一眼
  */
 export const TOOLS = {
-    board: { name: '砧板', icon: 'board', spot: 'mid',  window: 0.60 },
-    pan:   { name: '煎盘', icon: 'pan',   spot: 'mid',  window: 0.38 },
-    stove: { name: '灶台', icon: 'wok',   spot: 'mid',  window: 0.48 },
-    oven:  { name: '烤箱', icon: 'oven',  spot: 'left', window: 0.80 },
+    board: { name: '砧板', icon: 'board', spot: 'mid',  window: 0.30 },
+    pan:   { name: '煎盘', icon: 'pan',   spot: 'mid',  window: 0.16 },
+    stove: { name: '灶台', icon: 'wok',   spot: 'mid',  window: 0.20 },
+    oven:  { name: '烤箱', icon: 'oven',  spot: 'left', window: 0.34 },
 };
 
 /**
@@ -656,42 +657,42 @@ export const BURN_MS = 5000;      // 过了火之后再等这么久就彻底焦
  */
 export const RECIPE_STEPS = {
     shao_erkuai: [
-        { ing: 'erkuai', tool: 'stove', ms: 3500, name: '烤饵块' },
-        { ing: 'chili',  tool: 'board', ms: 1500, name: '切辣椒' },
+        { ing: 'erkuai', tool: 'stove', ms: 5000, name: '烤饵块' },
+        { ing: 'chili',  tool: 'board', ms: 2400, name: '切辣椒' },
     ],
     yangyu_baba: [
-        { ing: 'potato', tool: 'board', ms: 1600, name: '切洋芋' },
-        { ing: 'potato', tool: 'pan',   ms: 4000, name: '煎两面' },
+        { ing: 'potato', tool: 'board', ms: 2400, name: '切洋芋' },
+        { ing: 'potato', tool: 'pan',   ms: 6000, name: '煎两面' },
     ],
     liangxia: [
-        { ing: 'rice',  tool: 'stove', ms: 2500, name: '煮米浆' },
-        { ing: 'sugar', tool: 'board', ms: 1200, name: '刨红糖' },
+        { ing: 'rice',  tool: 'stove', ms: 3800, name: '煮米浆' },
+        { ing: 'sugar', tool: 'board', ms: 2400, name: '刨红糖' },
     ],
     douhua_mx: [
-        { ing: 'rice',   tool: 'stove', ms: 3000, name: '烫米线' },
-        { ing: 'douhua', tool: 'board', ms: 1500, name: '舀豆花' },
+        { ing: 'rice',   tool: 'stove', ms: 4500, name: '烫米线' },
+        { ing: 'douhua', tool: 'board', ms: 2400, name: '舀豆花' },
     ],
     xiaoguo_mx: [
-        { ing: 'chili', tool: 'board', ms: 1500, name: '切小米辣' },
-        { ing: 'rice',  tool: 'stove', ms: 5000, name: '小铜锅煮开' },
+        { ing: 'chili', tool: 'board', ms: 2400, name: '切小米辣' },
+        { ing: 'rice',  tool: 'stove', ms: 7500, name: '小铜锅煮开' },
     ],
     kao_rusan: [
-        { ing: 'rusan',  tool: 'pan',   ms: 3800, name: '架上去烤' },
-        { ing: 'flower', tool: 'board', ms: 1500, name: '调玫瑰酱' },
+        { ing: 'rusan',  tool: 'pan',   ms: 5600, name: '架上去烤' },
+        { ing: 'flower', tool: 'board', ms: 2400, name: '调玫瑰酱' },
     ],
     jianshouqing: [
-        { ing: 'mushroom', tool: 'board', ms: 2000, name: '切片' },
-        { ing: 'mushroom', tool: 'stove', ms: 5000, name: '大火炒' },
-        { ing: 'mushroom', tool: 'stove', ms: 5000, name: '再炒一遍' },
+        { ing: 'mushroom', tool: 'board', ms: 3000, name: '切片' },
+        { ing: 'mushroom', tool: 'stove', ms: 7500, name: '大火炒' },
+        { ing: 'mushroom', tool: 'stove', ms: 7500, name: '再炒一遍' },
     ],
     xianhua_bing: [
-        { ing: 'flower', tool: 'board', ms: 2000, name: '剁鲜花馅' },
-        { ing: 'erkuai', tool: 'oven',  ms: 11000, name: '进烤箱' },
+        { ing: 'flower', tool: 'board', ms: 3000, name: '剁鲜花馅' },
+        { ing: 'erkuai', tool: 'oven',  ms: 16000, name: '进烤箱' },
     ],
     qiguoji: [
-        { ing: 'potato',   tool: 'board', ms: 2000, name: '切配菜' },
-        { ing: 'mushroom', tool: 'stove', ms: 4000, name: '爆香' },
-        { ing: 'chili',    tool: 'oven',  ms: 16000, name: '上汽蒸' },
+        { ing: 'potato',   tool: 'board', ms: 3000, name: '切配菜' },
+        { ing: 'mushroom', tool: 'stove', ms: 6000, name: '爆香' },
+        { ing: 'chili',    tool: 'oven',  ms: 24000, name: '上汽蒸' },
     ],
 };
 
@@ -724,24 +725,31 @@ export const toolPower = lv => 1 + (lv - 1) * 0.18;
 /**
  * 一步最短要多久。**升级只能快到这儿为止。**
  *
- * 火力提高会把时长按 1/power 缩短,而「刚好」的窗口是时长的一个比例 ——
- * 于是升级同时把窗口也按比例缩掉了。满级之后最短的一步只有 0.7 秒,
- * 窗口 0.6 秒:**玩家花钱买到的是「更难点中」**,这是反过来的。
- * 一个休闲玩法里,升级该让人更轻松,不是更手忙脚乱。
- *
- * 到了这个下限之后,再升级换来的是**格子数**(能同时开几样),
- * 而不是继续压缩反应时间 —— 那才是「产能变大」该有的样子。
+ * 火力提高会把时长按 1/power 缩短。到了这个下限之后,再升级换来的是
+ * **格子数**(能同时开几样),而不是继续压缩反应时间 ——
+ * 那才是「产能变大」该有的样子。
  */
-export const MIN_STEP_MS = 1600;
+export const MIN_STEP_MS = 2400;
+
+/* ---- 「刚好」那一段有多宽:夹在一个上下限之间 ---- */
 
 /**
- * 「刚好」那一段最少要有多久(毫秒)。
- *
- * 光有 MIN_STEP_MS 还不够:一步 1.6 秒、煎盘的窗口占 38%,
- * 算下来「刚好」只有 1 秒出头。**同时开三四样的时候,这一秒是不够用的** ——
- * 手指还在拖上一样,这一锅就糊了。所以再兜一道绝对下限。
+ * 下限。窗口本来只是时长的一个比例,短的那几步算下来不到一秒 ——
+ * **同时开三四样的时候根本够不着**:手指还在拖上一样,这一锅就糊了。
  */
-export const GOOD_MIN_MS = 1800;
+export const GOOD_MIN_MS = 1100;
+
+/**
+ * 上限。**这条是「收紧火候」的关键。**
+ *
+ * 窗口是比例的话,一步越长窗口就越宽 —— 蒸汽锅鸡那一步 24 秒,
+ * 算下来「刚好」有二十多秒,等于根本不用看。于是出现了一个反过来的规律:
+ * **越贵越慢的菜,火候反而越不用管。**
+ *
+ * 加了上限之后,长时间的那几步换来的是「这段时间你可以去干别的」,
+ * 而不是「回来晚多久都行」。到点还是得踩准。
+ */
+export const GOOD_MAX_MS = 2600;
 
 /**
  * 餐盘。纯外观 + 一点点加价 —— **加价必须小**,
@@ -761,8 +769,9 @@ export const SERVICE = {
     stockMax: 12,
     /** 游客隔多久来一个(毫秒)。招牌越好来得越勤 */
     comeMs: 9000,
-    /** 一个游客最多等多久 */
-    patienceMs: 42_000,
+    /** 一个游客最多等多久。步骤时长整体拉长之后跟着放宽 ——
+     *  不放的话,汽锅鸡这种三步 33 秒的菜现点现做就必然超时 */
+    patienceMs: 50_000,
     /** 摊前最多站几个 */
     queueMax: 4,
     /**

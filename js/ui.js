@@ -802,7 +802,7 @@ export class UI {
             </div>`;
         }
         const b = rules.runwayBonus(s);
-        const shown = { ramp: `慢 ${Math.round(b.ramp * 100)}%`,
+        const shown = { ramp: `提速慢 ${Math.round(b.ramp * 100)}%`,
                         flag: `障碍 −${Math.round(b.flag * 100)}%`,
                         trough: `顶饿 +${Math.round(b.trough * 100)}%` };
         const cards = RUNWAY_KEYS.map(k => {

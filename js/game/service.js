@@ -26,7 +26,7 @@ import { now } from '../clock.js';
 import { shadedSprite } from './tint.js';
 import {
     RECIPES, RECIPE_STEPS, TOOLS, QUALITY, BURN_MS, SERVICE, HELPER, FOODS,
-    GOOD_MIN_MS, MIN_STEP_MS, dayPhase,
+    GOOD_MIN_MS, GOOD_MAX_MS, MIN_STEP_MS, dayPhase,
 } from '../data.js';
 import * as rules from './rules.js';
 
@@ -488,16 +488,21 @@ export class Service {
 /**
  * 这一步实际的「刚好」半宽。
  *
- * 窗口本来是时长的一个比例,短的那几步算下来只有半秒多 ——
- * **同时开三四样的时候根本够不着**。所以兜一道绝对下限:
- * 不管这一步多快,「刚好」那一段都不短于 GOOD_MIN_MS。
- * 一整段的宽度是 1.8w(早 1.0w + 晚 0.8w),由此反解出保底的 w。
+ * 名义上窗口是时长的一个比例,但**两头都夹住**:
+ *
+ *   下限 GOOD_MIN_MS  太短的一步,窗口不到一秒,同时开三四样时够不着
+ *   上限 GOOD_MAX_MS  太长的一步,窗口宽到二十几秒,等于不用看火 ——
+ *                     结果是越贵越慢的菜火候越不用管,正好反了
+ *
+ * 一整段的宽度是 1.8w(早 1.0w + 晚 0.8w),由此从毫秒反解出 w。
  *
  * **判定和画条子共用这一个函数** —— 两边各算一套的话,
  * 玩家会遇到「明明停在绿带子里却判了生的」,那是最让人下头的不公平。
  */
-export const goodBand = (window, ms) =>
-    Math.max(window, GOOD_MIN_MS / (1.8 * Math.max(1, ms)));
+export const goodBand = (window, ms) => {
+    const span = 1.8 * Math.max(1, ms);
+    return Math.min(GOOD_MAX_MS / span, Math.max(GOOD_MIN_MS / span, window));
+};
 
 export function gradeOf(p, window, ms) {
     const w = goodBand(window, ms);
