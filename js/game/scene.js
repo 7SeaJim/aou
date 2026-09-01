@@ -448,9 +448,14 @@ export function paintPier(ctx, deckY, bottom, weather = 'sunny', phase = 'day',
     shadow(ctx, SHACK_HIT.cx, deckY - 13, 26);
     drawStanding(ctx, shadedSprite('shack', SCENERY.shack, phase),
                  SHACK_HIT.cx, deckY - 13);
-    if (phase !== 'day') {                         // 屋里透出来的光
+    if (phase !== 'day') {
+        // 屋里透出来的光。**这块必须正好盖住窗芯,不能压到窗框上。**
+        // 原来写的是 (cx-5, -25, 10, 6),而窗芯在图里是 x 局部 5–14、y 9–13 ——
+        // 算成画面坐标是 cx-8 起、10 宽、5 高。差的那三格全糊在右边的框上,
+        // 看着就是「灯光边缘和窗框重叠了」。
+        // 精灵图 25 宽 20 高、底边落在 deckY-13,所以局部 y 换算是 deckY-33+y。
         ctx.fillStyle = phase === 'night' ? '#ffd98a' : '#ffe6b0';
-        ctx.fillRect(SHACK_HIT.cx - 5, deckY - 13 - 12, 10, 6);
+        ctx.fillRect(SHACK_HIT.cx - 8, deckY - 24, 10, 5);
     }
 }
 
@@ -505,7 +510,9 @@ export function drawReeds(ctx, weather, t, phase = 'day') {
     const mid = mix(dark, P.far, 0.28);
 
     // 两丛,分别咬住左下和右下角。每丛几根,高矮错开
-    for (const [bx, n, dir] of [[6, 9, 1], [VW - 8, 8, -1]]) {
+    // 右边那丛收到 5 根:跑道搬过来之后,原来的 8 根一直盖到 x=386,
+    // 把台上那面旗埋进草里了。前景要有,但不能把新盖的东西吃掉
+    for (const [bx, n, dir] of [[6, 9, 1], [VW - 8, 5, -1]]) {
         for (let i = 0; i < n; i++) {
             const x0 = bx + dir * i * 6;
             const h = 52 + (i * 17) % 34;
@@ -804,12 +811,13 @@ const FEED_ICONS = ['erkuai', 'potato', 'rice', 'douhua', 'chili'];
 const feedPops = [];
 
 /** 跑道站的位置。坝子右头,那一带原来只有芦苇 */
-const RUNWAY_X = 376;
+const RUNWAY_X = 370;
 /**
  * 跑道台面比甲板高多少(相对 SHED_Y 那条基线)。
- * 精灵图底边落在 SHED_Y,台面在图里第 15 行 —— 站到台面上就是往上抬这么多。
+ * 精灵图 40 高、底边落在 SHED_Y,台面在图里第 16 行 —— 40-16 = 24 格。
+ * **加高台子的时候这个数要跟着改**,不然老翘会陷进台面里或者浮在半空。
  */
-const RUNWAY_TOP = -16;
+const RUNWAY_TOP = -24;
 
 /** 跑道。没建的时候画地基和两根空杆 —— 让人看得见这儿会有个东西 */
 export function paintRunway(ctx, deckY, built, phase = 'day') {
@@ -831,12 +839,17 @@ export function paintRunway(ctx, deckY, built, phase = 'day') {
  * 躲开草棚(172)、木棚(199–245)和三根路灯(20 / 259 / 415)。
  */
 const CREW_SPOT = {
-    huihui:  104,                            // 颠锅的,挨着摊子
-    apang:   126,                            // 收钱的,也在摊子这头
-    xiaobai: 152,                            // 表演的,自己带俩围观
+    // 摊子占 34–118、草棚占 159–184,中间那一段留给这两只
+    huihui:  126,                            // 颠锅的,挨着摊子
+    apang:   146,                            // 收钱的,也在摊子这头
+    // 翻跟头要带俩围观,一共三个人 —— **左边那段塞不下**,
+    // 原来放 152,右边那个观众正好站在草棚门口把小屋挡了。挪到右半边空地
+    xiaobai: 300,
     dundun:  { x: STALL_X, onStall: true },   // 看摊子的 —— **站在摊子顶上**
-    laoqiao: { x: 372, dy: RUNWAY_TOP },     // 老鸟,站跑道台面上
-    yaya:    { x: 392, dy: RUNWAY_TOP },
+    // 老鸟站台面上、挨着旗子;小鸟站坡底下的起点。
+    // 「老鸟经验丰富,小鸟胆子更大」—— 一个在高处看,一个在起跑线上
+    laoqiao: { x: 370, dy: RUNWAY_TOP },
+    yaya:    { x: 338, dy: 0 },
 };
 
 /**
@@ -856,12 +869,15 @@ export function drawCrew(ctx, deckY, t, hired = [], phase = 'day',
             // 写死的话升一级它就悬在半空,或者陷进屋顶里
             base = deckY - 13 - SCENERY[stallStage(upgrades).key].length + 2;
         } else if (spot.dy === RUNWAY_TOP) {
-            // 跑道没建的时候,老翘和丫丫没地方站,落回甲板
+            // 跑道没建的时候,老翘没地方站,落回甲板
             base = deckY + SHED_Y + (runwayBuilt ? RUNWAY_TOP : 0);
         } else {
             base = deckY + SHED_Y;
         }
-        if (!spot.onStall && spot.dy !== RUNWAY_TOP) shadow(ctx, x, base, 12, 0.16);
+        // 站在东西上头的不落影子 —— 影子是画给甲板的
+        if (!spot.onStall && !(spot.dy === RUNWAY_TOP && runwayBuilt)) {
+            shadow(ctx, x, base, 12, 0.16);
+        }
         CREW_ACT[id](ctx, x, base, t, phase);
     }
 }

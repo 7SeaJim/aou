@@ -733,7 +733,11 @@ export class UI {
         ${this.hutHint()}
         ${this.showPanel()}
         ${this.eventLog()}
-        ${this.stallSummary()}`;
+        ${this.stallSummary()}
+
+        ${this.runwayView()}
+
+        ${this.crewView()}`;
     }
 
     /** 一条事件的一句话总结,吐司用。日志里显示的是事件本身的叙述。 */
@@ -1516,11 +1520,7 @@ export class UI {
         <h3 style="margin-bottom:12px">升级</h3>
         <div class="px-grid" style="--min:190px;margin-bottom:28px">${ups}</div>
 
-        ${this.kitchenShop()}
-
-        ${this.runwayView()}
-
-        ${this.crewView()}`;
+        ${this.kitchenShop()}`;
     }
 
     /**
