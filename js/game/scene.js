@@ -405,9 +405,15 @@ export function paintPier(ctx, deckY, bottom, weather = 'sunny', phase = 'day',
     ctx.fillRect(0, deckY - 13, VW, 2);     // 受光的板面前沿
     ctx.fillStyle = P.dark;
     ctx.fillRect(0, deckY - 3, VW, 2);      // 背光的板边
-    for (let x = 6; x < VW; x += 19) {      // 板缝
-        ctx.fillStyle = P.dark;
-        ctx.fillRect(x, deckY - DECK_H + 4, 1, DECK_H - 7);
+    // 板缝是**横**的,不是竖的。
+    //
+    // 竖缝画在一片平贴的木色上,人眼会把它读成一堵板壁 —— 于是站在上面的
+    // 人、摆在上面的棚子,全都成了「贴在墙上」。判断一个面是躺着还是立着,
+    // 靠的就是缝的方向。
+    // 缝距往前逐渐加大,是最省事的近大远小。
+    ctx.fillStyle = P.dark;
+    for (let y = deckY - DECK_H + 5, gap = 4; y < deckY - 4; y += gap, gap += 2) {
+        ctx.fillRect(0, y, VW, 1);
     }
 
     // 陈设分两排。后排走空气透视(farSprite),前排原色 ——
@@ -816,8 +822,14 @@ const CAT_Y = -15;
 
 /** 摊子旁边那间敞口的小木棚。不管什么天都在,下雨天猫躲进去 */
 export function paintShed(ctx, deckY, phase = 'day') {
-    drawStanding(ctx, shadedSprite('catshed', SCENERY.catshed, phase),
-                 SHED_X, deckY + SHED_Y);
+    // **先落影子。** 少了这一道,棚子就是浮在甲板上的一张贴图 ——
+    // 一个 46 格宽的东西没有接地阴影,比一个人没有还明显
+    const base = deckY + SHED_Y;
+    shadow(ctx, SHED_X, base, 44, 0.22);
+    drawStanding(ctx, shadedSprite('catshed', SCENERY.catshed, phase), SHED_X, base);
+    // 底座压一道暗边,把它和地板咬住。影子管「有多高」,这道边管「落在哪儿」
+    ctx.fillStyle = 'rgba(30, 20, 12, .30)';
+    ctx.fillRect(SHED_X - 23, base, 46, 1);
 }
 
 /**

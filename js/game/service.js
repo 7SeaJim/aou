@@ -21,7 +21,7 @@
 
 import { PixelScreen, sprite, drawStanding } from './pixmap.js';
 import { SCENERY, ICON_GRIDS } from './pixels.js';
-import { pal, VW, VH } from './scene.js';
+import { pal, shadow, VW, VH } from './scene.js';
 import { now } from '../clock.js';
 import { shadedSprite } from './tint.js';
 import {
@@ -304,14 +304,19 @@ export class Service {
         this.guests.forEach((g, i) => {
             const x = QUEUE_X[i] ?? QUEUE_X[QUEUE_X.length - 1];
             const key = KEYS[g.face % KEYS.length];
-            drawStanding(ctx, sprite(key, SCENERY[key]), x, DECK_Y);
-            const top = DECK_Y - 26;
+            // 影子。大坝那边的人都有,这边一直漏了 ——
+            // 没影子的人不管画得多好,都是**贴**在背景上的
+            shadow(ctx, x, DECK_Y - 2, 12, 0.16);
+            drawStanding(ctx, sprite(key, SCENERY[key]), x, DECK_Y - 2);
+            const top = DECK_Y - 28;
             bubble(ctx, x, top, g.want);
+            // 耐心条和气泡之间要留空。贴着画的话那条绿的读成气泡顶上的一道边,
+            // 不是一个还在走的计时器
             const left = Math.max(0, 1 - (this.t - g.at) / SERVICE.patienceMs);
             ctx.fillStyle = '#4a3628';
-            ctx.fillRect(x - 11, top - 26, 22, 4);
+            ctx.fillRect(x - 11, top - 29, 22, 4);
             ctx.fillStyle = left > 0.45 ? '#77b255' : left > 0.2 ? '#f5b83d' : '#e8384f';
-            ctx.fillRect(x - 10, top - 25, Math.round(20 * left), 2);
+            ctx.fillRect(x - 10, top - 28, Math.round(20 * left), 2);
         });
     }
 
@@ -453,11 +458,27 @@ function paintBackdrop(ctx, P) {
     ctx.fillStyle = S.ink; ctx.fillRect(0, RAIL_Y, VW, 3);
     ctx.fillStyle = S.light; ctx.fillRect(0, RAIL_Y + 1, VW, 1);
     for (let x = 12; x < VW; x += 44) { ctx.fillStyle = S.ink; ctx.fillRect(x, RAIL_Y, 3, 13); }
+    // 客人站的那条甲板。**是地板,不是墙。**
+    //
+    // 原来这儿是一整片木色 + 每 23 格一道**竖**缝 —— 竖缝画在一块平贴的
+    // 木色上,读出来就是一堵板壁,客人于是像贴在墙上,整片透视全塌了。
+    // 地板要的是三件事:
+    //
+    //   横的板缝    人眼是靠线的方向判断这个面是躺着的还是立着的
+    //   前后有明暗  贴着栏杆那头在阴影里,靠近柜台这头受光
+    //   一道前沿    地板到柜台之间那条暗边,是「这儿有个高差」的唯一交代
     const W = P.wood;
-    ctx.fillStyle = W.ink; ctx.fillRect(0, RAIL_Y + 13, VW, VH - RAIL_Y - 13);
-    ctx.fillStyle = W.wood; ctx.fillRect(0, RAIL_Y + 15, VW, DECK_Y - RAIL_Y - 15);
-    ctx.fillStyle = W.dark;
-    for (let x = 10; x < VW; x += 23) ctx.fillRect(x, RAIL_Y + 15, 1, DECK_Y - RAIL_Y - 15);
+    ctx.fillStyle = W.ink;  ctx.fillRect(0, RAIL_Y + 13, VW, VH - RAIL_Y - 13);
+    const deckTop = RAIL_Y + 15, deckH = DECK_Y - deckTop;
+    for (let i = 0; i < 3; i++) {                       // 从后往前一层层提亮
+        ctx.fillStyle = [W.dark, W.wood, W.light][i];
+        ctx.fillRect(0, deckTop + Math.round(deckH * i / 3), VW,
+                     Math.ceil(deckH / 3) + 1);
+    }
+    ctx.fillStyle = W.ink;                              // 横板缝,越靠前越宽
+    let y = deckTop + 4, gap = 5;
+    while (y < DECK_Y - 2) { ctx.fillRect(0, y, VW, 1); y += gap; gap += 2; }
+    ctx.fillRect(0, DECK_Y - 2, VW, 2);                 // 前沿
 }
 
 /**
