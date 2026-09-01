@@ -810,14 +810,18 @@ const ONLOOKERS = ['onlooker_a', 'onlooker_b', 'onlooker_c', 'onlooker_d'];
 const FEED_ICONS = ['erkuai', 'potato', 'rice', 'douhua', 'chili'];
 const feedPops = [];
 
-/** 跑道站的位置。坝子右头,那一带原来只有芦苇 */
-const RUNWAY_X = 370;
 /**
- * 跑道台面比甲板高多少(相对 SHED_Y 那条基线)。
- * 精灵图 40 高、底边落在 SHED_Y,台面在图里第 16 行 —— 40-16 = 24 格。
- * **加高台子的时候这个数要跟着改**,不然老翘会陷进台面里或者浮在半空。
+ * 跑道站的位置。坝子最右头。
+ * 杆子只有 4 格宽,甲板上几乎不占位置 —— 这正是换成竖着那版的理由;
+ * 屋子在杆顶,那一带是水面,和甲板上的东西谁也不碍着谁。
  */
-const RUNWAY_TOP = -24;
+const RUNWAY_X = 396;
+/**
+ * 屋子底下那根栖木比甲板高多少(相对 SHED_Y 那条基线)。
+ * 精灵图 64 高、底边落在 SHED_Y,栖木在图里第 26 行 —— 64-26 = 38 格。
+ * **改跑道的图的时候这个数要跟着改**,不然老翘会陷进屋子里或者浮在半空。
+ */
+const RUNWAY_TOP = -38;
 
 /** 跑道。没建的时候画地基和两根空杆 —— 让人看得见这儿会有个东西 */
 export function paintRunway(ctx, deckY, built, phase = 'day') {
@@ -848,8 +852,8 @@ const CREW_SPOT = {
     dundun:  { x: STALL_X, onStall: true },   // 看摊子的 —— **站在摊子顶上**
     // 老鸟站台面上、挨着旗子;小鸟站坡底下的起点。
     // 「老鸟经验丰富,小鸟胆子更大」—— 一个在高处看,一个在起跑线上
-    laoqiao: { x: 370, dy: RUNWAY_TOP },
-    yaya:    { x: 338, dy: 0 },
+    laoqiao: { x: RUNWAY_X - 12, dy: RUNWAY_TOP },   // 站栖木左端,让开门洞
+    yaya:    { x: RUNWAY_X + 4, dy: 0 },             // 杆子底下,起跑线上
 };
 
 /**
@@ -858,6 +862,10 @@ const CREW_SPOT = {
  */
 export function drawCrew(ctx, deckY, t, hired = [], phase = 'day',
                          runwayBuilt = false, upgrades = null) {
+    // **天黑了它们也回去睡。** 折耳根钻进木棚、哇鸥回草棚,伙计却整夜站在
+    // 坝上颠锅收钱,那就说不通了 —— 一个会睡觉的世界里,不能只有主角睡。
+    // 它们不住坝上,所以是直接不画,不像猫那样换个地方待着。
+    if (phase === 'night') return;
     for (const id of hired) {
         const spot = CREW_SPOT[id];
         const grid = ICON_GRIDS['crew_' + id];
