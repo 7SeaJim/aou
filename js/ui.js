@@ -348,6 +348,20 @@ export class UI {
                 break;
             }
 
+            case 'fullscreen': {
+                // 全屏只能在用户手势里请求 —— 这个 case 就是从点击进来的
+                const el = document.documentElement;
+                if (document.fullscreenElement) { document.exitFullscreen?.(); break; }
+                try {
+                    const req = el.requestFullscreen ?? el.webkitRequestFullscreen;
+                    if (!req) { this.toast('这个浏览器不给全屏 —— 试试「添加到主屏幕」', 'map'); break; }
+                    Promise.resolve(req.call(el, { navigationUI: 'hide' }))
+                        .then(() => screen.orientation?.lock?.('landscape'))
+                        .catch(() => { /* 锁方向失败不影响全屏 */ });
+                } catch { this.toast('这个浏览器不给全屏 —— 试试「添加到主屏幕」', 'map'); }
+                break;
+            }
+
             case 'mute':
                 this.toast(sfx.toggleMute() ? '静音了' : '音效开着', 'star');
                 this.render();
@@ -1416,6 +1430,17 @@ export class UI {
                    ${off ? 'disabled' : ''} aria-label="音量">
             <p class="px-muted" style="font-size:12.5px;margin-top:8px">
                 ${off ? '先把音效打开' : '拖的时候会响一声,那是试听'}</p>
+        </div>
+
+        <h3 style="margin-bottom:6px">画面</h3>
+        <div class="px-panel" style="padding:14px 16px;margin-bottom:24px">
+            <p style="margin-bottom:10px">${icon('map', 'lg')} <strong>全屏</strong></p>
+            <p class="px-muted" style="font-size:12.5px;line-height:1.7;margin-bottom:10px">
+                手机横过来,浏览器那条地址栏要吃掉三分之一的高度 ——
+                而这是个横屏游戏,<strong>高度每省 1 像素,画面就宽 2 像素</strong>。<br>
+                想彻底不要它:浏览器菜单里选「添加到主屏幕」,
+                从桌面图标进来就是一个全屏横屏的 app。</p>
+            <button class="px-btn px-btn--sm" data-act="fullscreen">进全屏</button>
         </div>
 
         <h3 style="margin-bottom:6px">这一份存档</h3>

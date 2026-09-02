@@ -4,6 +4,17 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>哇鸥 · 去大坝整点饵块</title>
+    <!-- 加到主屏幕之后是全屏横屏的一个 app,**地址栏整个没有** ——
+         浏览器里那条地址栏在手机横屏下要吃掉三分之一的高度,
+         而高度每省 1px 画面就宽 2px(见下面 --stage-max-w 的算法)。
+         manifest 里 orientation: landscape 顺带把方向也锁了。 -->
+    <link rel="manifest" href="site.webmanifest">
+    <meta name="theme-color" content="#1d5f76">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="apple-touch-icon" href="icon-192.png">
+    <link rel="icon" href="icon-192.png">
     <link rel="stylesheet" href="css/pixel-tokens.css">
     <link rel="stylesheet" href="css/pixel-base.css">
     <link rel="stylesheet" href="css/pixel-icons.css">

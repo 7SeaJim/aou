@@ -186,20 +186,45 @@ async function boot() {
  * 这样点下去是立刻开始,而不是等一轮加载。离线结算的吐司也先记着,
  * 等玩家真的进来了再弹,不然它会寂寞地在标题画面后面自己弹完。
  */
+/**
+ * 请求全屏,顺带把方向锁成横的。
+ *
+ * **全都得容错。** requestFullscreen 在 iOS Safari 上对非 <video> 直接没有,
+ * orientation.lock 只在全屏里有效、而且好几个浏览器压根没实现。
+ * 一处失败不该把「开始游戏」这一下也带崩 —— 所以整段包在 try 里,
+ * 拿不到就当没这回事,玩家最多是多看一条地址栏。
+ */
+export function goFullscreen() {
+    try {
+        const el = document.documentElement;
+        const req = el.requestFullscreen ?? el.webkitRequestFullscreen;
+        const p = req?.call(el, { navigationUI: 'hide' });
+        Promise.resolve(p)
+            .then(() => screen.orientation?.lock?.('landscape'))
+            .catch(() => { /* 不给就算了 */ });
+    } catch { /* 同上 */ }
+}
+
 function showTitle(skip = false) {
     const el = document.getElementById('title');
     const title = new TitleScreen(document.getElementById('titleCanvas'));
     title.start();
 
-    const enter = () => {
+    const enter = (gesture) => {
         // 第一次发声必须在用户手势之后,浏览器才不拦 —— 这个点击就是那个手势
         sfx.play('click');
+        // **同一个手势顺手要一次全屏。**
+        // 手机横过来,浏览器那条地址栏要吃掉三分之一的高度,而这是个横屏游戏 ——
+        // 高度每省 1px,画面就能宽 2px。全屏只能在用户手势里请求,
+        // 而「开始游戏」这一下正是唯一一个保证有的手势。
+        // 不成功就算了(iOS Safari 不给非视频元素全屏),那条路留给「加到主屏幕」。
+        if (gesture) goFullscreen();
         el.classList.add('is-gone');
         title.stop();
         if (pendingEvents.length) { ui.showEvents(pendingEvents); pendingEvents = []; }
     };
-    document.getElementById('startBtn').addEventListener('click', enter, { once: true });
-    if (skip) enter();      // ?enter —— 只在 dev 构建里传得进来
+    document.getElementById('startBtn').addEventListener('click', () => enter(true), { once: true });
+    if (skip) enter(false);      // ?enter —— 只在 dev 构建里传得进来
 }
 
 /**

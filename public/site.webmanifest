@@ -1,0 +1,17 @@
+{
+  "name": "哇鸥 · 去大坝整点饵块",
+  "short_name": "哇鸥",
+  "description": "在昆明滇池边,陪一只没跟着鸥群飞回西伯利亚的红嘴鸥,慢慢把一个小吃摊做起来。",
+  "start_url": "./",
+  "scope": "./",
+  "display": "fullscreen",
+  "display_override": ["fullscreen", "standalone"],
+  "orientation": "landscape",
+  "background_color": "#1d5f76",
+  "theme_color": "#1d5f76",
+  "lang": "zh-CN",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
