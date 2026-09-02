@@ -289,6 +289,7 @@ function startFlight(sprites) {
         wave: H_('flyWave'), dist: H_('flyDist'), hungry: H_('flyHungry'),
         count: H_('flyCount'),
         yaya: H_('flyYaya'), yayaText: H_('flyYayaText'),
+        buffs: H_('flyBuffs'), flapText: H_('flyFlapText'),
     };
 
     // 道具在开局扣除
@@ -322,6 +323,26 @@ function startFlight(sprites) {
             if (hud.yaya >= 0) {
                 flyHud.yayaText.textContent = hud.yaya === 0 ? '护着' : `${hud.yaya}s`;
                 flyHud.yayaText.style.color = hud.yaya === 0 ? 'var(--leaf)' : '';
+            }
+            // 道具那一格。**只在文字真的变了的时候才重写** —— onTick 一秒六十次,
+            // 而这行字一秒最多变一次(秒数);拿签名比一下就够,省掉 59 次 innerHTML
+            const sig = `${hud.flip}|${hud.rush}|${hud.magnet}|${hud.shieldN}:${hud.shield}`;
+            if (sig !== flyHud.sig) {
+                flyHud.sig = sig;
+                const bits = [];
+                if (hud.flip) bits.push(`<i class="px-icon px-icon--flip"></i>${hud.flip}s 翻倍`);
+                if (hud.rush) bits.push(`<i class="px-icon px-icon--double"></i>${hud.rush}s 无敌`);
+                if (hud.magnet) bits.push(`<i class="px-icon px-icon--magnet"></i>${hud.magnet}s`);
+                if (hud.shieldN) bits.push(`<i class="px-icon px-icon--shield"></i>×${hud.shieldN}`);
+                flyHud.buffs.hidden = bits.length === 0;
+                flyHud.buffs.innerHTML = bits.join('　');
+                // 颠倒的时候左键是往下扎的。**键上的字得跟着改** ——
+                // 键没换、意思换了,而玩家看的是键上写的那两个字
+                const flip = hud.flip > 0;
+                if (flyHud.flip !== flip) {
+                    flyHud.flip = flip;
+                    flyHud.flapText.textContent = flip ? '俯冲' : '跃起';
+                }
             }
             // 开局那三秒的大数字。**用 DOM 不用画布** ——
             // 画布上没有像素字体,写上去就是一团糊

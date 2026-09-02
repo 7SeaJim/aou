@@ -471,6 +471,42 @@ export function installDev({ getState, mutate, storage, fly, getFlight, rules, u
                  + (w ? ` · 工钱 −${w.cost}${w.unpaid.length ? `,${w.unpaid.length} 只请假` : ''}` : '');
         },
 
+        /**
+         * 飞行里的道具:不用等它飘过来。
+         *
+         *   wa.buff()               看现在身上有什么
+         *   wa.buff('flip')         立刻起颠倒(走一遍过场)
+         *   wa.buff('rush', 20)     无敌前冲 20 秒
+         *   wa.buff('magnet' | 'shield', 秒)
+         */
+        buff(kind, sec) {
+            const F = getFlight();
+            if (!F) return '现在没在飞 —— 先 wa.fly()';
+            const f = F.f;
+            if (!kind) {
+                return {
+                    颠倒: f.flip / 1000 + 's',
+                    无敌: f.rushMs / 1000 + 's',
+                    磁铁: f.magnetMs / 1000 + 's',
+                    护盾: `${f.shieldN} 次 / ${Math.ceil(f.shieldMs / 1000)}s`,
+                };
+            }
+            const ms = sec ? sec * 1000 : 0;
+            if (kind === 'flip') {
+                if (f.flip > 0 || f.cut) return '已经在颠倒里了';
+                f.flipAt = 0;
+                F._startCut(-1);
+                return '颠倒 —— 过场走起(八秒,期间食材翻倍)';
+            }
+            if (kind === 'magnet') { f.magnetMs = ms || 15_000; return `磁铁 ${f.magnetMs / 1000}s(整屏吸)`; }
+            if (kind === 'rush' || kind === 'double') { f.rushMs = ms || 8000; return `无敌前冲 ${f.rushMs / 1000}s`; }
+            if (kind === 'shield') {
+                f.shieldMs = ms || 45_000; f.shieldN = 2;
+                return `护盾 2 次 / ${Math.ceil(f.shieldMs / 1000)}s`;
+            }
+            return "只认 flip / magnet / shield / rush";
+        },
+
         /** 小屋:把时钟拨到某个时段看效果。传 null 恢复真实时间。 */
         hour(h) {
             if (h === null || h === undefined) { devHour = null; syncClock(); return '恢复真实时间'; }
@@ -580,6 +616,7 @@ export function installDev({ getState, mutate, storage, fly, getFlight, rules, u
                 'wa.hire(id)':     '直接招一只伙计,跳过条件(不收安家费)',
                 'wa.wage()':       '看每天要发多少工钱、谁在请假;wa.wage(true) 立刻补发',
                 'wa.flight':       '当前这一局(可改 .f.lives / .f.speed)',
+                'wa.buff(k, s)':   "飞行道具直接上身 — 'flip' 颠倒 / 'rush' 无敌 / 'magnet' / 'shield';不传参看现状",
                 'wa.code()':       '导出存档码',
             });
             console.log('URL 参数(打开就生效):?scene=mid  ?seed=42  ?tries=99  ?weather=rainy  ?day=1  ?time=night(待机界面时段)');

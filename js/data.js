@@ -942,10 +942,15 @@ export const EVENTS = [
       when: { season: 'summer' }, effect: {} },
 ];
 
+/**
+ * 觅食时自动用掉的三样。**每一样都有时限,而且都在飞行的状态栏上倒数** ——
+ * 原来它们是「一局有效」的开关,一局能飞十分钟,于是拿到就等于换了个游戏。
+ * 现在改成十几秒的一阵猛,细账在 flight.js 顶上那段注释里。
+ */
 export const ITEMS = {
-    shield: { name: '护盾', icon: 'shield', desc: '挡下一次撞击' },
-    magnet: { name: '磁铁', icon: 'magnet', desc: '吸附附近食材' },
-    double: { name: '双倍', icon: 'double', desc: '本局得分翻倍' },
+    shield: { name: '护盾', icon: 'shield', desc: '45 秒内挡两次' },
+    magnet: { name: '磁铁', icon: 'magnet', desc: '15 秒吸走整屏食材' },
+    double: { name: '金币', icon: 'double', desc: '8 秒无敌前冲,食材翻倍' },
 };
 
 /**

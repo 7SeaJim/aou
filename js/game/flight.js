@@ -176,7 +176,25 @@ const WAVE_MS = 20_000;
  * 密度上去之后如果不留道,就成了随机送死,那不叫难,叫不讲理。
  */
 const LANES = 5;
-/** 生成区的上下边。上面让开状态条,下面留出海面那一带 */
+/**
+ * 五条道的中心高度。**必须铺满能飞的那一整段,两头不能留边。**
+ *
+ * 原来的道是从「生成区」(46 ~ 224)里等分出来的:每条道 35.6 高,
+ * 中心落在 63.8 / 99.4 / … / 206.2 —— 两头各空着半条道。
+ * 于是最上面那条道的障碍离天花板 19.8 像素,比判定半径(15)还远:
+ * **顶着天飞谁也碰不到你**。而平飞键会把高度稳稳按住,贴着水面也是同一回事。
+ * 一个「一直顶着上边」的解法等于把这个玩法作废了 —— 躲和吃都不用做了。
+ *
+ * 现在道的中心直接按能飞的上下边(SKY_TOP / SEA_TOP)往里收 10 像素铺开。
+ * 10 比最小的那个判定半径(老翘的 12)还小,**贴着边也还在最外那条道的判定里**。
+ */
+const LANE_PAD = 10;
+const LANE_TOP = SKY_TOP + LANE_PAD;
+const LANE_BOTTOM = SEA_TOP - LANE_PAD;
+const LANE_H = (LANE_BOTTOM - LANE_TOP) / (LANES - 1);
+/** 第 i 条道的中心高度 */
+const laneY = i => LANE_TOP + LANE_H * i;
+/** 食材和道具的生成区。障碍走上面那五条道,这两个数只管能吃的 */
 const SPAWN_TOP = 46;
 const SPAWN_BOTTOM = HORIZON - 26;
 /**
@@ -188,6 +206,50 @@ const SPAWN_BOTTOM = HORIZON - 26;
 const CLIMB_PX_PER_SEC = 150;
 /** 食材出现在哇鸥当下高度的上下这么多像素之内。约等于两下翅膀 */
 const REACH = 72;
+
+/* ---------- 三个道具:出得少,但每一个都是一段能记住的十几秒 ----------
+ *
+ * 原来是**每次生成 5% 的概率**,大约十七秒一个:天上一直飘着加成,
+ * 于是它们既不稀罕,单个又不值一提 —— 磁铁只吸身边七十像素,
+ * 双倍只改一个看不见的分数,护盾更是一直揣着不过期。
+ * **又多又淡是最差的一档**:玩家既不会为拿到它高兴,也不会为够不着可惜。
+ *
+ * 现在两头一起改:概率压到 1.5%,并且两次之间至少隔 25 秒(约一分钟一个);
+ * 换来的是每一个都值得为它拐一趟 ——
+ *
+ *   磁铁  15 秒,**整屏**的食材全朝你飞过来(原来只有身边 70 像素)
+ *   护盾  45 秒内挡**两次**(原来是一次,而且没有期限)
+ *   金币  8 秒无敌 + 往前冲,期间**食材翻倍**,撞碎的障碍还给分
+ *
+ * 三个都有时限,而且都在状态栏上倒数。**一个不知道什么时候没的加成,
+ * 没了的那一下只会被当成手感变差**;看得见它快没了,才谈得上
+ * 「趁着还有赶紧吃」—— 那十几秒的紧张感是这三个道具真正给的东西。
+ */
+const POWER_RATE = 0.015;       // 每次生成里有多大概率是道具
+const POWER_GAP = 25_000;       // 两个道具之间至少隔这么久
+const MAGNET_MS = 15_000;
+const MAGNET_MAX = 30_000;
+/** 磁铁的吸力(像素/帧)。远的拉得快、近的收得稳,不然会绕着头打转 */
+const MAGNET_PULL_MIN = 1.6;
+const MAGNET_PULL_MAX = 6.5;
+const SHIELD_MS = 45_000;
+const SHIELD_MAX = 90_000;
+const SHIELD_N = 2;             // 一个护盾能挡几次
+const SHIELD_N_MAX = 4;
+/**
+ * 金币:这一局里唯一「什么都不用躲」的八秒。
+ *
+ * 无敌 + 提速 + 翻倍三件事捆在一起,是因为它们指的是同一句话:
+ * **放开了冲**。只给无敌的话玩家还是照原速飞,那八秒里什么都没发生;
+ * 只提速就成了惩罚。三件一起才有那个「一头扎进去」的劲儿。
+ *
+ * 八秒不能再长了 —— 无敌期间这个玩法是没有玩法的。
+ */
+const RUSH_MS = 8000;
+const RUSH_MAX = 16_000;
+const RUSH_SPEED = 1.8;         // 冲刺时世界跑多快
+const RUSH_DX = 46;             // 哇鸥往前顶出去多少(画面上)
+const RUSH_SMASH = 4;           // 撞碎一个障碍给多少分
 
 /* ---------- 窄道:唯一一件非平飞不可的事 ----------
  *
@@ -220,6 +282,43 @@ const CORRIDOR_MAX_W = 730;
  * 距离从 0 开始,难度从 0 分钟开始 —— 它是白送的三秒热身,不是白扣的三秒。
  */
 const COUNTDOWN_MS = 3000;
+
+/* ---------- 颠倒:一场八秒的赌 ----------
+ *
+ * 天上偶尔飘一个金边的上下箭头。吃到它,**重力翻个个儿**:
+ * 松手是往上飘,拍一下是往下扎,平飞还是稳住 —— 两个键各管什么没变,
+ * 变的是哪边算「下面」。云顶这时候和湖面一样要命(画面上会长出一层乌云顶),
+ * 而这八秒里捡到的东西**算两份**:分数两份,带回摊上的食材也是两份。
+ *
+ * 为什么是八秒不是十五秒:一局只有三条命、一天只有五次。
+ * 第五分钟的时候八秒是十来簇障碍,已经够长了 ——
+ * **十五秒会让「吃到它」变成一件该躲开的事**,那这个道具就白做了。
+ * 而且它跟着波数缩(最少五秒):越到后面越快,同样的秒数越来越重。
+ *
+ * 收益必须写在明处。**没有回报的机关只是惩罚**:玩家学到的会是「别碰那个」,
+ * 而不是「要不要赌一把」—— 后者才是它存在的理由。
+ *
+ * 开局一分钟内不出、两次之间隔四十五秒、窄道那一段也不出:
+ * 手还没热的时候不考,一件难事的当口不叠第二件。
+ */
+const FLIP_TYPE = 'flip';
+const FLIP_MS = 8000;
+const FLIP_MS_MIN = 5000;
+const FLIP_MS_DECAY = 300;      // 每过一波少这么多毫秒
+const FLIP_AFTER = 60_000;      // 开局这么久之内不出
+const FLIP_COOLDOWN = 45_000;   // 两次之间至少隔这么久
+const FLIP_CHANCE = 0.45;       // 道具位里有多大概率是它
+const FLIP_HAUL = 2;            // 颠倒期间捡到的算几份
+/**
+ * 过场:上下左右的黑边收拢 → 哇鸥归到画面正中 → 在最紧的那一刻翻 →
+ * 黑边张开。**翻的那一下藏在黑边后面** —— 重力反过来是个瞬间的事,
+ * 明着翻会像掉帧;藏在收拢的黑边里,玩家看到的是「镜头切了一下」。
+ *
+ * 这一段世界是停的:不计时、不生成、不判死,和开局那三秒同一个道理 ——
+ * **手里没有控制权的时候不能扣他的东西**。
+ */
+const CUT_MS = 1400;
+const CUT_HOLD = 0.62;          // 收到最紧的那一刻占过场的几成
 
 /* ---------- 五分钟之后:饿 ---------- */
 /** 从这一刻起开始饿。前五分钟只用管躲 */
@@ -328,6 +427,14 @@ export class Flight {
             // 上一簇障碍留的那条空道。下一簇只能开在它够得着的范围里
             lastGap: null,
 
+            /* ---- 颠倒 ---- */
+            gdir: 1,             // 重力朝哪:1 朝下(平常),-1 朝上
+            flip: 0,             // 颠倒还剩多少毫秒
+            flipAt: FLIP_AFTER,  // 下一次最早什么时候能出
+            flipCount: 0,
+            cut: null,           // 过场 { t, to, done }
+            cutFrom: 0,
+
             hungryMs: HUNGRY_MS * (1 + rw.trough),  // 食槽:肚子撑得更久
             elapsed: 0,
             hunger: 1,        // 肚子。五分钟之后才开始掉,掉光就回巢
@@ -347,9 +454,12 @@ export class Flight {
             yayaAt: yaya ? 0 : -1,
             yayaFlash: 0,
             // 道具在开局消耗,一局有效
-            shield: (this.state.items.shield ?? 0) > 0,
-            magnet: (this.state.items.magnet ?? 0) > 0,
-            double: (this.state.items.double ?? 0) > 0,
+            shieldMs: (this.state.items.shield ?? 0) > 0 ? SHIELD_MS : 0,
+            shieldN: (this.state.items.shield ?? 0) > 0 ? SHIELD_N : 0,
+            magnetMs: (this.state.items.magnet ?? 0) > 0 ? MAGNET_MS : 0,
+            rushMs: (this.state.items.double ?? 0) > 0 ? RUSH_MS : 0,
+            powerAt: POWER_GAP,   // 头 25 秒不出道具,先让人把手放稳
+            birdX: BIRD_X,        // 冲刺的时候会往前顶一段
         };
 
         this._bind();
@@ -358,7 +468,7 @@ export class Flight {
         this.lastTs = 0;
         this.rafId = requestAnimationFrame(this._loop);
         this._emit();
-        return { shield: this.f.shield, magnet: this.f.magnet, double: this.f.double };
+        return { shield: this.f.shieldMs > 0, magnet: this.f.magnetMs > 0, double: this.f.rushMs > 0 };
     }
 
     setPaused(v) {
@@ -403,8 +513,10 @@ export class Flight {
 
     /** 拍一下翅膀。暂停时不响应 —— 暂停界面上还有按钮要点 */
     flap() {
-        if (!this.running || this.paused) return;
-        this.f.vy = FLAP_VY;
+        if (!this.running || this.paused || this.f.cut) return;
+        // **朝「重力那一头」的反方向蹬。** 颠倒的时候这一下是往下扎的 ——
+        // 键没换,换的是哪边算下面
+        this.f.vy = FLAP_VY * this.f.gdir;
         this.f.flapAt = this.f.vt;
         sfx.play('flap');
     }
@@ -412,7 +524,7 @@ export class Flight {
     /** 平飞按住 / 松开。UI 上那两个按钮也走这两个口 */
     setGlide(on) {
         if (!this.running) return;
-        this.f.glide = !!on && !this.paused;
+        this.f.glide = !!on && !this.paused && !this.f.cut;
     }
 
     _onDown(e) {
@@ -450,7 +562,14 @@ export class Flight {
             yaya: this.f.yayaAt < 0 ? -1
                 : Math.max(0, Math.ceil((this.f.yayaAt - this.f.elapsed) / 1000)),
             hunger: this.f.hunger,
-            shield: this.f.shield, magnet: this.f.magnet, double: this.f.double,
+            // 颠倒:还剩几秒。0 = 不在颠倒里
+            flip: this.f.flip > 0 ? Math.ceil(this.f.flip / 1000) : 0,
+            // 磁铁 / 护盾:还剩几秒。**得倒数给他看** —— 一个不知道什么时候没的加成,
+            // 没了的那一下只会被当成手感变差
+            magnet: Math.ceil(this.f.magnetMs / 1000),
+            shield: Math.ceil(this.f.shieldMs / 1000),
+            shieldN: this.f.shieldN,
+            rush: Math.ceil(this.f.rushMs / 1000),
         });
     }
 
@@ -485,7 +604,31 @@ export class Flight {
             return;
         }
 
+        // 过场(颠倒的进和出)。**这一段世界是停的** —— 见 CUT_MS 那段注释
+        if (f.cut) { this._cut(dt); this._emit(); return; }
+
         f.elapsed += dt;
+
+        // 颠倒到点了:走一遍出场动画翻回来。这一帧交给过场,别的都不做
+        if (f.flip > 0) {
+            f.flip = Math.max(0, f.flip - dt);
+            if (f.flip === 0) {
+                f.flipAt = f.elapsed + FLIP_COOLDOWN;
+                this._startCut(1);
+                this._emit();
+                return;
+            }
+        }
+        if (f.magnetMs > 0) f.magnetMs = Math.max(0, f.magnetMs - dt);
+        if (f.rushMs > 0) f.rushMs = Math.max(0, f.rushMs - dt);
+        // 护盾的期限一到,剩下的次数一起作废 —— 两个数得同生共死,
+        // 不然会出现「还剩一次,但已经过期了」这种解释不了的状态
+        if (f.shieldMs > 0 && (f.shieldMs = Math.max(0, f.shieldMs - dt)) === 0) f.shieldN = 0;
+
+        // 冲刺时哇鸥往前顶出去一截,回来的时候慢慢退。**这是「冲」唯一看得见的地方** ——
+        // 世界跑得快不快,人眼其实分不太出来;而主角自己往前探了一头,一眼就知道
+        const wantX = BIRD_X + (f.rushMs > 0 ? RUSH_DX : 0);
+        f.birdX += (wantX - f.birdX) * Math.min(1, 0.06 * k);
 
         this._fly(k);
 
@@ -496,8 +639,8 @@ export class Flight {
             this._spawn();
         }
 
-        const move = f.speed * k;
-        const hit = (o, r) => Math.abs(BIRD_X - o.x) < r && Math.abs(f.birdY - o.y) < r;
+        const move = f.speed * k * (f.rushMs > 0 ? RUSH_SPEED : 1);
+        const hit = (o, r) => Math.abs(f.birdX - o.x) < r && Math.abs(f.birdY - o.y) < r;
 
         // 食材
         for (let i = f.foods.length - 1; i >= 0; i--) {
@@ -505,25 +648,31 @@ export class Flight {
             o.x -= move;
             if (o.x < -24) { f.foods.splice(i, 1); continue; }
 
-            if (f.magnet) {
-                const dx = BIRD_X - o.x, dy = f.birdY - o.y;
-                if (Math.abs(dx) < 70 && Math.abs(dy) < 70) {
-                    o.x += dx * 0.04 * k;
-                    o.y += dy * 0.04 * k;
-                }
+            // 磁铁开着的时候**整屏**的食材都朝哇鸥来,不再只吸身边那一圈。
+            // 拉力按距离给:远的快、近的稳 —— 一律按比例拉的话,
+            // 刚出屏的那个会瞬移过来,而贴脸的那个会绕着头打转
+            if (f.magnetMs > 0) {
+                const dx = f.birdX - o.x, dy = f.birdY - o.y;
+                const d = Math.hypot(dx, dy) || 1;
+                const pull = Math.min(MAGNET_PULL_MAX, MAGNET_PULL_MIN + d * 0.02);
+                o.x += dx / d * pull * k;
+                o.y += dy / d * pull * k;
             }
             if (hit(o, FOOD_R)) {
                 sfx.play('pickup');
                 f.foods.splice(i, 1);
-                f.collected[o.type] = (f.collected[o.type] ?? 0) + 1;
-                f.itemCount++;
+                // 颠倒的那八秒里捡到的**算两份**:分数两份,带回摊上的食材也是两份。
+                // 只翻一个看不见的分数不算赌注 —— 拿命换的东西得能端上桌
+                const n = (f.flip > 0 ? FLIP_HAUL : 1) * (f.rushMs > 0 ? FLIP_HAUL : 1);
+                f.collected[o.type] = (f.collected[o.type] ?? 0) + n;
+                f.itemCount += n;
                 f.combo++;
                 if (f.combo > f.maxCombo) f.maxCombo = f.combo;
 
                 let gain = 5;
                 if (f.combo >= 5) gain += 2;
                 if (f.combo >= 10) gain += 5;
-                if (f.double) gain *= 2;      // 只在这里翻倍,结算时不再翻
+                gain *= n;                    // 只在这里翻倍,结算时不再翻
                 f.score += gain;
                 f.hunger = Math.min(1, f.hunger + HUNGRY_FEED);
             }
@@ -537,6 +686,14 @@ export class Flight {
             if (!hit(o, f.hazR)) continue;
 
             f.obstacles.splice(i, 1);
+            // 冲刺:**撞碎,而且给分**。无敌只是「不掉血」,那八秒里
+            // 玩家什么反馈都拿不到;撞碎才是「我在冲」这件事本身
+            if (f.rushMs > 0) {
+                f.score += RUSH_SMASH;
+                f.smash = f.elapsed + 120;
+                sfx.play('pickup');
+                continue;
+            }
             if (this._absorb()) continue;
             sfx.play('hit');
             f.lives--;
@@ -552,7 +709,20 @@ export class Flight {
             if (o.x < -24) { f.powerups.splice(i, 1); continue; }
             if (!hit(o, FOOD_R)) continue;
             f.powerups.splice(i, 1);
-            f[o.type] = true;
+            if (o.type === FLIP_TYPE) {
+                // 颠倒:这一帧交给过场,底下的判定全不做 —— 世界从这里停住
+                f.flipCount++;
+                this._startCut(-1);
+                this._emit();
+                return;
+            }
+            sfx.play('event');
+            if (o.type === 'magnet') { f.magnetMs = Math.min(MAGNET_MAX, f.magnetMs + MAGNET_MS); continue; }
+            if (o.type === 'double') { f.rushMs = Math.min(RUSH_MAX, f.rushMs + RUSH_MS); continue; }
+            if (o.type === 'shield') {
+                f.shieldMs = Math.min(SHIELD_MAX, f.shieldMs + SHIELD_MS);
+                f.shieldN = Math.min(SHIELD_N_MAX, f.shieldN + SHIELD_N);
+            }
         }
 
         this._walls(move);
@@ -599,13 +769,70 @@ export class Flight {
      * 半个巴掌的时间飘平,看着才像一只鸟在借风。
      */
     _fly(k) {
-        const f = this.f;
+        const f = this.f, g = f.gdir;
         if (f.glide) f.vy += (0 - f.vy) * Math.min(1, GLIDE_K * k);
-        else f.vy = Math.min(MAX_VY, f.vy + GRAVITY * k);
+        else {
+            f.vy += GRAVITY * g * k;
+            f.vy = g > 0 ? Math.min(MAX_VY, f.vy) : Math.max(-MAX_VY, f.vy);
+        }
         f.birdY += f.vy * k;
 
-        if (f.birdY < SKY_TOP) { f.birdY = SKY_TOP; f.vy = 0; }   // 顶到天,停住
-        else if (f.birdY > SEA_TOP) this._splash();
+        // 上下两头:**朝着重力的那一头会要命,背着重力的那一头只是停住。**
+        // 平常是「掉进湖里」,颠倒的时候变成「撞上云顶」—— 一句话就是同一条规矩
+        if (f.birdY > SEA_TOP) {
+            if (g > 0) this._splash(false);
+            else { f.birdY = SEA_TOP; f.vy = 0; }
+        } else if (f.birdY < SKY_TOP) {
+            if (g > 0) { f.birdY = SKY_TOP; f.vy = 0; }
+            else this._splash(true);
+        }
+    }
+
+    /** 这一次颠倒管多久。越到后面越短 —— 同样的秒数,后期要重得多 */
+    _flipMs() {
+        return Math.max(FLIP_MS_MIN, FLIP_MS - this.f.wave * FLIP_MS_DECAY);
+    }
+
+    /**
+     * 起一段过场。`to` 是过完之后的重力方向(-1 颠倒 / 1 翻回来)。
+     *
+     * **场上先清空。** 过场里玩家的手是被拿走的,那这一段就不能留下任何
+     * 会要命的东西 —— 也不能留下够不着的食材,不然黑边张开的那一刻
+     * 会有一堆东西贴在脸上,而他刚被还回控制权。
+     */
+    _startCut(to) {
+        const f = this.f;
+        f.cut = { t: 0, to, done: false };
+        f.cutFrom = f.birdY;
+        f.glide = false;
+        f.obstacles.length = 0;
+        f.foods.length = 0;
+        f.powerups.length = 0;
+        f.walls.length = 0;
+        f.warn = null;
+        f.spawnTimer = 0;
+        f.lastGap = null;          // 翻完是新局面,上一簇的空道不再作数
+        sfx.play('event');
+    }
+
+    /** 过场的一步。归中 + 在最紧的那一刻把重力翻过来 */
+    _cut(dt) {
+        const f = this.f;
+        const c = f.cut;
+        c.t += dt;
+        const p = Math.min(1, c.t / CUT_MS);
+        // 归中和黑边收拢同步:黑边收到最紧的时候人正好在正中
+        const q = Math.min(1, p / CUT_HOLD);
+        const e = q * q * (3 - 2 * q);                 // smoothstep,起落都软
+        f.birdY = f.cutFrom + (VH / 2 - f.cutFrom) * e;
+        f.vy = 0;
+        if (!c.done && p >= CUT_HOLD) {
+            c.done = true;
+            f.gdir = c.to;
+            if (c.to < 0) f.flip = this._flipMs();
+            sfx.play('event');
+        }
+        if (p >= 1) f.cut = null;
     }
 
     /**
@@ -623,7 +850,11 @@ export class Flight {
             sfx.play('event');
             return true;
         }
-        if (f.shield) { sfx.play('event'); f.shield = false; return true; }
+        if (f.shieldN > 0) {
+            sfx.play('event');
+            if (--f.shieldN <= 0) f.shieldMs = 0;     // 次数用完,期限也就没意义了
+            return true;
+        }
         return false;
     }
 
@@ -633,19 +864,25 @@ export class Flight {
      * 而一个「碰到底就结束」的下边界,配上重力,会让人不敢往下飞。
      * 下半屏的食材本来就该有人去捡。
      */
-    _splash() {
+    _splash(up = false) {
         const f = this.f;
-        f.birdY = SEA_TOP;
+        // 撞的是哪一头。颠倒时天花板就是水面 —— 弹回来的方向跟着换
+        f.birdY = up ? SKY_TOP : SEA_TOP;
         // 蹬水比空中拍一下有力得多(升 120px 而不是 45px)。
         // **这样一次失误只会是一条命** —— 弹得矮的话,还没回过神就又拍下去了,
         // 一个走神扣两三条,那是在罚玩家没盯着屏幕,不是在考他会不会飞
-        f.vy = FLAP_VY * 1.6;
+        f.vy = (up ? -FLAP_VY : FLAP_VY) * 1.6;
         if (f.countdown > 0) return;          // 倒计时里随便掉,不算
+        if (f.rushMs > 0) return;             // 冲刺里连水面都不咬人
         if (f.elapsed < f.hurtUntil) return;  // 挨打的那几百毫秒里不重复扣
         // **掉进湖里丫丫不管。** 她挡的是迎面来的东西,
         // 而沉下去是自己没拍翅膀 —— 一个连自己失误都替你兜的伙计,
         // 玩家很快就不看屏幕了。护盾是花钱买的,那个照挡
-        if (f.shield) { sfx.play('event'); f.shield = false; return; }
+        if (f.shieldN > 0) {
+            sfx.play('event');
+            if (--f.shieldN <= 0) f.shieldMs = 0;
+            return;
+        }
         sfx.play('hit');
         f.lives--;
         f.combo = 0;
@@ -692,16 +929,19 @@ export class Flight {
     _announceWall() {
         const f = this.f;
         if (f.warn || f.walls.length) return;      // 一片没过去不排下一片
+        // **颠倒的时候不排窄道。** 一件难事的当口不叠第二件 ——
+        // 那八秒本来就在考「反过来还认不认得路」,再来一条只能平飞的缝,
+        // 玩家分不清自己是败在哪一件上
+        if (f.flip > 0 || f.cut) return;
         // **缝开在哪,也得是从上一簇的空道走得到的。** 预告有一秒半,
         // 够走两三条道;但开在最远那一头,提前量再多也是白给
-        const top = SPAWN_TOP, span = SPAWN_BOTTOM - SPAWN_TOP;
         const from = f.lastGap ?? Math.floor(this.rng() * LANES);
         const jump = Math.max(1, Math.min(LANES - 1,
-            Math.floor(CLIMB_PX_PER_SEC * (CORRIDOR_WARN / 1000) / (span / LANES))));
+            Math.floor(CLIMB_PX_PER_SEC * (CORRIDOR_WARN / 1000) / LANE_H)));
         const lo = Math.max(0, from - jump), hi = Math.min(LANES - 1, from + jump);
         const lane = lo + Math.floor(this.rng() * (hi - lo + 1));
         f.lastGap = lane;
-        f.warn = { y: top + span * (lane + 0.5) / LANES, at: f.elapsed + CORRIDOR_WARN };
+        f.warn = { y: laneY(lane), at: f.elapsed + CORRIDOR_WARN };
         sfx.play('event');
     }
 
@@ -724,8 +964,9 @@ export class Flight {
             const o = f.walls[i];
             o.x -= move;
             if (o.x + o.w < -8) { f.walls.splice(i, 1); continue; }
-            const inX = BIRD_X + f.hazR > o.x && BIRD_X - f.hazR < o.x + o.w;
+            const inX = f.birdX + f.hazR > o.x && f.birdX - f.hazR < o.x + o.w;
             if (!inX || Math.abs(f.birdY - o.gapY) < CORRIDOR_GAP) continue;
+            if (f.rushMs > 0) continue;       // 冲刺:直接从云里穿过去
             if (f.elapsed < f.hurtUntil) continue;
             if (this._absorb()) continue;
             sfx.play('hit');
@@ -746,6 +987,16 @@ export class Flight {
         const near = o => o.x > VW - 24 && Math.abs(o.y - y) < minDy;
         const f = this.f;
         return !f.obstacles.some(near) && !f.foods.some(near) && !f.powerups.some(near);
+    }
+
+    /**
+     * 这会儿能不能出颠倒。
+     * 开局一分钟内不出、上一次之后隔够了、自己没在颠倒里、也不在过场里。
+     * (窄道那一段 _spawn 早就 return 了,轮不到这儿。)
+     */
+    _flipReady() {
+        const f = this.f;
+        return f.flip <= 0 && !f.cut && f.elapsed >= f.flipAt;
     }
 
     _spawn() {
@@ -774,8 +1025,6 @@ export class Flight {
             }
             return Math.max(top, Math.min(top + span, f.birdY + (rnd() * 2 - 1) * REACH));
         };
-        /** 第 i 条道的中间高度 */
-        const laneY = i => top + span * (i + 0.5) / LANES;
         const pick = a => a[Math.floor(rnd() * a.length)];
 
         // 窄道在场上、**或者已经预告了**的时候,不再撒障碍。
@@ -792,12 +1041,16 @@ export class Flight {
         }
         const r = rnd();
 
-        if (r < 0.05) {
-            f.powerups.push({ x: VW + 16, y: foodY(), type: pick(POWERUPS) });
-        } else if (r < 0.05 + f.hazard) {
+        if (r < POWER_RATE && f.elapsed >= f.powerAt) {
+            // 道具位里挑一个。颠倒够格的时候优先出它 —— 它是这里面唯一
+            // **有代价**的那个,不该和三个纯加成抢同一个概率
+            const type = this._flipReady() && rnd() < FLIP_CHANCE ? FLIP_TYPE : pick(POWERUPS);
+            f.powerups.push({ x: VW + 16, y: foodY(), type });
+            f.powerAt = f.elapsed + POWER_GAP;
+        } else if (r < POWER_RATE + f.hazard) {
             // 障碍**不跟着哇鸥走** —— 跟着走就成了追着人扔石头,
             // 而它靠的是「一簇里必留一条空道」那套规矩
-            this._hazard(1 + Math.floor(f.wave / 4), laneY);
+            this._hazard(1 + Math.floor(f.wave / 4));
         } else {
             f.foods.push({ x: VW + 16, y: foodY(), type: pick(FOOD_TYPES) });
         }
@@ -807,7 +1060,7 @@ export class Flight {
         // 一个障碍和一样食材叠在一起:两个圈重在一处,谁也认不出哪个能吃。
         // 生成节奏本来就靠 x 上的间距做疏密,加塞的那个不错开就是在破坏它
         const EXTRA_X = VW / 2;
-        if (this.state.weather === 'rainy' && rnd() < 0.3) this._hazard(1, laneY, EXTRA_X);
+        if (this.state.weather === 'rainy' && rnd() < 0.3) this._hazard(1, EXTRA_X);
         if (this.state.weather === 'foggy' && rnd() < 0.25) {
             f.foods.push({ x: VW + 16 + EXTRA_X, y: foodY(), type: pick(FOOD_TYPES) });
         }
@@ -833,12 +1086,11 @@ export class Flight {
      * 能跨三条,路线照样绕;间隔压到底线的时候只能跨一条,
      * 但**那一条一定走得到**。
      */
-    _hazard(n, laneY, dx = 0) {
+    _hazard(n, dx = 0) {
         const f = this.f, rnd = this.rng;
         const pick = a => a[Math.floor(rnd() * a.length)];
-        const laneH = (SPAWN_BOTTOM - SPAWN_TOP) / LANES;
         const reach = CLIMB_PX_PER_SEC * (f.spawnInterval / 1000);
-        const jump = Math.max(1, Math.min(LANES - 1, Math.floor(reach / laneH)));
+        const jump = Math.max(1, Math.min(LANES - 1, Math.floor(reach / LANE_H)));
         const from = f.lastGap ?? Math.floor(rnd() * LANES);
         const lo = Math.max(0, from - jump), hi = Math.min(LANES - 1, from + jump);
         const gap = lo + Math.floor(rnd() * (hi - lo + 1));
@@ -869,7 +1121,8 @@ export class Flight {
             collected: f.collected,
             itemCount: f.itemCount,
             maxCombo: f.maxCombo,
-            usedItems: { shield: f.shield, magnet: f.magnet, double: f.double },
+            flips: f.flipCount,
+            usedItems: { shield: f.shieldN > 0, magnet: f.magnetMs > 0, double: f.rushMs > 0 },
         });
     }
 
@@ -894,12 +1147,14 @@ export class Flight {
         ctx.globalAlpha = 1;
         drawFarGulls(ctx, t * 2);
         drawSea(ctx, weather, HORIZON, VH, t * 2, this.phase);
+        this._drawCeiling(ctx, f);
 
         for (const o of f.foods)     this._drawItem(ctx, o.type, o.x, o.y);
         for (const o of f.powerups)  this._drawPowerup(ctx, o, t);
         for (const o of f.obstacles) this._drawObstacle(ctx, o);
         this._drawWalls(ctx, f);
 
+        this._drawRush(ctx, f);
         this._drawBird(ctx, f);
         this._drawYaya(ctx, f);
 
@@ -907,8 +1162,62 @@ export class Flight {
         if (weather === 'foggy') drawFog(ctx, t, HORIZON);
         this._drawWave(ctx, f);
         this._drawHunger(ctx, f);
+        this._drawCut(ctx, f);          // 黑边压在最上面
 
         this.screen.present();
+    }
+
+    /**
+     * 云顶。**只有颠倒的时候才有** —— 平常上边界只是「顶住不动」,
+     * 而颠倒之后重力朝上,那一头就成了会要命的那一边。
+     *
+     * 必须画出来。**一条看不见的死线是最不讲理的那种难**:
+     * 玩家松手往上飘,飘着飘着少一条命,而画面上什么都没发生过。
+     * 画成一层压下来的乌云,和窄道那两片是同一种东西 ——
+     * 他不用学新东西就知道那是碰不得的。
+     */
+    _drawCeiling(ctx, f) {
+        if (f.gdir > 0) return;
+        for (let x = 0; x < VW; x += 4) {
+            // 疙瘩按屏幕坐标算就够了 —— 这一层不动
+            const b = ((x * 2654435761) >>> 0) % 3 * 3;
+            const y = SKY_TOP - b;
+            ctx.fillStyle = '#8a99a3';
+            ctx.fillRect(x, 0, 4, y);
+            ctx.fillStyle = '#5f6d78';                 // 贴着下面那一面压暗
+            ctx.fillRect(x, Math.max(0, y - 6), 4, Math.min(6, y));
+            ctx.fillStyle = '#4a3628';                 // 描边
+            ctx.fillRect(x, y - 1, 4, 1);
+        }
+    }
+
+    /**
+     * 过场的黑边。上下左右一起收拢,收到最紧的那一刻翻,然后张开。
+     *
+     * **左边只收到 34。** 哇鸥站在 x=60,左边那道再往里就把主角盖住了 ——
+     * 「四边一起收」是要的那个感觉,而「看得见自己」是不能丢的那件事。
+     */
+    _drawCut(ctx, f) {
+        if (!f.cut) return;
+        const p = Math.min(1, f.cut.t / CUT_MS);
+        const q = p < CUT_HOLD ? p / CUT_HOLD : 1 - (p - CUT_HOLD) / (1 - CUT_HOLD);
+        const e = q * q * (3 - 2 * q);
+        const l = Math.round(34 * e);
+        const r = Math.round(VW * 0.30 * e);
+        const v = Math.round(VH * 0.34 * e);
+        ctx.fillStyle = '#241a13';
+        ctx.fillRect(0, 0, VW, v);
+        ctx.fillRect(0, VH - v, VW, v);
+        ctx.fillRect(0, 0, l, VH);
+        ctx.fillRect(VW - r, 0, r, VH);
+        // 黑块要有边。像素画里一块没有描边的纯黑不像幕布,像画布破了个洞
+        ctx.fillStyle = '#c98a1e';
+        if (v) {
+            ctx.fillRect(l, v - 1, VW - l - r, 1);
+            ctx.fillRect(l, VH - v, VW - l - r, 1);
+        }
+        if (l) ctx.fillRect(l - 1, v, 1, VH - v * 2);
+        if (r) ctx.fillRect(VW - r, v, 1, VH - v * 2);
     }
 
     /**
@@ -1003,6 +1312,20 @@ export class Flight {
         plate(ctx, o.x, o.y, r, '#c98a1e');
         plate(ctx, o.x, o.y, r - 1, '#fffdf4');
         this._drawItem(ctx, o.type, o.x, o.y);
+        // 颠倒不是纯加成,它要人付出点什么。**外面再套一圈闪的金边** ——
+        // 三个白盘道具是「见了就吃」,这一个得让人认出来是另一类:
+        // 看清了再决定要不要伸头,是这个道具的全部乐趣
+        if (o.type === FLIP_TYPE) {
+            const on = Math.floor(t / 120) % 2 === 0;
+            ctx.fillStyle = on ? '#f5b83d' : '#c98a1e';
+            const d = r + 3;
+            for (let k = -d; k <= d; k += 3) {
+                ctx.fillRect(Math.round(o.x + k), Math.round(o.y - d), 2, 2);
+                ctx.fillRect(Math.round(o.x + k), Math.round(o.y + d), 2, 2);
+                ctx.fillRect(Math.round(o.x - d), Math.round(o.y + k), 2, 2);
+                ctx.fillRect(Math.round(o.x + d), Math.round(o.y + k), 2, 2);
+            }
+        }
     }
 
     /**
@@ -1104,34 +1427,53 @@ export class Flight {
         }
     }
 
+    /**
+     * 颠倒的时候**整只翻过来画**,而不是换一套图。
+     *
+     * 素材是冻着的(朋友在拿这批图做参考动画),而且也不该为这八秒
+     * 再画四帧倒着的哇鸥 —— 画布沿着它自己那条水平中线镜像一下就是了。
+     * 翻的是画笔不是图:四帧、护盾、受伤变色全都跟着走。
+     */
     _drawBird(ctx, f) {
+        if (f.gdir > 0) { this._bird(ctx, f); return; }
+        ctx.save();
+        ctx.translate(0, Math.round(f.birdY) * 2);
+        ctx.scale(1, -1);
+        this._bird(ctx, f);
+        ctx.restore();
+    }
+
+    _bird(ctx, f) {
         const t = f.vt;                      // 翅膀的节奏走画面时间
         // 挨打后闪 450ms:这一条是玩法时间,和 hurtUntil 同一把尺子
         const hurt = f.elapsed < f.hurtUntil;
         if (hurt && Math.floor(f.elapsed / 70) % 2 === 0) {
-            if (f.shield) this._drawShield(ctx, f);
+            if (f.shieldMs > 0) this._drawShield(ctx, f);
             return;
         }
 
-        if (this.sprites?.drawAnim(ctx, 'waou', 'fly', t, BIRD_X, f.birdY, 32)) {
-            if (f.shield) this._drawShield(ctx, f);
+        if (this.sprites?.drawAnim(ctx, 'waou', 'fly', t, f.birdX, f.birdY, 32)) {
+            if (f.shieldMs > 0) this._drawShield(ctx, f);
             return;
         }
 
         // 挑翅膀帧:**按的是哪个键要能从画面上看出来**。
         // 刚拍完那 220ms 一定是扬起的那一帧 —— 反馈得贴着按键,
         // 不能等速度真的变正了才换,那时候手感已经过去了
+        // **按重力那一头折算**:颠倒的时候「蹬一下」是往下走的,
+        // 而画面已经整只翻过来了 —— 用 vy*gdir,四帧的意思就还是原来那个意思
+        const rvy = f.vy * f.gdir;
         let i = Math.floor(t / 1000 * 10) % 4;
-        if (t - f.flapAt < 180 || f.vy < -1.5) i = 0;  // 往上蹿 -> 翅膀扬起
+        if (t - f.flapAt < 180 || rvy < -1.5) i = 0;   // 蹬出去 -> 翅膀扬起
         else if (f.glide) i = 1;                       // 平飞    -> 摊平
-        else if (f.vy > 2.5) i = 2;                    // 往下掉  -> 翅膀压下
+        else if (rvy > 2.5) i = 2;                     // 顺着掉  -> 翅膀压下
         const key = hurt ? 'waou_hurt' + i : 'waou' + i;
         const cv = hurt
             ? sprite(key, WAOU[i], { remap: { w: '#ffd0c4', V: '#f0b8b0' } })
             : sprite(key, WAOU[i]);
-        drawSprite(ctx, cv, BIRD_X, f.birdY);
+        drawSprite(ctx, cv, f.birdX, f.birdY);
 
-        if (f.shield) this._drawShield(ctx, f);
+        if (f.shieldMs > 0) this._drawShield(ctx, f);
     }
 
     /**
@@ -1147,21 +1489,71 @@ export class Flight {
         // 摆在哇鸥**前上方**:她是飞到前头去替你挨的那一下,
         // 不是从背后冒出来。压在哇鸥头上的话像多长了个脑袋
         const y = f.birdY - 14 - Math.round(p * 8);
-        drawSprite(ctx, sprite('crew_yaya', ICON_GRIDS.crew_yaya), BIRD_X + 22, y);
+        drawSprite(ctx, sprite('crew_yaya', ICON_GRIDS.crew_yaya), f.birdX + 22, y);
         ctx.fillStyle = `rgba(119, 178, 85, ${(p * 0.9).toFixed(3)})`;
-        ctx.fillRect(BIRD_X - 14, Math.round(f.birdY) + 14, 28, 2);
+        ctx.fillRect(f.birdX - 14, Math.round(f.birdY) + 14, 28, 2);
     }
 
-    /** 护盾:一圈像素虚线环,不用 arc(),免得出软边 */
+    /**
+     * 护盾:一圈像素虚线环,不用 arc(),免得出软边。
+     * **还能挡几次就画几圈** —— 次数是这个道具现在唯一的资源,
+     * 得让人一眼数得出来,而不是去状态栏上找一个数字。
+     * 快到期的时候整圈闪:它是会过期的,这一条也得看得见。
+     */
     _drawShield(ctx, f) {
-        const cx = Math.round(BIRD_X), cy = Math.round(f.birdY), r = 22;
+        const cx = Math.round(f.birdX), cy = Math.round(f.birdY);
         const spin = Math.floor(f.elapsed / 90);
-        ctx.fillStyle = '#ffe08a';
-        for (let a = 0; a < 24; a++) {
-            if ((a + spin) % 3 === 0) continue;      // 缺几段,看得出在转
-            const rad = a / 24 * Math.PI * 2;
-            ctx.fillRect(Math.round(cx + Math.cos(rad) * r),
-                         Math.round(cy + Math.sin(rad) * r), 2, 2);
+        const dim = f.shieldMs < 6000 && Math.floor(f.elapsed / 160) % 2 === 0;
+        ctx.fillStyle = dim ? '#c98a1e' : '#ffe08a';
+        for (let n = 0; n < Math.min(f.shieldN, SHIELD_N_MAX); n++) {
+            const r = 22 + n * 4;
+            for (let a = 0; a < 24; a++) {
+                if ((a + spin + n * 4) % 3 === 0) continue;   // 缺几段,看得出在转
+                const rad = a / 24 * Math.PI * 2;
+                ctx.fillRect(Math.round(cx + Math.cos(rad) * r),
+                             Math.round(cy + Math.sin(rad) * r), 2, 2);
+            }
+        }
+    }
+
+    /**
+     * 冲刺:身后拖一串速风线,身上罩一层金。
+     *
+     * **「变快了」这件事人眼是分不出来的** —— 世界从 3 像素/帧变成 5.4,
+     * 数字上快了八成,看着只是「还是那样」。真正让人觉得在冲的是三样:
+     * 主角自己往前探了一头(见 _update 里的 birdX)、身后拉出线、身上有光。
+     * 三样都便宜,合起来那八秒才对得起一个只出现一次的道具。
+     */
+    _drawRush(ctx, f) {
+        if (f.rushMs <= 0) return;
+        const cx = Math.round(f.birdX), cy = Math.round(f.birdY);
+        const t = Math.floor(f.vt / 40);
+        // 身后的风线。**高低和长短都得散开** —— 等长等距的话是一把梳子,
+        // 而梳子看着是静止的;错开之后同样几根线才像风
+        for (let i = 0; i < 10; i++) {
+            const h = (i * 1103515245 + 12345) >>> 0;
+            const dy = ((h >>> 9) % 31) - 15;
+            const len = 12 + ((h >>> 4) % 24);
+            const x = cx - 20 - ((i * 37 + t * 9) % 150);
+            if (x + len < 0) continue;
+            ctx.fillStyle = i % 3 ? '#ffe08a' : '#f5b83d';
+            ctx.fillRect(x, cy + dy, len, 1);
+        }
+        // 罩在身上的金:快到点的时候闪,和护盾一个道理
+        const low = f.rushMs < 2000 && Math.floor(f.elapsed / 130) % 2 === 0;
+        if (!low) {
+            ctx.fillStyle = 'rgba(245, 184, 61, 0.5)';
+            ctx.fillRect(cx - 17, cy - 17, 34, 2);
+            ctx.fillRect(cx - 17, cy + 15, 34, 2);
+            ctx.fillRect(cx - 17, cy - 15, 2, 30);
+            ctx.fillRect(cx + 15, cy - 15, 2, 30);
+        }
+        // 撞碎一个障碍的那一下,眼前炸一小片
+        if ((f.smash ?? 0) > f.elapsed) {
+            ctx.fillStyle = '#fffdf4';
+            for (const [dx, dy] of [[20, -12], [26, 4], [16, 14], [30, -6]]) {
+                ctx.fillRect(cx + dx, cy + dy, 3, 3);
+            }
         }
     }
 }

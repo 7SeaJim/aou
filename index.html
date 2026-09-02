@@ -381,6 +381,10 @@
                     <span class="px-chip px-chip--dark">
                         <i class="px-icon px-icon--map"></i> <strong id="flyDist">0</strong> 米
                     </span>
+                    <!-- 道具:四样共用一格,都在倒数。**各占一个 chip 的话,
+                         拿到两个就把「第几波」挤出屏幕了**,而它们本来是同一类东西 -->
+                    <span class="px-chip px-chip--dark" id="flyBuffs" hidden
+                          style="color:var(--gold)"></span>
                     <!-- 招了丫丫才出现:她隔一阵替你挡一下,得让人知道现在有没有 -->
                     <span class="px-chip px-chip--dark" id="flyYaya" hidden>
                         <i class="px-icon px-icon--crew_yaya"></i>
@@ -401,7 +405,7 @@
                         <button class="px-btn px-btn--sm px-btn--coral" id="flyQuit">收工</button>
                     </div>
                 </div>
-                <button class="fly-key fly-key--l" id="flyFlap"><kbd>空格</kbd><b>跃起</b></button>
+                <button class="fly-key fly-key--l" id="flyFlap"><kbd>空格</kbd><b id="flyFlapText">跃起</b></button>
                 <button class="fly-key fly-key--r" id="flyGlide"><kbd>→</kbd><b>平飞</b></button>
                 <div class="fly-count" id="flyCount" hidden></div>
                 <div class="px-mask" id="pauseMask">
