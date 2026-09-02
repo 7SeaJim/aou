@@ -793,14 +793,16 @@ export class UI {
         const kids = () => [...body.children];
         for (let i = 0; i < kids().length; i++) {
             const el = kids()[i];
-            // **小标题一律另起一页。** 一页 = 一件事。
+            // **小标题不能和它的正文分家 —— 但也不该为此浪费一整页。**
             //
-            // 不这么定的话,贪心装箱迟早会出现「一整页只写着『升级』」——
-            // 上一页正好还剩二十像素,标题塞得进去,它底下那四张卡塞不进去。
-            // 而且按标题分页之后,「3 / 8」这个数对玩家是有意义的:
-            // 摊子这一页本来就是八件事(摊位、市场、升级、后厨、餐盘、
-            // 收集进度、跑道、伙计),翻到第几页就是在看第几件。
-            if (el.tagName === 'H3' && cur.length) nextPage();
+            // 第一版是「一律另起一页」,治好了「一整页只写着『升级』」,
+            // 却换来「一整页只写着『后厨』加一行说明」—— 后厨那一段本来就短,
+            // 硬给它一页,底下空掉三分之二。
+            //
+            // 现在**往前看一眼**:标题连着它后面那一块,要是这一页还塞得下,
+            // 就不断页;塞不下才断。落单和浪费都堵住了,而且判断的依据是
+            // 「实际量出来的高度」,不是「我猜这一段大概多长」。
+            if (el.tagName === 'H3' && cur.length && !this._fits(i, H - used)) nextPage();
 
             const h = el.getBoundingClientRect().height;
             if (h <= H - used) { cur.push(el); used += h; continue; }
@@ -819,6 +821,22 @@ export class UI {
         if (key !== this._pageKey) { this._page = 0; this._pageKey = key; }
         this._page = Math.max(0, Math.min(this._page, pages.length - 1));
         this.showPage();
+    }
+
+    /**
+     * 从第 i 块起,「标题 + 紧跟的正文」塞不塞得进 `room`。
+     * 正文取到下一个标题为止,但最多看三块 —— 再多就不是「一段」而是「一节」了,
+     * 那种情况本来就该断页。
+     */
+    _fits(i, room) {
+        const kids = [...this.$panel.children];
+        let sum = 0;
+        for (let j = i; j < kids.length && j < i + 4; j++) {
+            if (j > i && kids[j].tagName === 'H3') break;
+            sum += kids[j].getBoundingClientRect().height;
+            if (sum > room) return false;
+        }
+        return true;
     }
 
     /**
@@ -1749,28 +1767,32 @@ export class UI {
         const slots = Array.from({ length: 3 }, (_, i) => {
             if (i >= info.slots) {
                 const need = [1, 3, 6][i];
-                return `<div class="px-slot px-slot--locked" style="width:auto;height:auto;padding:14px 18px;flex-direction:column;gap:6px">
-                    <span class="px-muted">Lv.${need} 解锁</span></div>`;
+                // 锁着的格子**只占一条**,不撑成一整块。
+                // 原来它和摆了菜的格子一样高,而里面只有「Lv.3 解锁」四个字 ——
+                // 一行网格的高度是按最高的那个算的,一个空壳把整行撑高了
+                return `<div class="px-slot px-slot--locked"
+                    style="width:auto;height:auto;padding:8px 12px;justify-content:center">
+                    <span class="px-muted" style="font-size:12px">Lv.${need} 解锁</span></div>`;
             }
             const st = s.stalls[i] ?? { recipe: null, ms: 0 };
             const r = RECIPES.find(x => x.id === st.recipe);
             if (!r) {
                 return `<button class="px-btn px-btn--wood" data-act="stall" data-slot="${i}"
-                    style="flex-direction:column;gap:6px;padding:16px 20px">
+                    style="gap:8px;padding:10px 14px">
                     ${icon('shop', 'lg')} <span style="font-size:13px">空着 · 点一下摆菜</span></button>`;
             }
             const enough = rules.canAfford(s, r.cost);
             const pct = Math.min(100, (st.ms / info.serveMs) * 100);
-            return `<div class="px-panel px-panel--gold" style="padding:12px 14px">
+            return `<div class="px-panel px-panel--gold" style="padding:8px 10px">
                 <button class="px-btn px-btn--sm px-btn--wood" data-act="stall" data-slot="${i}"
-                    style="width:100%;justify-content:flex-start;margin-bottom:10px">
+                    style="width:100%;justify-content:flex-start;margin-bottom:6px">
                     ${icon(r.icon, 'lg')} ${r.name}</button>
-                <div class="px-bar px-bar--sea" style="height:16px;margin-bottom:8px">
+                <div class="px-bar px-bar--sea" style="height:12px;margin-bottom:6px">
                     <div class="px-bar__fill" data-bar="${i}" style="width:${pct}%"></div>
                 </div>
-                <p class="px-muted" style="font-size:12px;line-height:1.6">
-                    ${Math.round(r.reward * info.priceMul)} 鸥币一份<br>
-                    吃 ${Object.entries(r.cost).map(([k, v]) => `${FOODS[k].name}×${v}`).join(' ')}
+                <p class="px-muted" style="font-size:12px;line-height:1.5">
+                    ${Math.round(r.reward * info.priceMul)} 鸥币 ·
+                    ${Object.entries(r.cost).map(([k, v]) => `${FOODS[k].name}×${v}`).join(' ')}
                     ${enough ? '' : '<br><span style="color:var(--coral)">材料不够,停着</span>'}
                 </p>
             </div>`;
@@ -1796,10 +1818,10 @@ export class UI {
             <span class="px-chip">${icon('shop')} 每份 <strong>${(info.serveMs / 1000).toFixed(1)}</strong> 秒</span>
             <span class="px-chip">${icon('backpack')} 离线 <strong>${info.offlineCapMs / 3600000}</strong> 小时</span>
         </div>
-        <p class="px-muted" style="margin-bottom:16px">
-            摆上去的菜自己会卖,你不在的时候也照卖(慢些)。
-            <strong>想卖给真正的游客,白天去「出摊」亲手做。</strong></p>
-        <div class="px-grid" style="--min:230px;margin-bottom:28px">${slots}</div>
+        <!-- 介绍那一段删了。三个 chip 已经把数说清楚,引导里也讲过一遍 ——
+             而它在手机上占掉一页的四分之一,正好把摊位格子挤到下一页去。
+             **说明文字的代价在手机上是按「几分之一页」算的。** -->
+        <div class="px-grid" style="--min:230px;margin-bottom:16px">${slots}</div>
 
         ${this.marketView()}
 
@@ -1879,13 +1901,14 @@ export class UI {
             </div>`;
         }).join('');
 
+        // 这一段的说明原来写成 Markdown 的粗体(两个星号包起来),而这儿是
+        // innerHTML —— **注释里的写法漏到界面上了**,玩家看到的是一串星号。
+        // 代码注释和界面文案共用一套强调符号,迟早会串。界面上只用 <strong>。
         return `
         <h3 style="margin-bottom:6px">后厨</h3>
-        <p class="px-muted" style="margin-bottom:12px">
-            这几件管的是**你在摊上的时候**能做多快。上面那四条管的是你不在的时候。</p>
-        <div style="margin-bottom:16px">${tools}</div>
-        <h4 style="margin-bottom:8px">餐盘</h4>
-        <div style="margin-bottom:24px">${plates}</div>`;
+        <div style="margin-bottom:12px">${tools}</div>
+        <h4 style="margin-bottom:6px">餐盘</h4>
+        <div>${plates}</div>`;
     }
 
     viewPostcards() {
