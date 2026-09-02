@@ -38,6 +38,8 @@ let syncScene = () => false;
 let flight = null;
 /** 开发用的播种随机源工厂。生产构建里始终是 null */
 let devRng = null;
+/** wa.god() 的开关。同上,生产构建里始终是 null */
+let devGodOn = null;
 /** 待机界面期间攒下的事件,进游戏后一起弹 */
 let pendingEvents = [];
 
@@ -58,6 +60,7 @@ async function boot() {
     if (import.meta.env.DEV) {
         dev = await import('./dev.js');
         devRng = dev.devRng;
+        devGodOn = dev.devGodOn;
     }
 
     state = dev?.devScene() ?? await storage.load();
@@ -358,6 +361,8 @@ function startFlight(sprites) {
         },
     });
     flight.start();
+    // 不死模式跨局有效:每开一局问一次 dev(见 wa.god())
+    if (devGodOn?.()) flight.f.god = true;
 }
 
 function finishFlight(result) {

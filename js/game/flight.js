@@ -154,8 +154,14 @@ const SPEED_GROW = 0.22;
  * （助跑坡当初也是这么改的 —— 第三次撞上同一件事了。）
  */
 const LV_GROW = 0.10;
-/** 开局的生成间隔。**也是个常数** —— 理由同上 */
-const SPAWN_0 = 860;
+/**
+ * 开局的生成间隔。**也是个常数** —— 理由同上。
+ *
+ * 860 → 780:开局那一分钟场上东西太少,而占比调不动这一条 ——
+ * 障碍占比管的是「来的是哪一种」,**节奏管的是「多久来一个」**,
+ * 头一分钟空荡荡是两个一起造成的,只拧一个拧不动。
+ */
+const SPAWN_0 = 780;
 /**
  * 生成间隔每分钟压缩多少毫秒,以及压到哪儿为止。
  *
@@ -166,9 +172,20 @@ const SPAWN_0 = 860;
 const SPAWN_GROW = 110;
 const SPAWN_MIN = 420;
 
-/** 障碍占生成的比例:开局 22%,一路涨到 55% */
-const HAZARD_0 = 0.22;
-const HAZARD_MAX = 0.55;
+/**
+ * 障碍占生成的比例:开局 36%,一路涨到 62%。
+ *
+ * 原来开局是 22%,配上 860 毫秒的生成间隔,等于**平均 3.9 秒才来一个障碍**,
+ * 而一个障碍横穿画面要 3.2 秒 —— 场上长时间只有零点几个东西。
+ * 那不是「先热热身」,是**头一分钟没有游戏**:玩家在空荡荡的天上飞,
+ * 学不到任何东西,等难度上来了才发现自己什么都没练过。
+ *
+ * 36% 大约是场上常驻一个多障碍:一上来就得躲,但还留得出吃东西的空当。
+ * 涨到 62% 封顶(斜率 0.09/分钟,约三分钟摸到顶)——
+ * **后期真正在变难的是速度和间隔**,占比只是把「空当」压薄。
+ */
+const HAZARD_0 = 0.42;
+const HAZARD_MAX = 0.62;
 /** 多久算一波。到点报一次,让玩家知道是游戏变难了不是自己变菜了 */
 const WAVE_MS = 20_000;
 /**
@@ -225,8 +242,18 @@ const REACH = 72;
  * 没了的那一下只会被当成手感变差**;看得见它快没了,才谈得上
  * 「趁着还有赶紧吃」—— 那十几秒的紧张感是这三个道具真正给的东西。
  */
-const POWER_RATE = 0.015;       // 每次生成里有多大概率是道具
-const POWER_GAP = 25_000;       // 两个道具之间至少隔这么久
+/**
+ * 每次生成里有多大概率是道具,以及两个之间至少隔多久。
+ *
+ * 1.5% + 25 秒(约一分钟一个)试下来**太稀了**:一局里见着三四次,
+ * 而其中还有一次是颠倒 —— 玩家来不及建立「天上会掉好东西」这个预期,
+ * 反倒像是随机撞了大运。**加成要成为一条玩法,得先密到能被指望上。**
+ *
+ * 4% + 12 秒 ≈ 一分钟两三个:每一个还是要拐一趟才拿得到,
+ * 但「这一路上会有东西」变成了可以计划的事。
+ */
+const POWER_RATE = 0.04;
+const POWER_GAP = 12_000;
 const MAGNET_MS = 15_000;
 const MAGNET_MAX = 30_000;
 /** 磁铁的吸力(像素/帧)。远的拉得快、近的收得稳,不然会绕着头打转 */
@@ -306,8 +333,8 @@ const FLIP_MS = 8000;
 const FLIP_MS_MIN = 5000;
 const FLIP_MS_DECAY = 300;      // 每过一波少这么多毫秒
 const FLIP_AFTER = 60_000;      // 开局这么久之内不出
-const FLIP_COOLDOWN = 45_000;   // 两次之间至少隔这么久
-const FLIP_CHANCE = 0.45;       // 道具位里有多大概率是它
+const FLIP_COOLDOWN = 50_000;   // 两次之间至少隔这么久
+const FLIP_CHANCE = 0.4;        // 道具位里有多大概率是它
 const FLIP_HAUL = 2;            // 颠倒期间捡到的算几份
 /**
  * 过场:上下左右的黑边收拢 → 哇鸥归到画面正中 → 在最紧的那一刻翻 →
@@ -458,8 +485,9 @@ export class Flight {
             shieldN: (this.state.items.shield ?? 0) > 0 ? SHIELD_N : 0,
             magnetMs: (this.state.items.magnet ?? 0) > 0 ? MAGNET_MS : 0,
             rushMs: (this.state.items.double ?? 0) > 0 ? RUSH_MS : 0,
-            powerAt: POWER_GAP,   // 头 25 秒不出道具,先让人把手放稳
+            powerAt: 10_000,      // 头十秒不出道具,先让人把手放稳
             birdX: BIRD_X,        // 冲刺的时候会往前顶一段
+            god: false,           // wa.god():不掉命、不掉肚子。只有 dev 版能开
         };
 
         this._bind();
@@ -696,7 +724,7 @@ export class Flight {
             }
             if (this._absorb()) continue;
             sfx.play('hit');
-            f.lives--;
+            if (!f.god) f.lives--;              // wa.god():照挨照闪,就是不掉命
             f.combo = 0;
             f.hurtUntil = f.elapsed + 450;      // 闪一下,给个挨打的反馈
             if (f.lives <= 0) { this._finish('crash'); return; }
@@ -884,7 +912,7 @@ export class Flight {
             return;
         }
         sfx.play('hit');
-        f.lives--;
+        if (!f.god) f.lives--;
         f.combo = 0;
         f.hurtUntil = f.elapsed + 450;
         if (f.lives <= 0) this._finish('crash');
@@ -897,6 +925,7 @@ export class Flight {
             f.hungryFlash = f.elapsed + 1600;
             sfx.play('hit');
         }
+        if (f.god) return;                   // 无敌连肚子一起停 —— 见 wa.god()
         f.hunger -= dt / f.hungryMs;
         if (f.hunger <= 0) { f.hunger = 0; this._finish('hungry'); }
     }
@@ -910,7 +939,7 @@ export class Flight {
         // 开头的手感都不一样,而他根本不知道为什么。
         f.speed = f.baseSpeed * (1 + mins * f.grow);
         f.spawnInterval = Math.max(SPAWN_MIN, f.baseInterval - mins * f.denser);
-        f.hazard = Math.min(HAZARD_MAX - f.flag, Math.max(0.08, HAZARD_0 - f.flag) + mins * 0.12);
+        f.hazard = Math.min(HAZARD_MAX - f.flag, Math.max(0.08, HAZARD_0 - f.flag) + mins * 0.09);
 
         // 每 20 秒报一波。**得让玩家听见、看见它变难了** ——
         // 悄悄变难只会让人觉得「我怎么突然打不过了」,而不是「又上了一档」
@@ -970,7 +999,7 @@ export class Flight {
             if (f.elapsed < f.hurtUntil) continue;
             if (this._absorb()) continue;
             sfx.play('hit');
-            f.lives--;
+            if (!f.god) f.lives--;
             f.combo = 0;
             f.hurtUntil = f.elapsed + 450;
             // **撞了就把它卷进缝里。** 一片云要走一秒多,不这么做的话
@@ -1050,7 +1079,7 @@ export class Flight {
         } else if (r < POWER_RATE + f.hazard) {
             // 障碍**不跟着哇鸥走** —— 跟着走就成了追着人扔石头,
             // 而它靠的是「一簇里必留一条空道」那套规矩
-            this._hazard(1 + Math.floor(f.wave / 4));
+            this._hazard(1 + Math.floor(f.wave / 3));
         } else {
             f.foods.push({ x: VW + 16, y: foodY(), type: pick(FOOD_TYPES) });
         }

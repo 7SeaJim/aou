@@ -472,6 +472,25 @@ export function installDev({ getState, mutate, storage, fly, getFlight, rules, u
         },
 
         /**
+         * 不死模式。**开着的时候不掉命、也不掉肚子** ——
+         * 想看第八分钟长什么样,不该先打赢前七分钟。
+         *
+         * 挨打的闪光和音效照旧:**要能看出「这一下本来是要命的」**,
+         * 不然拿它调难度就成了盲调 —— 屏幕上一片和平,而实际每三秒死一次。
+         *
+         *   wa.god()        这一局起效,之后每一局也自动开
+         *   wa.god(false)   关掉(当前这局立刻恢复)
+         */
+        god(on = true) {
+            devGod = !!on;
+            const F = getFlight();
+            if (F) F.f.god = devGod;
+            return devGod
+                ? '不死模式:不掉命、不掉肚子(照挨照闪)。' + (F ? '当前这局已生效' : '下一局 wa.fly() 生效')
+                : '不死模式关了' + (F ? ' —— 当前这局立刻恢复' : '');
+        },
+
+        /**
          * 飞行里的道具:不用等它飘过来。
          *
          *   wa.buff()               看现在身上有什么
@@ -616,6 +635,7 @@ export function installDev({ getState, mutate, storage, fly, getFlight, rules, u
                 'wa.hire(id)':     '直接招一只伙计,跳过条件(不收安家费)',
                 'wa.wage()':       '看每天要发多少工钱、谁在请假;wa.wage(true) 立刻补发',
                 'wa.flight':       '当前这一局(可改 .f.lives / .f.speed)',
+                'wa.god()':        '飞行不死:不掉命也不掉肚子(照挨照闪);wa.god(false) 关',
                 'wa.buff(k, s)':   "飞行道具直接上身 — 'flip' 颠倒 / 'rush' 无敌 / 'magnet' / 'shield';不传参看现状",
                 'wa.code()':       '导出存档码',
             });
@@ -679,6 +699,10 @@ function syncClock() {
 }
 
 /** main.js 用它拿飞行的随机源;没设种子就返回 undefined,Flight 用默认的 Math.random */
+/** wa.god() 的开关。main.js 每开一局问一次 —— 这样它跨局有效 */
+let devGod = false;
+export const devGodOn = () => devGod;
+
 export function devRng() {
     return devSeed === null ? undefined : seeded(devSeed);
 }
