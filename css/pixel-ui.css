@@ -996,26 +996,55 @@
 .px-drawer {
     position: absolute;
     z-index: 30;
-    /* 右半边。左边那截画面留着 —— 抽屉铺满就等于回到了原来的整页面板。
-       **右边和底下各让出一条按钮栏的厚度**:按钮栏现在压在画面上,
-       抽屉再铺到边就会把导航整个盖住,玩家开了抽屉就换不了页 */
-    top: var(--rail-t); right: var(--rail-w); bottom: var(--rail-h);
-    width: 56%;
+    /**
+     * 一块**四边都浮着**的板子,不是焊在右边缘的一半屏幕。
+     *
+     * 原来它是 `top/right/bottom: 0` 的一整条,那是画面只有 880 宽、
+     * 按钮栏还在画面外面的时候。现在按钮栏压在画面上,抽屉再铺到边
+     * 就会把导航整个盖住 —— **玩家开了抽屉就换不了页**。
+     * 而且画面大了之后,一块贴着边的板子看着像界面裂了一道缝;
+     * 四边留出按钮栏那一圈,它才像「压在画面上的一块板」。
+     */
+    top: calc(var(--rail-t) + 6px);
+    right: calc(var(--rail-w) + 6px);
+    bottom: calc(var(--rail-h) + 6px);
+    width: min(58%, 760px);
     display: flex;
     flex-direction: column;
     background: var(--sand);
-    box-shadow: -4px 0 0 var(--ink);
+    /* 四面都描边 + 一道投影。贴着边的时候只描左边就够,浮起来之后不够 */
+    box-shadow:
+        0 0 0 4px var(--ink),
+        8px 8px 0 rgba(36, 26, 19, .35);
+    /* 里面的字号跟着抽屉自己的宽度走 —— 画面大了之后
+       13px 的按钮在一千二百宽的屏上小得像脚注 */
+    container-type: inline-size;
 }
 .px-drawer__bar {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 12px;
-    padding: 9px 12px;
+    padding: clamp(8px, 1.6cqi, 14px) clamp(10px, 2cqi, 18px);
     background: var(--wood);
     box-shadow: inset 0 -3px 0 var(--ink);
+    font-size: clamp(15px, 2.6cqi, 20px);
 }
-.px-drawer__body { flex: 1; overflow-y: auto; padding: 14px 14px 20px; }
+.px-drawer__body {
+    flex: 1;
+    overflow-y: auto;
+    padding: clamp(12px, 2.4cqi, 22px) clamp(12px, 2.4cqi, 22px) clamp(18px, 3cqi, 28px);
+    font-size: clamp(14px, 2.1cqi, 17px);
+}
+/**
+ * 抽屉里的按钮跟着放大。**空间富余的时候小按钮不是克制,是浪费** ——
+ * 一块七百宽的板子上摆一堆 13px 的按钮,手指按不准、眼睛也得凑近。
+ */
+.px-drawer__body .px-btn { font-size: clamp(14px, 2.1cqi, 18px); padding: clamp(10px, 1.8cqi, 15px) clamp(16px, 2.8cqi, 26px); }
+.px-drawer__body .px-btn--sm { font-size: clamp(13px, 1.9cqi, 16px); padding: clamp(8px, 1.5cqi, 12px) clamp(12px, 2.2cqi, 20px); }
+.px-drawer__body h3 { font-size: clamp(16px, 2.6cqi, 21px); }
+.px-drawer__body .px-icon { width: clamp(16px, 2.4cqi, 20px); height: clamp(16px, 2.4cqi, 20px); }
+.px-drawer__body .px-icon--lg { width: clamp(24px, 3.6cqi, 32px); height: clamp(24px, 3.6cqi, 32px); }
 /* .px-drawer 设了 display:flex,会盖掉浏览器默认的 [hidden]{display:none} */
 .px-drawer[hidden] { display: none; }
 
