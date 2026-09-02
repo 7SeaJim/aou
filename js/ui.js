@@ -24,6 +24,7 @@ import { now } from './clock.js';
 import { FOOD_KEYS, DAILY_TRIES, TUTORIAL_DONE } from './state.js';
 import * as rules from './game/rules.js';
 import { STATIONS } from './game/service.js';
+import { VW, VH } from './game/scene.js';
 import * as sfx from './audio.js';
 
 const $ = sel => document.querySelector(sel);
@@ -55,7 +56,7 @@ function daysToWinter() {
 const DRAWER_TITLE = {
     dock: '海埂大坝', service: '出摊', cook: '摊子', hut: '小屋',
     bag: '背包', codex: '图鉴 · 食材和菜谱', postcard: '明信片', achievement: '成就',
-    wear: '装扮', chat: '聊天', save: '存档',
+    wear: '装扮', chat: '聊天', save: '存档', settings: '设置',
 };
 
 /**
@@ -135,6 +136,16 @@ export class UI {
         this.$hud.addEventListener('click', e => {
             const btn = e.target.closest('[data-act]');
             if (btn) this.handle(btn.dataset.act, btn.dataset);
+        });
+        // 音量滑块。**不能走 click,也不能在拖的过程中整页重绘** ——
+        // 重绘会把 input 元素重建一遍,手指按着的那个滑块当场就没了,
+        // 拖到一半永远断在那儿。所以只改那个百分比标签,别动结构。
+        this.$panel.addEventListener('input', e => {
+            const el = e.target.closest('input[data-act="vol"]');
+            if (!el) return;
+            sfx.setVolume(Number(el.value) / 100);
+            const tag = el.closest('.px-panel')?.querySelector('.px-tag');
+            if (tag) tag.textContent = Math.round(sfx.getVolume() * 100) + '%';
         });
         // 面板内所有按钮走事件委托,重绘后不用重新绑定
         this.$panel.addEventListener('click', e => {
@@ -339,8 +350,9 @@ export class UI {
 
             case 'mute':
                 this.toast(sfx.toggleMute() ? '静音了' : '音效开着', 'star');
-                this.renderHud();
+                this.render();
                 break;
+
 
             case 'export': this.exportCode(); break;
             case 'import': this.importCode(); break;
@@ -594,6 +606,7 @@ export class UI {
             wear: () => this.viewWear(),
             chat: () => this.viewChat(),
             save: () => this.viewSave(),
+            settings: () => this.viewSettings(),
         }[this.screen];
 
         this.$drawer.hidden = !view;
@@ -603,19 +616,35 @@ export class UI {
         this.paintCanvases();
     }
 
+    /**
+     * 画面上头那一条。**只留三样:钱、天、等级。**
+     *
+     * 原来还有瓶盖、觅食次数、音效开关。这一条在手机上要占掉两行,
+     * 而那三样各自都有更该待的地方:
+     *
+     *   瓶盖    挪进背包 —— 它是一种资源,背包就是看资源的地方
+     *   觅食次数 底下「出发觅食 5/5」那个按钮上本来就写着,这儿是重复的
+     *   音效    挪进设置
+     *
+     * **判断标准是「要不要一直盯着」。** 钱和等级会一直变,天气决定今天卖多少;
+     * 剩下那三样是「想起来才看一眼」的,不该常年占着最上面这一条。
+     *
+     * 这一条本身搬到画面**里面**去了 —— 画面外面每多一行,
+     * 手机横过来之后画面就矮一截,而它已经很矮了。
+     *
+     * 但**它保留边框和底色**,和底下三条按钮栏不一样:按钮只是入口,
+     * 透明就够;而状态是要「读数」的,读数需要一块安静的底,
+     * 不然眼睛得先把字从画面里挑出来。
+     */
     renderHud() {
         const s = this.getState();
         const w = WEATHER[s.weather] ?? WEATHER.sunny;
         const pct = Math.min(100, Math.round(s.exp / s.expNext * 100));
         this.$hud.innerHTML = `
-            <span class="px-chip">${icon('coin')} <strong>${s.coins}</strong> 鸥币</span>
+            <span class="px-chip">${icon('coin')} <strong>${s.coins}</strong><small class="px-unit"> 鸥币</small></span>
             <span class="px-chip">${icon(w.icon)} ${w.name}</span>
             <span class="px-chip">${icon('star')} Lv.<strong>${s.level}</strong></span>
-            <span class="px-chip">${icon('cap')} <strong>${s.caps}</strong> 瓶盖</span>
-            <span class="px-chip">${icon('waou')} 觅食 <strong>${s.dailyTries}</strong>/${DAILY_TRIES}</span>
-            <button class="px-chip px-chip--btn" data-act="mute" title="音效开关">
-                ${icon('star')} 音效 <strong>${sfx.isMuted() ? '关' : '开'}</strong></button>
-            <div class="px-bar px-bar--exp" style="flex:1;min-width:160px">
+            <div class="px-bar px-bar--exp">
                 <div class="px-bar__fill" style="width:${pct}%"></div>
                 <div class="px-bar__label">经验 ${s.exp} / ${s.expNext}</div>
             </div>`;
@@ -668,76 +697,56 @@ export class UI {
      * **不再有页签** —— 页签的语义是「切换整页」,而这儿画面从不切换,
      * 只是在它上面开一个抽屉。
      */
+    /**
+     * 三条按钮栏。左边是玩法、右边是收集与状态、下面是动作。
+     * **不再有页签** —— 页签的语义是「切换整页」,而这儿画面从不切换,
+     * 只是在它上面开一个抽屉。
+     *
+     * 三条都**压在画面上、底色透明**(见 pixel-ui.css 的 .px-rail)。
+     * 原来它们是占位置的,手机上左右两条就吃掉四成宽 ——
+     * 而这本质是个手机游戏。
+     */
     renderRails() {
         const s = this.getState();
+        // 整页场景(小屋 / 出摊)里三条全收起来:那两页本身就是一整个界面,
+        // 底下那条场景操作条里有「回大坝」,出得去。**留着反而会和它撞在一起**,
+        // 而且出摊那一场左边正好是烤箱,竖栏会压住它
+        const full = FULL_SCENES.has(this.screen);
+        for (const el of this.$rails) el.hidden = full;
+        if (full) return;
+
         const btn = ([id, name, ico]) =>
             `<button class="px-railbtn" data-screen="${id}"
                      aria-selected="${this.screen === id}">
                 ${icon(ico, 'lg')}<span>${name}</span></button>`;
 
-        // 左边这条底下接摊子的实时状态。**按钮底下空着的那截不是靠拉长按钮填的** ——
-        // 拉长只是把空白摊薄。这儿放的是玩家每隔一会儿就要瞄一眼的三件事:
-        // 下一份还有多久、一份卖多少、哇鸥人在哪。
+        // 左边这条底下只剩**客单价**一条。
+        // 原来这儿摞着出餐进度、客单价、哇鸥在哪三条 —— 那是按钮栏还是实心木头、
+        // 底下空着一大片时候的填法。现在栏是透明的、压在画面上,
+        // **多一行字就多糊住一块画**,而客单价是唯一一个「看一眼就影响下一步」的数。
         const info = rules.stallInfo(s);
-        const ms = Math.max(...s.stalls.map(st => st?.ms ?? 0), 0);
-        const slot = hourSlot(now());
-        const where = slot === 'night' ? '睡了' : slot ? '草棚' : '大坝';
         this.$rails[0].innerHTML = [
             ['dock', '大坝', 'map'], ['service', '出摊', 'shao_erkuai'],
             ['cook', '摊子', 'shop'], ['hut', '小屋', 'waou'],
         ].map(btn).join('') + `
         <div class="px-railfoot">
             <div class="px-railstat">
-                ${icon('shop')}
-                <div class="px-railstat__bar">
-                    <i style="width:${Math.min(100, ms / info.serveMs * 100)}%"></i></div>
-                <small>出餐中</small>
-            </div>
-            <div class="px-railstat">
                 ${icon('coin')}<small>×${info.priceMul.toFixed(2)}</small><small>客单价</small>
-            </div>
-            <div class="px-railstat">
-                ${icon('waou')}<small>${where}</small><small>哇鸥</small>
             </div>
         </div>`;
 
-        // 右边这条底下接收集进度。三条线各自的完成度 ——
-        // 按钮点进去才看得到数字的话,玩家不会主动去点
-        const bar = (ico, name, have, total) => `
-            <div class="px-railstat">
-                ${icon(ico)}
-                <div class="px-railstat__bar">
-                    <i style="width:${total ? have / total * 100 : 0}%"></i></div>
-                <small>${have}/${total}</small>
-                <small>${name}</small>
-            </div>`;
+        // 右边这条不再挂收集进度 —— 图鉴 / 明信片 / 成就那三条挪进「摊子」那一页
         this.$rails[1].innerHTML = [
             ['bag', '背包', 'backpack'], ['codex', '图鉴', 'erkuai'],
             ['postcard', '明信片', 'postcard'], ['achievement', '成就', 'trophy'],
-        ].map(btn).join('') + `
-        <div class="px-railfoot">
-            ${bar('erkuai', '图鉴', s.unlockedRecipes.length, RECIPES.length)}
-            ${bar('postcard', '明信片', s.postcards.length, POSTCARDS.length)}
-            ${bar('trophy', '成就', s.achievements.length, ACHIEVEMENTS.length)}
-        </div>`;
+        ].map(btn).join('');
 
-        // 底下这条原来只有几个按钮挤在正中,右边空着大半条。
-        // **空着的地方该放的是「现在什么情况」** —— 几点了、摊子开没开、什么季节。
-        // 这三件事玩家隔一会儿就要问一次,原来得自己去推。
-        const phase = { day: '白天', dusk: '傍晚', night: '夜里' }[dayPhase(now())];
-        const open = rules.serviceOpen();
-        const w = WEATHER[s.weather] ?? WEATHER.sunny;
         this.$rails[2].innerHTML =
             `<button class="px-railbtn px-railbtn--go" data-act="fly"
                      ${s.dailyTries <= 0 ? 'disabled' : ''}>
                 ${icon('waou', 'lg')}<span>出发觅食 ${s.dailyTries}/${DAILY_TRIES}</span></button>`
             + [['wear', '装扮', 'cap'], ['chat', '聊天', 'heart'],
-               ['save', '存档', 'coin']].map(btn).join('')
-            + `<span class="px-railinfo">
-                <span>${icon(w.icon)} ${phase} · ${w.name}</span>
-                <span class="${open ? '' : 'px-muted'}">${icon('shop')} 摊子${open ? '开着' : '打烊了'}</span>
-                <span>${icon('star')} ${rules.seasonNow().name}季</span>
-               </span>`;
+               ['save', '存档', 'coin'], ['settings', '设置', 'gear']].map(btn).join('');
     }
 
     viewDock() {
@@ -1102,11 +1111,17 @@ export class UI {
      * 为什么不干脆全放画布上:核心动作是拖,而拖拽、命中判定、拖影这些
      * 浏览器本来就有。所以画归画布、点归 DOM,两边共用同一张坐标表。
      *
-     * 坐标 ×2 是因为画布是 440×310 的位图放大两倍贴到 880×620 上的。
+     * 坐标用**百分比**,不用像素。
+     *
+     * 原来写的是 `x * 2` —— 假设画面正好是 880 CSS 像素宽,也就是位图 1:1。
+     * 桌面上碰巧成立,**手机上整块画面是缩过的**,判定框却还按 CSS 像素摆:
+     * 看得见的砧板在这儿,收手指的框在那儿,越窄的屏差得越远。
+     * 换成百分比之后,画面缩到多大都对得上。
      */
     station(key, v) {
         const st = STATIONS[key];
         const [x, y, w, h] = st.hit;
+        const pc = (v0, total) => (v0 / total * 100).toFixed(3) + '%';
         const jobs = (v.tools[key] ?? []).filter(Boolean);
         const done = jobs.length > 0;
         const hot = jobs.some(j => j.grade === 'good');
@@ -1114,7 +1129,7 @@ export class UI {
         <div class="px-station ${done ? 'px-station--busy' : ''} ${hot ? 'px-station--hot' : ''}"
              data-drop="${key}" ${done ? `data-take="${key}"` : ''}
              title="${TOOLS[key].name}"
-             style="left:${x * 2}px;top:${y * 2}px;width:${w * 2}px;height:${h * 2}px">
+             style="left:${pc(x, VW)};top:${pc(y, VH)};width:${pc(w, VW)};height:${pc(h, VH)}">
             <span class="px-station__tag">${TOOLS[key].name}</span>
         </div>`;
     }
@@ -1324,6 +1339,20 @@ export class UI {
     viewBag() {
         const s = this.getState();
 
+        // 瓶盖原来常年挂在最上面那一条。**它是一种资源,而背包就是看资源的地方** ——
+        // 而且它只有一个去处(装扮),不像鸥币那样每一步都要看,
+        // 没必要占着一屏里最贵的那块地方
+        const caps = `
+            <div class="px-bagitem" style="grid-column:1/-1">
+                ${icon('cap', 'lg')}
+                <div style="flex:1;min-width:0">
+                    <strong>瓶盖</strong> <span class="px-tag">${s.caps}</span>
+                    <p class="px-muted">从成就来,只能买装扮 ——
+                       和鸥币分开,买帽子才不会跟升炉子抢钱</p>
+                </div>
+                <button class="px-btn px-btn--sm" data-screen="wear">去装扮</button>
+            </div>`;
+
         // 不写「这样能做什么」—— 那是食谱那一页的事,写两遍等于两处要同步维护,
         // 而且背包本来就该是「我有什么」,不是「我该干嘛」
         const foods = FOOD_KEYS.map(k => {
@@ -1350,10 +1379,50 @@ export class UI {
         }).join('');
 
         return `
-                <p class="px-muted" style="margin-bottom:10px">食材</p>
+        <div class="px-grid" style="--min:150px;margin-bottom:24px">${caps}</div>
+        <p class="px-muted" style="margin-bottom:10px">食材</p>
         <div class="px-grid" style="--min:150px;margin-bottom:24px">${foods}</div>
         <p class="px-muted" style="margin-bottom:10px">道具 · 下次觅食自动使用</p>
         <div class="px-grid" style="--min:190px">${items}</div>`;
+    }
+
+    /**
+     * 设置。现在只有声音两条 —— **但它得有个地方**。
+     *
+     * 音效开关原来是最上面那条里的一个 chip:一个每局只点一次的东西,
+     * 常年占着一屏里最贵的位置。而音量根本没得调,只有代码里写死的 0.35。
+     * 手机上「声音太大」是最常见的一条抱怨,而玩家的第一反应是找齿轮。
+     */
+    viewSettings() {
+        const vol = Math.round(sfx.getVolume() * 100);
+        const off = sfx.isMuted();
+        return `
+        <h3 style="margin-bottom:6px">声音</h3>
+        <p class="px-muted" style="margin-bottom:14px;font-size:13px">
+            全部是即时合成的方波音,一个音频文件都不带 —— 所以它不吃流量,
+            但也确实有点扎耳朵,嫌吵就往下拉。</p>
+
+        <div class="px-panel" style="padding:14px 16px;margin-bottom:12px">
+            <p style="margin-bottom:10px">${icon('star', 'lg')} <strong>音效</strong>
+               <span class="px-tag ${off ? '' : 'px-tag--leaf'}">${off ? '关着' : '开着'}</span></p>
+            <button class="px-btn px-btn--sm" data-act="mute">${off ? '打开' : '静音'}</button>
+        </div>
+
+        <div class="px-panel" style="padding:14px 16px;margin-bottom:24px">
+            <p style="margin-bottom:10px">${icon('coin', 'lg')} <strong>音量</strong>
+               <span class="px-tag">${vol}%</span></p>
+            <input type="range" class="px-range" data-act="vol"
+                   min="0" max="100" step="5" value="${vol}"
+                   ${off ? 'disabled' : ''} aria-label="音量">
+            <p class="px-muted" style="font-size:12.5px;margin-top:8px">
+                ${off ? '先把音效打开' : '拖的时候会响一声,那是试听'}</p>
+        </div>
+
+        <h3 style="margin-bottom:6px">这一份存档</h3>
+        <p class="px-muted" style="margin-bottom:14px;font-size:13px">
+            存在这台设备的浏览器里。<strong>换设备、清网站数据都会没</strong> ——
+            要留着就去存档那页导出一串码。</p>
+        <button class="px-btn px-btn--sm" data-screen="save">${icon('coin')} 去存档</button>`;
     }
 
     /**
@@ -1559,7 +1628,39 @@ export class UI {
         <h3 style="margin-bottom:12px">升级</h3>
         <div class="px-grid" style="--min:190px;margin-bottom:28px">${ups}</div>
 
-        ${this.kitchenShop()}`;
+        ${this.kitchenShop()}
+
+        ${this.progressView()}`;
+    }
+
+    /**
+     * 三条收集线的完成度。**从画面边上挪到这儿来的。**
+     *
+     * 原来它挂在右边那条按钮栏底下 —— 那是按钮栏还占位置的时候,
+     * 底下正好空着一大片。现在按钮栏压在画面上、底色透明,
+     * **多三行字就多糊住三块画**,而这三条是「隔几天看一次」的东西,
+     * 不是「一直盯着」的。摊子这一页本来就是看数字的地方。
+     */
+    progressView() {
+        const s = this.getState();
+        const bar = (ico, name, have, total, to) => {
+            const pct = total ? Math.round(have / total * 100) : 0;
+            return `<div class="px-panel" style="padding:12px 14px">
+                <p style="margin-bottom:8px">${icon(ico, 'lg')} ${name}
+                   <span class="px-muted">${have} / ${total}</span></p>
+                <div class="px-bar" style="height:14px;margin-bottom:10px">
+                    <div class="px-bar__fill" style="width:${pct}%"></div>
+                </div>
+                <button class="px-btn px-btn--sm px-btn--wood" data-screen="${to}">去看看</button>
+            </div>`;
+        };
+        return `
+        <h3 style="margin-bottom:12px">收集进度</h3>
+        <div class="px-grid" style="--min:190px;margin-bottom:28px">
+            ${bar('erkuai', '菜谱', s.unlockedRecipes.length, RECIPES.length, 'codex')}
+            ${bar('postcard', '明信片', s.postcards.length, POSTCARDS.length, 'postcard')}
+            ${bar('trophy', '成就', s.achievements.length, ACHIEVEMENTS.length, 'achievement')}
+        </div>`;
     }
 
     /**

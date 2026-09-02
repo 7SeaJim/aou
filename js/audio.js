@@ -18,11 +18,23 @@
  */
 
 const KEY = 'waou.muted';
+const VOL_KEY = 'waou.vol';
+
+/**
+ * 音量的天花板。**这类方波音很扎耳朵**,满格也不能到 1。
+ * 玩家调的那个 0~1 是在这个数上面再乘一道。
+ */
+const MASTER_MAX = 0.5;
 
 let ctx = null;
 let master = null;
 let muted = false;
+let volume = 0.7;
 try { muted = localStorage.getItem(KEY) === '1'; } catch { /* 隐私模式,当没静音 */ }
+try {
+    const v = Number(localStorage.getItem(VOL_KEY));
+    if (Number.isFinite(v) && v >= 0 && v <= 1) volume = v;
+} catch { /* 同上 */ }
 
 /** 上一次发声的时刻,用来限流 */
 let lastAt = 0;
@@ -34,7 +46,7 @@ function ensure() {
     if (!AC) return null;
     ctx = new AC();
     master = ctx.createGain();
-    master.gain.value = 0.35;      // 整体压低:这类方波音很扎耳朵
+    master.gain.value = MASTER_MAX * volume;
     master.connect(ctx.destination);
     return ctx;
 }
@@ -145,6 +157,22 @@ export function play(name) {
 }
 
 export const isMuted = () => muted;
+
+/** 现在的音量,0~1 */
+export const getVolume = () => volume;
+
+/**
+ * 调音量。**要当场生效** —— 只存不改 master 的话,玩家拖着滑块什么也听不见,
+ * 会以为这个滑块坏了。所以顺手放一声 click 当试听。
+ * @param {number} v 0~1
+ */
+export function setVolume(v) {
+    volume = Math.max(0, Math.min(1, Number(v) || 0));
+    try { localStorage.setItem(VOL_KEY, String(volume)); } catch { /* 忽略 */ }
+    if (master) master.gain.value = MASTER_MAX * volume;
+    if (!muted && volume > 0) play('click');
+    return volume;
+}
 
 /** @returns {boolean} 切换之后是不是静音 */
 export function toggleMute() {

@@ -20,10 +20,17 @@ import { ICON_GRIDS, SCENERY, WAOU } from './pixels.js';
 import { dayPhase, CREW_FLIGHT } from '../data.js';
 import { now } from '../clock.js';
 
-/** 显示画布的尺寸。玩法本身跑在 440×310 的虚拟坐标里(见 scene.js), */
-/** 由 PixelScreen 整数倍放大贴出来 —— 半像素坐标在像素画里就是糊。 */
-export const W = 880;
-export const H = 620;
+/**
+ * 显示画布的尺寸。玩法跑在 440×310 的虚拟坐标里(见 scene.js),
+ * 由 PixelScreen **整数倍**放大贴出来 —— 半像素坐标在像素画里就是糊。
+ *
+ * 1320×930 = 440×310 的 **3 倍**。原来是 2 倍(880×620),
+ * 而舞台不再让出左右两条按钮栏之后,桌面上画面能铺到一千二百多宽 ——
+ * 880 的位图撑到那儿是 1.4 倍非整数放大,像素立刻一大一小。
+ * 底图跟着上一档,桌面上就又回到 1:1。
+ */
+export const W = 1320;
+export const H = 930;
 
 const HORIZON = 250;          // 飞行视角:海平线压在下面,大半屏是天
 const BIRD_X = 60;

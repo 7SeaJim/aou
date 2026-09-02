@@ -361,6 +361,40 @@
         0 -3px 0 var(--ink), 0 3px 0 var(--ink);
 }
 .px-tag--leaf  { background: var(--leaf); }
+
+/* ============ 滑块(音量) ============
+   浏览器自带的滑块是圆的、有渐变、还带抗锯齿 —— 一个像素风页面里
+   最扎眼的就是它。所以整个重画:轨道是一条挖进去的槽,滑钮是一块方木。 */
+.px-range {
+    -webkit-appearance: none; appearance: none;
+    width: 100%; height: 22px;
+    background: transparent;
+    cursor: pointer;
+}
+.px-range:disabled { opacity: .4; cursor: default; }
+.px-range::-webkit-slider-runnable-track {
+    height: 12px;
+    background: var(--sand-3);
+    box-shadow: inset 0 0 0 3px var(--ink);
+}
+.px-range::-moz-range-track {
+    height: 12px;
+    background: var(--sand-3);
+    box-shadow: inset 0 0 0 3px var(--ink);
+}
+.px-range::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none;
+    width: 18px; height: 22px;
+    margin-top: -5px;
+    background: var(--gold);
+    box-shadow: inset 0 0 0 3px var(--ink), inset 0 4px 0 var(--gold-l);
+}
+.px-range::-moz-range-thumb {
+    width: 18px; height: 22px;
+    border: none; border-radius: 0;
+    background: var(--gold);
+    box-shadow: inset 0 0 0 3px var(--ink), inset 0 4px 0 var(--gold-l);
+}
 .px-tag--gold  { background: var(--gold); color: var(--ink); text-shadow: none; }
 .px-tag--coral { background: var(--coral); }
 
@@ -390,11 +424,15 @@
 
 /* ============ 游戏舞台(880×620 画面外的木质机身) ============ */
 .px-stage {
-    /* 916 = 14px 内衬 ×2 + 4px 描边 ×2 + 880px 画面。
-       宽度必须让 .px-screen 正好等于 canvas 的 880×620:
-       差一点点(比如画面被挤成 844)整块画面就要按 0.959 倍缩放,
-       pixelated 下像素立刻一大一小,和图标那边是同一个坑。 */
-    width: min(916px, 100%);
+    /* 1356 = 14px 内衬 ×2 + 4px 描边 ×2 + 1320px 画面。
+       宽度必须让 .px-screen 正好等于 canvas 的 1320×930:
+       差一点点(比如画面被挤成 1280)整块画面就要按 0.97 倍缩放,
+       pixelated 下像素立刻一大一小,和图标那边是同一个坑。
+
+       **还得被视口高度夹住。** 这是个横屏游戏,画面比 1.42:1 ——
+       只按宽度算的话,笔记本上画面会长过一屏,底下那条按钮要滚才看得到,
+       而它是主要的导航。--stage-max-h 由 index.html 按视口算。 */
+    width: min(1356px, 100%, var(--stage-max-w, 100%));
     margin-inline: auto;
     padding: 14px;
     background-color: var(--wood);
@@ -414,11 +452,15 @@
 /* 舞台内的屏幕:canvas / 界面都放这里 */
 .px-screen {
     position: relative;
+    /* 四条栏的粗细、字号都按**画面本身**的宽度算,不按视口 ——
+       画面被视口高度夹住的时候,它可能只有视口的一半宽,
+       按视口算的话栏会大得离谱,一边一条就吃掉四成 */
+    container-type: inline-size;
     /* 888 / 628 而不是 880 / 620 —— box-sizing 是 border-box,
        aspect-ratio 算的是**含边框**的盒子。写 880/620 的话内容区会变成
-       880×618,整块画面竖着被压掉两行:横向是整数倍、纵向不是,
-       像素一行高一行矮。888 = 880 + 4px 边框 ×2,628 同理。 */
-    aspect-ratio: 888 / 628;
+       1320×928,整块画面竖着被压掉两行:横向是整数倍、纵向不是,
+       像素一行高一行矮。1328 = 1320 + 4px 边框 ×2,938 同理。 */
+    aspect-ratio: 1328 / 938;
     overflow: hidden;
     background: var(--sky);
     border: 4px solid var(--ink);
@@ -742,134 +784,222 @@
    而这游戏的主角是那片湖。现在按钮**贴着**画面的左、右、下三边:
    贴着不是浮着 —— 中间留缝的话三堆按钮各自为政,看着像三块没对齐的补丁,
    连成一体才像一台机器的面板。 */
+/* ============================================================
+   机身:舞台 + 压在舞台四周的按钮栏
+
+   **原来三条按钮栏是占位置的** —— 左右各一条竖的、底下一条横的,
+   桌面上无所谓,手机上左右两条加起来就吃掉四成宽。
+   而这本质是个手机游戏,四成宽是不能给的。
+
+   现在按钮栏压在画面上,**底色全透明**,只剩图标和字。
+   画面因此能铺满整个机身,而按钮还在原来那三条边上,手指位置没变。
+   ============================================================ */
 .px-console {
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr) auto;
-    grid-template-areas:
-        "left stage right"
-        "bottom bottom bottom";
-    justify-content: center;
+    position: relative;
     margin-bottom: 24px;
 }
-.px-console > .px-stage { grid-area: stage; }
-#railLeft   { grid-area: left; }
-#railRight  { grid-area: right; }
-#railBottom { grid-area: bottom; }
+.px-console > .px-stage { margin-inline: auto; }
 
-/* 按钮条和机身同一块木头,靠边缘的圆角/描边把它们焊在一起 */
+/* 四条栏的厚度。抽屉、厨房、场景条都按它往里让,免得被按钮压住。
+   cqi = 画面自己的宽度的百分之一。**下限 44px 是手指的下限**,
+   上限 78 是「再宽也没用」—— 图标就那么大。 */
+:root {
+    --rail-w: clamp(44px, 5.8cqi, 78px);    /* 左右两条的宽 */
+    --rail-h: clamp(42px, 4.8cqi, 64px);    /* 底下那条的高 */
+    --rail-t: clamp(32px, 3.6cqi, 46px);    /* 上面那条状态的高(chip 要放得下) */
+}
+
 .px-rail {
+    position: absolute;
+    z-index: 40;
     display: flex;
-    gap: 0;
-    background: var(--wood);
-    box-shadow: inset 0 0 0 4px var(--ink);
+    /* **只有按钮收事件。** 整条栏收的话,压在下面的画面就点不动了 ——
+       大坝上那个草棚是要点的 */
+    pointer-events: none;
+    /* 字压在画面上,底下是什么颜色不知道。**给每个字描一圈深色**,
+       浅天空和深甲板上都读得出来 —— 这一条比任何底色都省地方。
+
+       **描边必须是 1px,不能是 2px。** 像素字体在 13px 上笔画本来就只有
+       一到两个像素宽,外面再糊两圈,字心就被自己的描边填满了 ——
+       第一版是 2px,远看整条栏是一串深色小方块,一个字都读不出来。 */
+    text-shadow:
+        -1px -1px 0 var(--ink),  0 -1px 0 var(--ink),  1px -1px 0 var(--ink),
+        -1px  0   0 var(--ink),                        1px  0   0 var(--ink),
+        -1px  1px 0 var(--ink),  0  1px 0 var(--ink),  1px  1px 0 var(--ink);
+    color: var(--foam);
 }
+.px-rail > * { pointer-events: auto; }
 .px-rail--v {
+    top: var(--rail-t); bottom: var(--rail-h);
+    width: var(--rail-w);
     flex-direction: column;
-    margin-block: 14px;
-    padding: 6px 5px;
+    align-items: center;
+    padding: 4px 0;
+    gap: 1px;
 }
+
+/* ---- 最上面那条:钱 / 天 / 等级 / 经验 ----
+   **这一条和底下三条不一样:chip 和经验条保留自己的边框和底色。**
+   试过一版全透明、只靠描边读的:字是看得清,但整条看着太素,
+   而且和游戏里别处的 chip 长得不是一回事 —— 一个界面里同一种东西
+   不该有两种画法。按钮该透明(它们只是入口),而**状态是要「读数」的**,
+   读数就需要一块安静的底,不然眼睛得先把字从画面里挑出来。 */
+.px-rail--t {
+    top: 0; left: 0; right: 0;
+    height: var(--rail-t);
+    align-items: center;
+    gap: clamp(5px, .9cqi, 12px);
+    padding: 0 8px;
+    /* chip 自己有底色,不需要描边;留着反而会在字外面糊一圈 */
+    text-shadow: none;
+}
+/* 画面窄的时候整条按比例缩 —— 手机横过来只有五百来宽,
+   原尺寸的 chip 四个就顶到经验条了 */
+.px-rail--t .px-chip {
+    font-size: clamp(11px, 1.15cqi, 15px);
+    padding: clamp(3px, .45cqi, 6px) clamp(6px, 1cqi, 14px);
+    gap: clamp(4px, .6cqi, 8px);
+    white-space: nowrap;
+    /* **不许被压扁。** flex 默认会挤,而 chip 里是 nowrap 的字 ——
+       挤的结果不是变窄,是字从框里溢出去压到下一个 chip 上。
+       要让的是经验条(它本来就是可长可短的那个) */
+    flex-shrink: 0;
+}
+/* 窄画面上把单位字去掉:图标已经说了是钱,而九位数的鸥币能把整条顶穿 */
+@container (max-width: 620px) {
+    .px-rail--t .px-unit { display: none; }
+    .px-rail--t { padding: 0 5px; }
+}
+.px-rail--t .px-icon { width: clamp(12px, 1.3cqi, 16px); height: clamp(12px, 1.3cqi, 16px); }
+.px-rail--t .px-bar {
+    flex: 1;
+    min-width: 60px;
+    max-width: clamp(110px, 26cqi, 340px);
+    height: clamp(16px, 1.9cqi, 24px);
+}
+.px-rail--t .px-bar__label { font-size: clamp(9px, .95cqi, 13px); }
+
+#railLeft   { left: 0; }
+#railRight  { right: 0; }
+#railBottom {
+    left: 0; right: 0; bottom: 0;
+    height: var(--rail-h);
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    padding: 0 6px;
+}
+
 /**
- * 按钮底下那一截。**空是靠内容填的,不是靠把按钮拉开** ——
- * 拉开只是把同样的空白摊薄,四个按钮之间各隔 90px 反而更散。
- * 这儿放的是玩家隔一会儿就要瞄一眼、但现在得点进去才看得到的东西。
+ * 按钮底下那一截。现在只剩一件事:**客单价**。
+ *
+ * 原来这儿摞着六条(出餐进度、客单价、哇鸥在哪、图鉴/明信片/成就三条进度)。
+ * 那是「按钮栏是实心木头、底下还有一大片空白」时候的填法 ——
+ * 现在栏是透明的,压在画面上,多一行字就多糊住一块画。
+ * **收集进度挪进「摊子」那一页**,那儿本来就是看数字的地方。
  */
 .px-railfoot {
-    margin-top: auto;              /* 顶到底,和按钮之间留出的正是那截空白 */
-    padding-top: 10px;
+    margin-top: auto;
+    padding-top: 8px;
     display: flex;
     flex-direction: column;
-    gap: 10px;
-    border-top: 3px solid var(--ink);
+    gap: 8px;
 }
 .px-railstat {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 3px;
+    gap: 2px;
     font-family: var(--font-pixel);
-    /* 15 不是 10。像素字体本来就没有抗锯齿,小字号在手机上直接糊成一团 ——
-       这一栏是给人瞄一眼的,瞄不清就等于没有。
-       13 试过一版还是偏小,别再往下调了。 */
-    font-size: 15px;
-    line-height: 1.35;
-    color: var(--ink);
+    /* 像素字体没有抗锯齿,小字号在手机上直接糊成一团 ——
+       这一栏是给人瞄一眼的,瞄不清就等于没有。 */
+    font-size: clamp(11px, 1.2cqi, 15px);
+    line-height: 1.3;
     text-align: center;
 }
-/* 第二行是标题。**不靠压暗区分** —— 木头底上再压暗就读不出来了,
-   靠小一号和一点点透明度分主次就够 */
-.px-railstat small:last-child { font-size: 13px; opacity: .8; }
-.px-railstat__bar {
-    width: 54px;
-    height: 7px;
-    background: var(--wood-d);
-    box-shadow: inset 0 0 0 2px var(--ink);
-}
-.px-railstat__bar > i { display: block; height: 100%; background: var(--gold); }
-#railLeft  { border-right: none; margin-right: -4px; }
-#railRight { border-left: none;  margin-left: -4px; }
-.px-rail--h {
-    flex-wrap: wrap;
-    align-items: center;
-    padding: 5px 6px;
-    margin-inline: 14px;
-    margin-top: -4px;
-}
-/* 右边那截「现在什么情况」。靠 margin-left:auto 顶到最右,把这条填满 */
-.px-railinfo {
-    display: flex;
-    align-items: center;
-    gap: 16px;
-    margin-left: auto;
-    padding-right: 8px;
-    font-family: var(--font-pixel);
-    font-size: 15px;
-    color: var(--ink);
-}
-.px-railinfo > span { display: flex; align-items: center; gap: 5px; }
-@media (max-width: 700px) {
-    /* 窄屏放不下就整条收起来 —— 挤成两行反而更乱 */
-    .px-railinfo { display: none; }
-    .px-rail--h { justify-content: center; }
-}
+.px-railstat small:last-child { font-size: .85em; opacity: .85; }
 
 .px-railbtn {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 3px;
-    width: 70px;
-    padding: 7px 3px 6px;
+    gap: 2px;
+    width: 68px;
+    padding: 6px 2px 5px;
     font-family: var(--font-pixel);
-    font-size: 13px;
+    font-size: clamp(11px, 1.3cqi, 16px);
     line-height: 1.25;
-    color: var(--ink);
+    color: inherit;
+    /* **必须显式写一遍。** text-shadow 是继承属性,但 <button> 在浏览器
+       自带样式表里被重置了 —— 只在 .px-rail 上写的话,栏里的字一个描边都没有,
+       压在天上直接读不出来。踩过一次,别删。 */
+    text-shadow: inherit;
     background: transparent;
     border: none;
     cursor: pointer;
+    /* 连点的东西:别选中文字、别触发双击缩放 */
+    user-select: none; -webkit-user-select: none;
+    touch-action: manipulation;
 }
-.px-railbtn:hover { background: var(--wood-l); }
-.px-railbtn[aria-selected="true"] {
-    background: var(--sand);
-    box-shadow: inset 0 0 0 3px var(--ink);
+.px-railbtn:hover { color: var(--gold-l); }
+/**
+ * 正开着的那一页。**不给底色,给一道左边(或下边)的粗线**。
+ *
+ * 底色一填,「透明栏」这件事就白做了 —— 四个按钮里总有一个是亮的,
+ * 等于常年在画面上贴一块方块。一道线只占三个像素宽,
+ * 而「哪个是当前」这件事一道线就够了。
+ */
+.px-railbtn[aria-selected="true"] { color: var(--gold-l); }
+.px-railbtn[aria-selected="true"]::after {
+    content: '';
+    position: absolute;
+    background: var(--gold);
+    box-shadow: 0 0 0 2px var(--ink);
 }
+.px-railbtn { position: relative; }
+#railLeft   .px-railbtn[aria-selected="true"]::after { left: -1px;  top: 20%; bottom: 20%; width: 3px; }
+#railRight  .px-railbtn[aria-selected="true"]::after { right: -1px; top: 20%; bottom: 20%; width: 3px; }
+#railBottom .px-railbtn[aria-selected="true"]::after { bottom: -1px; left: 18%; right: 18%; height: 3px; }
 .px-railbtn:disabled { opacity: .45; cursor: default; }
-/* 出发觅食是主按钮 */
+/**
+ * 画面窄的时候**只留图标,不留字**。
+ *
+ * 手机横过来也就四五百像素宽,一边一条 44px 的栏已经是手指的下限;
+ * 字要跟着缩到 9px —— 而像素字体没有抗锯齿,9px 就是一团。
+ * **认不出的字不如不画**,图标本来就是给这个尺寸准备的。
+ */
+@container (max-width: 620px) {
+    .px-railbtn > span { display: none; }
+    /* width:100% 只给竖着那两条 —— 底下那条是横排,
+       给 100% 的话第一个按钮就把整条撑开了 */
+    .px-rail--v .px-railbtn { width: 100%; padding: 5px 0; }
+    #railBottom .px-railbtn { width: auto; padding: 5px 6px; }
+    /* 出发觅食那个留字:它是唯一一个「还剩几次」要看的按钮 */
+    .px-railbtn--go > span { display: inline; font-size: 11px; }
+    .px-railbtn--go { padding-inline: 10px; }
+    .px-railstat small:first-of-type { display: none; }
+}
+/* 出发觅食是主按钮。**整条栏里只有它有底色** —— 它是每天必点的那一下 */
 .px-railbtn--go {
     flex-direction: row;
     width: auto;
     gap: 8px;
     padding-inline: 14px;
+    color: var(--ink);
+    text-shadow: none;
     background: var(--gold);
-    box-shadow: inset 0 0 0 3px var(--ink);
+    box-shadow: inset 0 0 0 3px var(--ink), 0 0 0 2px rgba(36, 26, 19, .5);
 }
-.px-railbtn--go:hover { background: var(--gold-l); }
+.px-railbtn--go:hover { background: var(--gold-l); color: var(--ink); }
 
 /* ============ 抽屉 ============ */
 .px-drawer {
     position: absolute;
     z-index: 30;
-    /* 右半边。左边那截画面留着 —— 抽屉铺满就等于回到了原来的整页面板 */
-    top: 0; right: 0; bottom: 0;
+    /* 右半边。左边那截画面留着 —— 抽屉铺满就等于回到了原来的整页面板。
+       **右边和底下各让出一条按钮栏的厚度**:按钮栏现在压在画面上,
+       抽屉再铺到边就会把导航整个盖住,玩家开了抽屉就换不了页 */
+    top: var(--rail-t); right: var(--rail-w); bottom: var(--rail-h);
     width: 56%;
     display: flex;
     flex-direction: column;

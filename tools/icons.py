@@ -230,6 +230,28 @@ ICONS['star'] = [
 "................",
 ]
 
+# 设置。**四个齿 + 一个孔就够了** —— 16 格上画八齿的话,
+# 斜着那四个各只剩两三格,缩到界面里全糊成一圈毛边。
+# 认得出「是个齿轮」靠的是外圈的方牙和中间那个洞,不是牙的数量。
+ICONS['gear'] = [
+".....KKKKKK.....",
+".....KAAAAK.....",
+"...KKKAAAAKKK...",
+"..KKAAAAAAAAKK..",
+"..KAAAAAAAAAAK..",
+"KKKAAAKKKKAAAKKK",
+"KAAAAK....KAAAAK",
+"KAAAK......KAAAK",
+"KAAAK......KAAAK",
+"KAAAAK....KAAAAK",
+"KKKAAAKKKKAAAKKK",
+"..KAAAAAAAAAAK..",
+"..KKAAAAAAAAKK..",
+"...KKKAAAAKKK...",
+".....KAAAAK.....",
+".....KKKKKK.....",
+]
+
 ICONS['backpack'] = [
 "................",
 "......KKKK......",
