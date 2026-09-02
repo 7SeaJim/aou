@@ -14,7 +14,22 @@ import { PHASE, mix, shade, shadedSprite } from './tint.js';
 import { PAL, SCENERY, ICON_GRIDS } from './pixels.js';
 
 /** 虚拟分辨率。880×620 的显示画布正好放大 2 倍。 */
-export const VW = 440;
+/**
+ * 虚拟画布。**620×310 = 2:1。**
+ *
+ * 原来是 440×310(1.42:1)。手机横过来是 2.2:1 左右,1.42 的画面塞进去
+ * 左右各留一大条黑边 —— 画面只占屏幕一半宽,小到没法玩。
+ *
+ * 改宽的代价比想象中小得多:所有的背景层(天、湖、长堤、甲板、栏杆、
+ * 芦苇、雨雾,以及出摊和小屋的整套陈设)本来就写成 `fillRect(0, y, VW, …)`
+ * 和 `for (x < VW)` —— **它们从一开始就是「贴着边」而不是「在第几像素」**,
+ * 自动就铺开了。小屋一行没改。
+ * 真正要动的只是甲板上那十来个写死的内容坐标(摊子、小屋、猫棚、跑道、
+ * 路灯、缆桩)—— 那是重新摆位,不是重构。
+ *
+ * 顺带:2:1 之后桌面上也不再被高度卡住,画面反而更大。
+ */
+export const VW = 620;
 export const VH = 310;
 
 /* ---------- 天气配色 ---------- */
@@ -311,7 +326,7 @@ export function drawSea(ctx, weather, horizon, bottom, t, phase = 'day') {
 /** 甲板厚度。栏杆脚、后排陈设、板缝都从它算,别在下面各写各的数字。 */
 export const DECK_H = 26;
 
-export const SHACK_HIT = { cx: 172, w: 34, h: 30, pad: 6 };
+export const SHACK_HIT = { cx: 228, w: 34, h: 30, pad: 6 };
 
 /** 点在草棚上了吗。x/y 是虚拟坐标(440×310)。 */
 export function hitShack(x, y, deckY) {
@@ -419,14 +434,15 @@ export function paintPier(ctx, deckY, bottom, weather = 'sunny', phase = 'day',
     // 陈设分两排。后排走空气透视(farSprite),前排原色 ——
     // 光是错开 y 还不够,人眼靠的是对比度判断远近。
     const back = deckY - DECK_H + 4;
-    drawStanding(ctx, farSprite('barrel', SCENERY.barrel, weather, 0.34, {}, phase), 212, back);
-    drawStanding(ctx, farSprite('crate', SCENERY.crate, weather, 0.34, {}, phase), 230, back);
-    drawStanding(ctx, farSprite('crate', SCENERY.crate, weather, 0.34, {}, phase), 246, back);
-    drawStanding(ctx, farSprite('bollard', SCENERY.bollard, weather, 0.34, {}, phase), 66, back);
-    drawStanding(ctx, farSprite('barrel', SCENERY.barrel, weather, 0.34, {}, phase), 356, back);
+    drawStanding(ctx, farSprite('barrel', SCENERY.barrel, weather, 0.34, {}, phase), 268, back);
+    drawStanding(ctx, farSprite('crate', SCENERY.crate, weather, 0.34, {}, phase), 288, back);
+    drawStanding(ctx, farSprite('crate', SCENERY.crate, weather, 0.34, {}, phase), 306, back);
+    drawStanding(ctx, farSprite('bollard', SCENERY.bollard, weather, 0.34, {}, phase), 74, back);
+    drawStanding(ctx, farSprite('barrel', SCENERY.barrel, weather, 0.34, {}, phase), 470, back);
+    drawStanding(ctx, farSprite('crate', SCENERY.crate, weather, 0.34, {}, phase), 546, back);
 
     paintStall(ctx, deckY, phase, upgrades);
-    for (const bx of [300, 396]) {
+    for (const bx of [388, 502]) {
         shadow(ctx, bx, deckY - 13, 8);
         drawStanding(ctx, shadedSprite('bollard', SCENERY.bollard, phase), bx, deckY - 13);
     }
@@ -438,7 +454,7 @@ export function paintPier(ctx, deckY, bottom, weather = 'sunny', phase = 'day',
     // 灯杆本身也加长过了(见 tools/scenery.py):**灯头必须高过栏杆**,
     // 第一版灯头正好落在栏杆横杆上,两样东西糊成一团 —— 那不是位置问题,
     // 是高度不够,挪到哪儿都救不回来。
-    for (const x of [17, 259, 413]) {
+    for (const x of [17, 150, 340, 500, 605]) {
         shadow(ctx, x, deckY - 13, 10, 0.26);
         drawStanding(ctx, lampCv, x, deckY - 13);
     }
@@ -578,7 +594,20 @@ const STALL_STAGES = [
     { key: 'stall4', min: 32, smoke: [66, -1], sign: [8, 17, 68, 10],  side: false },
 ];
 
-const STALL_X = 76;      // 摊子的水平中心。四段都按它居中,所以只有一个数
+/**
+ * 甲板上这几样东西的水平位置。**画面从 440 加宽到 620 之后重新摊开的。**
+ *
+ * 加宽之后背景全自动铺开了,只有这几个写死的坐标会原地不动 ——
+ * 结果是所有东西挤在左边三分之二,右边一大条空甲板。
+ * 这一组数就是「重新摆位」的全部工作量。
+ *
+ *     摊子 96 · 小屋 228 · 猫棚 300 · 表演位 452 · 跑道 570
+ *
+ * 排的顺序有讲究:**摊子和小屋是要点的,放左边(拇指够得着);
+ * 表演位在正中偏右(围观的人要往两边站得开);跑道贴着右边缘**,
+ * 它是最后解锁的东西,理应在最远的地方。
+ */
+const STALL_X = 96;      // 摊子的水平中心。四段都按它居中,所以只有一个数
 
 export function stallStage(up) {
     const total = up ? up.stove + up.sign + up.shelf + up.warmer : 0;
@@ -755,7 +784,7 @@ export function drawPerformance(ctx, x, baseY, t, shows = 1, fedNow = false,
         // **右边到头了就挪到左边去。** 右下角那丛芦苇是画在所有人之上的前景,
         // 占着 x≥374 那一带;解锁的节目一多,围观的人排到七个,
         // 最外面那两个正好站进芦苇后面 —— 时不时有人被草挡住半个身子。
-        // 画面右边本来就窄(哇鸥站在 336),左边还宽着,让过去就行。
+        // 右下角那丛芦苇占着 x≥528 那一带;哇鸥站在 452,左右都还宽着。
         if (x + dx > CROWD_RIGHT) { leftmost -= 15; dx = leftmost - x; }
         else if (x + dx < leftmost) leftmost = x + dx;
         line.push({ i, dx, dz: DZ[i % DZ.length] });
@@ -802,7 +831,7 @@ export function drawPerformance(ctx, x, baseY, t, shows = 1, fedNow = false,
  * 芦苇是画在所有人之上的前景(那是纵深的来源),所以只能让人躲开它。
  * 374 = 芦苇最左那根(386)减去叶片甩出去的一截,再留一个人的半身。
  */
-const CROWD_RIGHT = 374;
+const CROWD_RIGHT = 528;
 
 /** 四个路人。素材在 tools/people.py。 */
 const ONLOOKERS = ['onlooker_a', 'onlooker_b', 'onlooker_c', 'onlooker_d'];
@@ -815,7 +844,7 @@ const feedPops = [];
  * 杆子只有 4 格宽,甲板上几乎不占位置 —— 这正是换成竖着那版的理由;
  * 屋子在杆顶,那一带是水面,和甲板上的东西谁也不碍着谁。
  */
-const RUNWAY_X = 396;
+const RUNWAY_X = 570;
 /**
  * 屋子底下那根栖木比甲板高多少(相对 SHED_Y 那条基线)。
  * 精灵图 72 高、底边落在 SHED_Y,栖木在图里第 26 行 —— 72-26 = 46 格。
@@ -964,7 +993,7 @@ const CREW_ACT = {
 };
 
 /** 小木棚站的位置。草棚(172)和路灯(259)之间那块空地 */
-const SHED_X = 222;
+const SHED_X = 300;
 /**
  * 甲板上的三条道。**原来所有人都踩在同一条基线上** ——
  * 路人经过猫的时候两个身子重在一起,分不出谁在前谁在后。

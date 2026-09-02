@@ -424,15 +424,15 @@
 
 /* ============ 游戏舞台(880×620 画面外的木质机身) ============ */
 .px-stage {
-    /* 1356 = 14px 内衬 ×2 + 4px 描边 ×2 + 1320px 画面。
-       宽度必须让 .px-screen 正好等于 canvas 的 1320×930:
-       差一点点(比如画面被挤成 1280)整块画面就要按 0.97 倍缩放,
+    /* 1896 = 14px 内衬 ×2 + 4px 描边 ×2 + 1860px 画面。
+       宽度必须让 .px-screen 正好等于 canvas 的 1860×930:
+       差一点点(比如画面被挤成 1800)整块画面就要按 0.97 倍缩放,
        pixelated 下像素立刻一大一小,和图标那边是同一个坑。
 
        **还得被视口高度夹住。** 这是个横屏游戏,画面比 1.42:1 ——
        只按宽度算的话,笔记本上画面会长过一屏,底下那条按钮要滚才看得到,
        而它是主要的导航。--stage-max-h 由 index.html 按视口算。 */
-    width: min(1356px, 100%, var(--stage-max-w, 100%));
+    width: min(1896px, 100%, var(--stage-max-w, 100%));
     margin-inline: auto;
     padding: 14px;
     background-color: var(--wood);
@@ -455,9 +455,9 @@
     /* container-type 在下面的 @supports 里给 —— 见那儿的注释 */
     /* 888 / 628 而不是 880 / 620 —— box-sizing 是 border-box,
        aspect-ratio 算的是**含边框**的盒子。写 880/620 的话内容区会变成
-       1320×928,整块画面竖着被压掉两行:横向是整数倍、纵向不是,
-       像素一行高一行矮。1328 = 1320 + 4px 边框 ×2,938 同理。 */
-    aspect-ratio: 1328 / 938;
+       1860×928,整块画面竖着被压掉两行:横向是整数倍、纵向不是,
+       像素一行高一行矮。1868 = 1860 + 4px 边框 ×2,938 同理。 */
+    aspect-ratio: 1868 / 938;
     overflow: hidden;
     background: var(--sky);
     border: 4px solid var(--ink);
@@ -1293,15 +1293,17 @@
 .px-recipebtn:hover:not(:disabled) { background: var(--gold-l); }
 .px-recipebtn:disabled { opacity: .4; cursor: default; }
 
-@media (max-width: 1059px) {
-    .px-kside { width: 150px; font-size: 11px; }
-}
+/* 第三块 1059 断点,同样换掉:.px-kside 现在本来就是百分比宽,
+   按视口宽度再钉一个 150px 只会在窄而高的屏上把它压扁 */
 
 /* 订单条:排在画面最上面那一带(天空那儿),不压住柜台外站着的人。
    画布上的人是「谁在等」,这排卡片是「我现在能给谁」,两件事各占一处。 */
 .px-korders {
     position: absolute;
-    top: 6px; left: 6px; right: 210px;
+    /* **得让开最上面那条状态。** 状态条搬进画面之后,订单条还写着 top: 6px ——
+       两块都贴着上边缘,订单卡直接压在鸥币和经验条上(真机截图里就是这样)。
+       右边让开的是食谱面板,那块现在是百分比宽,这儿也跟着用百分比。 */
+    top: calc(var(--rail-t) + 4px); left: 6px; right: calc(30% + 10px);
     display: flex;
     gap: 6px;
     flex-wrap: wrap;
@@ -1314,9 +1316,11 @@
     box-shadow: inset 0 0 0 2px var(--ink);
 }
 .px-korder--ready { background: var(--gold-l); }
-@media (max-width: 1059px) {
-    .px-korders { right: 158px; }
-    .px-korder { width: 108px; }
+/* 又一块上一版布局留下的 1059 断点,已换成按高度判 ——
+   手机横过来是「宽而矮」,按宽度判永远不触发 */
+@media (max-height: 620px) {
+    .px-korder { width: 96px; font-size: 10px; padding: 3px 4px; }
+    .px-korders { gap: 4px; }
 }
 
 /* ============================================================

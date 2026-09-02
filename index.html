@@ -11,16 +11,16 @@
     <style>
         body { display: block; padding: 20px 12px 40px; }
         /* 按钮栏不再占位置(它们压在画面上了),所以这儿就是画面本身的宽度。
-           1356 = 1320 的画面 + 14px 内衬 ×2 + 4px 描边 ×2。 */
-        .wrap { width: min(1356px, 100%); margin-inline: auto; }
+           1896 = 1860 的画面 + 14px 内衬 ×2 + 4px 描边 ×2。 */
+        .wrap { width: min(1896px, 100%); margin-inline: auto; }
         .title { text-align: center; margin-bottom: 16px; }
         .title h1 { font-size: 32px; }
 
-        /* **画面还得被视口高度夹住。** 这是个横屏游戏,画面比 1.42:1 ——
+        /* **画面还得被视口高度夹住。** 这是个横屏游戏,画面比 2:1 ——
            只按宽度算的话,笔记本上画面会长过一屏,底下那条按钮栏要滚才看得到,
            而它是主要的导航。
-           反解:舞台高 = (舞台宽 − 28) × 938/1328 + 28,所以
-           舞台宽 = (可用高 − 28) × 1.4158 + 28。--chrome 是画面之外那些东西
+           反解:舞台高 = (舞台宽 − 28) × 938/1868 + 28,所以
+           舞台宽 = (可用高 − 28) × 1.9915 + 28。--chrome 是画面之外那些东西
            (标题、状态条、内衬、底下那道厚边)占掉的高度。 */
         /* 状态条也压进画面之后,画面之外就只剩标题和内衬了 */
         :root { --chrome: 118px; }
@@ -38,17 +38,17 @@
          * 先写 vh 兜底(老浏览器三个新单位都不认),
          * 再在 @supports 里换成 svh。
          */
-        .px-console { --stage-max-w: calc((100vh - var(--chrome) - 28px) * 1.4158 + 28px); }
+        .px-console { --stage-max-w: calc((100vh - var(--chrome) - 28px) * 1.9915 + 28px); }
         /* 待机界面铺满整屏,它的舞台也得被高度夹住 —— 不夹的话
            笔记本上万达双塔和「开始游戏」都会掉到屏幕外面去 */
-        .title-screen { --stage-max-w: calc((100vh - 60px) * 1.4158 + 28px); }
+        .title-screen { --stage-max-w: calc((100vh - 60px) * 1.9915 + 28px); }
         @supports (height: 1svh) {
-            .px-console { --stage-max-w: calc((100svh - var(--chrome) - 28px) * 1.4158 + 28px); }
-            .title-screen { --stage-max-w: calc((100svh - 60px) * 1.4158 + 28px); }
+            .px-console { --stage-max-w: calc((100svh - var(--chrome) - 28px) * 1.9915 + 28px); }
+            .title-screen { --stage-max-w: calc((100svh - 60px) * 1.9915 + 28px); }
         }
 
         /* 窄屏 / 矮屏:标题和状态条都收一收,把高度全让给画面。
-           画面本身不用管 —— 真机 DPR 2~3 下 1320 的位图落在 780~2550 个
+           画面本身不用管 —— 真机 DPR 2~3 下 1860 的位图落在 780~2550 个
            设备像素上,是上采样或者很轻的下采样,看着是干净的。 */
         @media (max-width: 700px) {
             body { padding: 10px 6px 24px; }
@@ -57,8 +57,8 @@
         }
         /* 手机横过来之后视口就剩三四百高。**标题让位** ——
            它每局只读一次,而画面是一直在看的 */
-        /* 手机横过来之后视口只剩两三百高,而画面是 1.42:1 的 ——
-           高度每省下 1px,宽度就能多出 1.42px。所以这一档把画面之外的东西
+        /* 手机横过来之后视口只剩两三百高,而画面是 2:1 的 ——
+           高度每省下 1px,宽度就能多出 2px。所以这一档把画面之外的东西
            压到最少:标题不要、内衬收到 6px、页面留白收到 4px。 */
         @media (max-height: 560px) {
             :root { --chrome: 16px; }
@@ -67,19 +67,19 @@
             .px-console { margin-bottom: 0; }
             .px-stage { padding: 6px; }
             /* 内衬变了,反解那条也得跟着变:6×2 = 12,不是 14×2 = 28 */
-            .px-console { --stage-max-w: calc((100vh - var(--chrome) - 12px) * 1.4158 + 12px); }
+            .px-console { --stage-max-w: calc((100vh - var(--chrome) - 12px) * 1.9915 + 12px); }
             /* 横屏时整页**不许滚**。没得滚,地址栏就不会收放,
                画面也就不会跟着一惊一乍 —— 这是上面那条 svh 的另一半 */
             html, body { height: 100%; overflow: hidden; overscroll-behavior: none; }
         }
         @supports (height: 1svh) {
             @media (max-height: 560px) {
-                .px-console { --stage-max-w: calc((100svh - var(--chrome) - 12px) * 1.4158 + 12px); }
+                .px-console { --stage-max-w: calc((100svh - var(--chrome) - 12px) * 1.9915 + 12px); }
             }
         }
 
         /* ---------- 竖屏:请把手机横过来 ----------
-           这是个横着玩的游戏(画面 1.42:1,大坝本来就是长的)。
+           这是个横着玩的游戏(画面 2:1,大坝本来就是长的)。
            竖屏硬塞的话画面只能缩到手指盖大小,不如直接请玩家转一下。
            `screen.orientation.lock()` 只在全屏里有效、而且 iOS 不支持,
            所以**不锁,只提示** —— 提示是所有浏览器都吃的那条路。 */
@@ -294,7 +294,7 @@
 <div id="title" class="title-screen">
     <div class="px-stage">
         <div class="px-screen">
-            <canvas id="titleCanvas" width="1320" height="930"></canvas>
+            <canvas id="titleCanvas" width="1860" height="930"></canvas>
             <div class="title-screen__plate">
                 <h1>哇鸥 · 去大坝整点饵块</h1>
                 <button class="px-btn px-btn--lg" id="startBtn">开始游戏</button>
@@ -317,7 +317,7 @@
     <div class="px-console" id="console">
         <div class="px-stage">
         <div class="px-screen">
-            <canvas id="bgCanvas" width="1320" height="930"></canvas>
+            <canvas id="bgCanvas" width="1860" height="930"></canvas>
 
             <!-- 四条栏。**全在 .px-screen 里面** —— 放外面的话定位要跟着
                  木框的内衬走,而内衬在窄屏上会变;放里面就是贴着画面本身的
@@ -329,7 +329,7 @@
             <div id="railBottom" class="px-rail px-rail--h"></div>
 
             <div id="flyOverlay">
-                <canvas id="flyCanvas" width="1320" height="930"></canvas>
+                <canvas id="flyCanvas" width="1860" height="930"></canvas>
                 <div class="fly-hud">
                     <span class="px-chip px-chip--dark">
                         <i class="px-icon px-icon--erkuai"></i> <strong id="flyScore">0</strong>

@@ -46,7 +46,7 @@ const COUNTER_Y = 138;   // 柜台面
 const READY_BIAS = 0.7;
 
 // 队伍只排在左边 —— 右边那 200px 被食谱面板盖着,排过去的人看不见
-const QUEUE_X = [52, 108, 164, 220, 276];
+const QUEUE_X = [72, 154, 236, 318, 400];
 
 /** 案板面的高度。案上那三件东西都踩在这条线上 */
 export const BENCH_Y = 192;
@@ -64,18 +64,18 @@ const FLOOR_Y = 290;     // 地面
  *   bar     火候条画在哪儿。前三件在东西上方,烤箱的画在它自己的玻璃窗上
  */
 export const STATIONS = {
-    board: { key: 'kw_board', cx: 44,  by: BENCH_Y,
-             hit: [18, 166, 54, 28],  food: { x: 44, y: 184, gap: 13 },
-             bar: { x: 22, y: 168, w: 44 } },
-    pan:   { key: 'kw_pan',   cx: 112, by: BENCH_Y,
-             hit: [90, 164, 46, 30],  food: { x: 106, y: 188, gap: 11 },
-             bar: { x: 94, y: 166, w: 36 } },
-    stove: { key: 'kw_stove', cx: 188, by: BENCH_Y,
-             hit: [152, 148, 72, 46], food: { x: 188, y: 168, gap: 15 },
-             bar: { x: 158, y: 146, w: 60 } },
-    oven:  { key: 'kw_oven',  cx: 66,  by: 268,
-             hit: [23, 220, 88, 50],  food: { x: 66, y: 252, gap: 17 },
-             bar: { x: 31, y: 258, w: 70 } },
+    board: { key: 'kw_board', cx: 62,  by: BENCH_Y,
+             hit: [36, 166, 54, 28],  food: { x: 62, y: 184, gap: 13 },
+             bar: { x: 40, y: 168, w: 44 } },
+    pan:   { key: 'kw_pan',   cx: 158, by: BENCH_Y,
+             hit: [136, 164, 46, 30], food: { x: 152, y: 188, gap: 11 },
+             bar: { x: 140, y: 166, w: 36 } },
+    stove: { key: 'kw_stove', cx: 266, by: BENCH_Y,
+             hit: [230, 148, 72, 46], food: { x: 266, y: 168, gap: 15 },
+             bar: { x: 236, y: 146, w: 60 } },
+    oven:  { key: 'kw_oven',  cx: 92,  by: 268,
+             hit: [49, 220, 88, 50],  food: { x: 92, y: 252, gap: 17 },
+             bar: { x: 57, y: 258, w: 70 } },
 };
 
 let uid = 1;
@@ -460,7 +460,7 @@ export class Service {
         let i = 0;
         for (const [id, o] of Object.entries(stock)) {
             for (let n = 0; n < (o?.n ?? 0) && i < 8; n++, i++) {
-                const x = 244 + (i % 3) * 32;
+                const x = 356 + (i % 3) * 34;
                 const y = BENCH_Y - (i < 3 ? 0 : 15);
                 ctx.fillStyle = '#4a3628';
                 ctx.fillRect(x - 11, y - 4, 22, 4);
@@ -477,7 +477,7 @@ export class Service {
     _drawCat(ctx, phase) {
         const cv = shadedSprite('cat_work', SCENERY.cat_work, phase);
         const bob = Math.sin(this.t * 0.0021) > 0 ? 0 : 1;
-        drawStanding(ctx, cv, 320, COUNTER_Y + 2 + bob);
+        drawStanding(ctx, cv, 470, COUNTER_Y + 2 + bob);
     }
 }
 
@@ -710,30 +710,30 @@ function paintUnderBench(ctx, night) {
     };
 
     /* ---------- 左边那格:碗 + 米袋 ---------- */
-    backPanel(126, 96);
-    boardTop(123, mid, 102);
-    bowls(136, mid - 3, 3, '#f7ecca');
-    bowls(176, mid - 3, 2, '#dfe4e8');
-    boardLip(123, mid, 102);
-    boardTop(123, bot, 102);
-    sack(134, bot - 3, 32, 30, '#dfc98e');
-    sack(176, bot - 3, 30, 26, '#b8b0a0');
-    boardLip(123, bot, 102);
+    backPanel(186, 96);
+    boardTop(183, mid, 102);
+    bowls(196, mid - 3, 3, '#f7ecca');
+    bowls(236, mid - 3, 2, '#dfe4e8');
+    boardLip(183, mid, 102);
+    boardTop(183, bot, 102);
+    sack(194, bot - 3, 32, 30, '#dfc98e');
+    sack(236, bot - 3, 30, 26, '#b8b0a0');
+    boardLip(183, bot, 102);
 
     /* ---------- 右边那格:竹筐 + 蒸笼 + 煤气罐 ---------- */
-    backPanel(232, 100);
-    boardTop(229, mid, 106);
-    basket(240, mid - 3, 38, 22);
-    basket(288, mid - 3, 38, 22);
-    boardLip(229, mid, 106);
-    boardTop(229, bot, 106);
+    backPanel(324, 100);
+    boardTop(321, mid, 106);
+    basket(332, mid - 3, 38, 22);
+    basket(380, mid - 3, 38, 22);
+    boardLip(321, mid, 106);
+    boardTop(321, bot, 106);
     for (let i = 0; i < 3; i++) {                                       // 一摞蒸笼
         const yy = bot - 3 - i * 9;
-        ctx.fillStyle = '#241a13';      ctx.fillRect(240, yy - 9, 44, 9);
-        ctx.fillStyle = dim('#cf9862'); ctx.fillRect(241, yy - 8, 42, 7);
-        ctx.fillStyle = dim('#e0b077'); ctx.fillRect(241, yy - 8, 42, 2);
+        ctx.fillStyle = '#241a13';      ctx.fillRect(332, yy - 9, 44, 9);
+        ctx.fillStyle = dim('#cf9862'); ctx.fillRect(333, yy - 8, 42, 7);
+        ctx.fillStyle = dim('#e0b077'); ctx.fillRect(333, yy - 8, 42, 2);
     }
-    const gx = 294, gy = bot - 3;                                       // 煤气罐
+    const gx = 386, gy = bot - 3;                                       // 煤气罐
     ctx.fillStyle = '#241a13';      ctx.fillRect(gx, gy - 34, 28, 34);
     ctx.fillStyle = '#241a13';      ctx.fillRect(gx + 3, gy - 38, 22, 4);
     ctx.fillStyle = dim('#8a99a3'); ctx.fillRect(gx + 1, gy - 33, 26, 33);
@@ -742,7 +742,7 @@ function paintUnderBench(ctx, night) {
     ctx.fillStyle = dim('#5f6d78'); ctx.fillRect(gx + 1, gy - 20, 26, 3);
     ctx.fillStyle = '#241a13';      ctx.fillRect(gx + 10, gy - 44, 8, 6);
     ctx.fillStyle = dim('#5f6d78'); ctx.fillRect(gx + 11, gy - 43, 6, 4);
-    boardLip(229, bot, 106);
+    boardLip(321, bot, 106);
 }
 
 /** 两个十六进制色按比例混。夜里把架子上的东西整体压暗一档用 */
