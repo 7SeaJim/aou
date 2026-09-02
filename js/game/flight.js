@@ -333,8 +333,22 @@ const COUNTDOWN_MS = 3000;
  * 开局一分钟内不出、两次之间隔四十五秒、窄道那一段也不出:
  * 手还没热的时候不考,一件难事的当口不叠第二件。
  */
-const FLIP_TYPE = 'flip';
-const VERT_TYPE = 'climb';
+/**
+ * 四个「换个飞法」的道具。**它们共用一个秒表、一段过场、一条冷却** ——
+ * 同一时间只可能有一个在,所以底下的状态就是一个 f.mode。
+ *
+ *   flip    重力翻个个儿:松手往上飘,拍一下往下扎。云顶变得和湖面一样要命
+ *   mirror  整个世界照镜子:哇鸥挪到右边,东西从左边来,**两个按钮左右对调**
+ *   climb   镜头转 90°:哇鸥往上钻,东西从头顶落下,大坝沉到画外
+ *   dive    同上反过来:哇鸥往下扎,东西从脚底涌上来,湖面迎面涨上来
+ *
+ * 越怪的越晚出(见 MODE_AFTER):先让人把最基本的两个键坐熟,
+ * 再一件一件往上加。**一次只换一件事**是这四个都成立的前提 ——
+ * 同时换两件,玩家学不到东西,只会觉得这游戏在随机整他。
+ */
+const MODE_TYPE = { flip: 'flip', mirror: 'mirror', climb: 'climb', dive: 'dive' };
+const MODE_AFTER = { flip: 60_000, mirror: 90_000, climb: 120_000, dive: 150_000 };
+const MODES = ['flip', 'mirror', 'climb', 'dive'];
 const FLIP_MS = 20_000;
 const FLIP_MS_MIN = 12_000;
 const FLIP_MS_DECAY = 300;      // 每过一波少这么多毫秒
@@ -371,9 +385,9 @@ const CUT_HOLD = 0.62;          // 收到最紧的那一刻占过场的几成
  * 空格往左蹬一下,方向键右把横向速度按住。**同一套手感,转了九十度。**
  * 顺带,云缝这个形状本来就是窄道那一套的九十度版本,玩家见过。
  */
-const VERT_AFTER = 120_000;     // 开局两分钟内不出 —— 它比颠倒还陌生
 const VERT_SPEED = 0.48;        // 纵向时世界跑多慢
-const BIRD_Y_V = 248;           // 纵向时哇鸥停在这个高度(靠下,好看清头顶)
+const BIRD_Y_V = 248;           // 往上钻时哇鸥停在这个高度(靠下,好看清头顶)
+const BIRD_Y_D = VH - BIRD_Y_V; // 往下扎时反过来,停在靠上
 const V_HALF = 96;              // 五条道摊开的半宽。道距 48 = 一次跃起
 const V_PAD = 10;               // 同 LANE_PAD:贴着云墙也还在最外那条道的判定里
 const V_MID = VW / 2;
@@ -383,6 +397,15 @@ const V_RIGHT = V_MID + V_HALF + V_PAD;
 const laneX = i => V_MID - V_HALF + V_HALF * 2 * i / (LANES - 1);
 /** 爬升时画面往下让开多少 —— 大坝和湖沉下去,眼前只剩天 */
 const CLIMB_OFF = 132;
+/**
+ * 俯冲时反过来:画面**往上提**,湖面迎面涨上来。
+ *
+ * 比爬升那个小一半(70 vs 132),因为往上看是空的天(让多少都行),
+ * 往下看是实打实的水面 —— 提太多的话半屏都是湖,而五条道还在天上,
+ * 会看着像贴着水面飞,可判定又不在那儿。
+ * 现在水面停在下面四成,「越扎越近」看得见,又不至于把场地淹掉。
+ */
+const DIVE_OFF = 70;
 
 /* ---------- 五分钟之后:饿 ---------- */
 /** 从这一刻起开始饿。前五分钟只用管躲 */
@@ -491,15 +514,18 @@ export class Flight {
             // 上一簇障碍留的那条空道。下一簇只能开在它够得着的范围里
             lastGap: null,
 
-            /* ---- 颠倒 ---- */
+            /* ---- 换飞法的那四个(同一时间只可能有一个) ---- */
+            mode: 'flat',        // flat / flip / mirror / climb / dive
+            vert: false,         // climb 或 dive:镜头转了 90°
+            down: false,         // dive:往下扎
+            mir: false,          // mirror:世界照镜子,两个按钮也对调
             gdir: 1,             // 重力朝哪:1 朝下(平常),-1 朝上
             flip: 0,             // 颠倒还剩多少毫秒
             flipAt: FLIP_AFTER,  // 下一次最早什么时候能出
             flipCount: 0,
             cut: null,           // 过场 { t, to, done }
             wallDue: false,      // 颠倒里欠下的那片窄道,翻回来要补
-            vert: false,         // 纵向:镜头转 90°,哇鸥往上钻
-            climbOff: 0,         // 爬升时画面往下让开多少(纯画面,不进判定)
+            climbOff: 0,         // 爬升/俯冲时画面让开多少(纯画面,不进判定)
             cutFrom: 0,
 
             hungryMs: HUNGRY_MS * (1 + rw.trough),  // 食槽:肚子撑得更久
@@ -526,7 +552,7 @@ export class Flight {
             magnetMs: (this.state.items.magnet ?? 0) > 0 ? MAGNET_MS : 0,
             rushMs: (this.state.items.double ?? 0) > 0 ? RUSH_MS : 0,
             powerAt: 10_000,      // 头十秒不出道具,先让人把手放稳
-            birdX: BIRD_X,        // 冲刺的时候会往前顶一段
+            birdX: BIRD_X,        // 冲刺的时候会往前顶一段;镜像时它挪到右边
             god: false,           // wa.god():不掉命、不掉肚子。只有 dev 版能开
         };
 
@@ -597,7 +623,10 @@ export class Flight {
 
     _onDown(e) {
         const rect = this.canvas.getBoundingClientRect();
-        if (e.clientX - rect.left < rect.width / 2) this.flap();
+        const left = e.clientX - rect.left < rect.width / 2;
+        // **镜像时两个键左右对调。** 这不是顺手加的花样,它就是那个飞法
+        // 要考的东西本身 —— 世界照了镜子,手也得跟着照
+        if (left !== this.f.mir) this.flap();
         else this.setGlide(true);
     }
 
@@ -607,12 +636,15 @@ export class Flight {
         // **按住空格不能变成无重力。** 系统的自动重复会一秒发几十个 keydown,
         // 每个都拍一下翅膀的话,压着不放就直接飞上天了
         if (e.repeat) return;
+        // 镜像时平飞换到左方向键(键盘上的「左右对调」)
+        const glideKey = this.f.mir ? 'ArrowLeft' : 'ArrowRight';
         if (e.code === 'Space' || e.code === 'ArrowUp') { e.preventDefault(); this.flap(); }
-        else if (e.code === 'ArrowRight') { e.preventDefault(); this.setGlide(true); }
+        else if (e.code === glideKey) { e.preventDefault(); this.setGlide(true); }
     }
 
+    /** 松开**哪个**方向键都算松手 —— 换飞法那一下正按着的话,不能让它卡住 */
     _onKeyUp(e) {
-        if (e.code === 'ArrowRight') this.setGlide(false);
+        if (e.code === 'ArrowRight' || e.code === 'ArrowLeft') this.setGlide(false);
     }
 
     _onBlur() { this.setGlide(false); }
@@ -630,10 +662,11 @@ export class Flight {
             yaya: this.f.yayaAt < 0 ? -1
                 : Math.max(0, Math.ceil((this.f.yayaAt - this.f.elapsed) / 1000)),
             hunger: this.f.hunger,
-            // 颠倒 / 纵向:还剩几秒。0 = 不在里头。**两个共用一个秒表**
-            // (它们不会同时在),但报给界面时得分开 —— 键上写什么不一样
-            flip: this.f.flip > 0 && !this.f.vert ? Math.ceil(this.f.flip / 1000) : 0,
-            vert: this.f.flip > 0 && this.f.vert ? Math.ceil(this.f.flip / 1000) : 0,
+            // 换飞法的那四个共用一个秒表(同一时间只有一个在)。
+            // **模式名要一起报** —— 键上写什么、按钮在哪边、状态条画哪个图标,
+            // 四种各不一样
+            mode: this.f.mode,
+            modeLeft: this.f.flip > 0 ? Math.ceil(this.f.flip / 1000) : 0,
             // 磁铁 / 护盾:还剩几秒。**得倒数给他看** —— 一个不知道什么时候没的加成,
             // 没了的那一下只会被当成手感变差
             magnet: Math.ceil(this.f.magnetMs / 1000),
@@ -664,7 +697,8 @@ export class Flight {
         // 爬升时画面往下让开,大坝和湖沉下去。**纯画面,不进任何判定** ——
         // 「在往上飞」这件事光靠障碍从上面下来是读不出来的,背景得跟着走。
         // 放在最上面:倒计时和过场里也要动(过场那一秒四正好用来沉下去)
-        const wantOff = (f.vert || f.cut?.to.vert) ? CLIMB_OFF : 0;
+        const m = f.cut ? f.cut.to : f.mode;
+        const wantOff = m === 'climb' ? CLIMB_OFF : m === 'dive' ? -DIVE_OFF : 0;
         f.climbOff += (wantOff - f.climbOff) * Math.min(1, 0.05 * k);
 
         // 倒计时:先飞着玩三秒。这里 return 掉的是「计时、生成、判死」,
@@ -689,7 +723,7 @@ export class Flight {
             f.flip = Math.max(0, f.flip - dt);
             if (f.flip === 0) {
                 f.flipAt = f.elapsed + FLIP_COOLDOWN;
-                this._startCut({});          // 回到横着飞
+                this._startCut('flat');      // 回到平常那个飞法
                 this._emit();
                 return;
             }
@@ -703,9 +737,10 @@ export class Flight {
         // 冲刺时哇鸥往前顶出去一截,回来的时候慢慢退。**这是「冲」唯一看得见的地方** ——
         // 世界跑得快不快,人眼其实分不太出来;而主角自己往前探了一头,一眼就知道
         // **纵向的时候不动它** —— 那会儿横轴归玩家管,冲刺再去拉一把
-        // 就成了两只手抢同一个方向盘
+        // 就成了两只手抢同一个方向盘。镜像时「往前」是往左
         if (!f.vert) {
-            const wantX = BIRD_X + (f.rushMs > 0 ? RUSH_DX : 0);
+            const home = f.mir ? VW - BIRD_X : BIRD_X;
+            const wantX = home + (f.rushMs > 0 ? (f.mir ? -RUSH_DX : RUSH_DX) : 0);
             f.birdX += (wantX - f.birdX) * Math.min(1, 0.06 * k);
         }
 
@@ -720,11 +755,17 @@ export class Flight {
 
         const move = f.speed * k * (f.rushMs > 0 ? RUSH_SPEED : 1) * (f.vert ? VERT_SPEED : 1);
         const hit = (o, r) => Math.abs(f.birdX - o.x) < r && Math.abs(f.birdY - o.y) < r;
-        // 往哪边走:横着飞是从右往左,纵向是从上往下。**每个东西自己记着**
-        // (o.v),而不是问当下是哪个模式 —— 过场会清场,但万一没清干净,
-        // 半路改朝向的那些会当着玩家的面拐弯
-        const adv = o => { if (o.v) o.y += move; else o.x -= move; };
-        const gone = o => (o.v ? o.y > VH + 24 : o.x < -24);
+        // 往哪边走。**每个东西自己记着**(o.d),而不是问当下是哪个模式 ——
+        // 过场会清场,但万一没清干净,半路改朝向的那些会当着玩家的面拐弯。
+        //   0 往左(平常) · 1 往下(爬升) · 2 往右(镜像) · 3 往上(俯冲)
+        const adv = o => {
+            if (o.d === 1) o.y += move;
+            else if (o.d === 2) o.x += move;
+            else if (o.d === 3) o.y -= move;
+            else o.x -= move;
+        };
+        const gone = o => (o.d === 1 ? o.y > VH + 24 : o.d === 2 ? o.x > VW + 24
+                         : o.d === 3 ? o.y < -24 : o.x < -24);
 
         // 食材
         for (let i = f.foods.length - 1; i >= 0; i--) {
@@ -794,10 +835,11 @@ export class Flight {
             if (gone(o)) { f.powerups.splice(i, 1); continue; }
             if (!hit(o, FOOD_R)) continue;
             f.powerups.splice(i, 1);
-            if (o.type === FLIP_TYPE || o.type === VERT_TYPE) {
-                // 颠倒 / 纵向:这一帧交给过场,底下的判定全不做 —— 世界从这里停住
+            if (MODE_TYPE[o.type]) {
+                // 换飞法的那四个:这一帧交给过场,底下的判定全不做 ——
+                // 世界从这里停住
                 f.flipCount++;
-                this._startCut(o.type === VERT_TYPE ? { vert: true } : { gdir: -1 });
+                this._startCut(o.type);
                 this._emit();
                 return;
             }
@@ -897,9 +939,26 @@ export class Flight {
      * 会要命的东西 —— 也不能留下够不着的食材,不然黑边张开的那一刻
      * 会有一堆东西贴在脸上,而他刚被还回控制权。
      */
+    /** 换成哪个飞法。四个布尔量只在这一处派生,别处一律读它们 */
+    _applyMode(m) {
+        const f = this.f;
+        f.mode = m;
+        f.vert = m === 'climb' || m === 'dive';
+        f.down = m === 'dive';
+        f.mir = m === 'mirror';
+        f.gdir = m === 'flip' ? -1 : 1;
+    }
+
+    /** 某个飞法里哇鸥站在哪。过场要知道「他要去哪」,冲刺要知道「家在哪」 */
+    _station(m = this.f.mode) {
+        if (m === 'climb') return { x: V_MID, y: BIRD_Y_V };
+        if (m === 'dive') return { x: V_MID, y: BIRD_Y_D };
+        return { x: m === 'mirror' ? VW - BIRD_X : BIRD_X, y: VH / 2 };
+    }
+
     _startCut(to) {
         const f = this.f;
-        f.cut = { t: 0, to: { gdir: to.gdir ?? 1, vert: !!to.vert }, done: false };
+        f.cut = { t: 0, to, done: false };
         f.cutFrom = { x: f.birdX, y: f.birdY };
         f.glide = false;
         // **挨打的那一下就在这儿结清。** 过场里场上是空的、也不判死,
@@ -927,16 +986,14 @@ export class Flight {
         // 横着飞要回到左边那个老位置
         const q = Math.min(1, p / CUT_HOLD);
         const e = q * q * (3 - 2 * q);                 // smoothstep,起落都软
-        const tx = c.to.vert ? V_MID : BIRD_X;
-        const ty = c.to.vert ? BIRD_Y_V : VH / 2;
-        f.birdX = f.cutFrom.x + (tx - f.cutFrom.x) * e;
-        f.birdY = f.cutFrom.y + (ty - f.cutFrom.y) * e;
+        const to = this._station(c.to);
+        f.birdX = f.cutFrom.x + (to.x - f.cutFrom.x) * e;
+        f.birdY = f.cutFrom.y + (to.y - f.cutFrom.y) * e;
         f.vy = 0;
         if (!c.done && p >= CUT_HOLD) {
             c.done = true;
-            f.gdir = c.to.gdir;
-            f.vert = c.to.vert;
-            if (f.gdir < 0 || f.vert) f.flip = this._flipMs();
+            this._applyMode(c.to);
+            if (c.to !== 'flat') f.flip = this._flipMs();
             sfx.play('event');
         }
         if (p >= 1) f.cut = null;
@@ -1103,9 +1160,11 @@ export class Flight {
      */
     _roomAt(c, minD = 34) {
         const f = this.f;
-        const near = f.vert
-            ? o => o.y < 24 && Math.abs(o.x - c) < minD
-            : o => o.x > VW - 24 && Math.abs(o.y - c) < minD;
+        const d = this._gate().d;
+        const near = d === 1 ? o => o.y < 24 && Math.abs(o.x - c) < minD
+                   : d === 3 ? o => o.y > VH - 24 && Math.abs(o.x - c) < minD
+                   : d === 2 ? o => o.x < 24 && Math.abs(o.y - c) < minD
+                   :           o => o.x > VW - 24 && Math.abs(o.y - c) < minD;
         return !f.obstacles.some(near) && !f.foods.some(near) && !f.powerups.some(near);
     }
 
@@ -1114,13 +1173,28 @@ export class Flight {
      * 开局一分钟内不出、上一次之后隔够了、自己没在颠倒里、也不在过场里。
      * (窄道那一段 _spawn 早就 return 了,轮不到这儿。)
      */
-    _flipReady() {
+    /**
+     * 这会儿能出哪个飞法道具(没有就是 null)。
+     * 越怪的越晚出;够格的几个里随机挑一个。
+     */
+    _modeReady() {
         const f = this.f;
-        return f.flip <= 0 && !f.cut && f.elapsed >= f.flipAt;
+        if (f.mode !== 'flat' || f.cut || f.flip > 0 || f.elapsed < f.flipAt) return null;
+        const ok = MODES.filter(m => f.elapsed >= MODE_AFTER[m]);
+        return ok.length ? ok[Math.floor(this.rng() * ok.length)] : null;
     }
 
-    /** 纵向比颠倒还陌生,再往后挪一分钟。够格之后和颠倒对半开 */
-    _vertReady() { return this.f.elapsed >= VERT_AFTER; }
+    /**
+     * 东西从哪个边出来、往哪走。**四种模式只有这一处知道朝向** ——
+     * 生成、判空、加塞全从这儿取,不各自再判一遍模式
+     */
+    _gate() {
+        const f = this.f;
+        if (f.mode === 'climb') return { d: 1, x: null, y: -16 };
+        if (f.mode === 'dive') return { d: 3, x: null, y: VH + 16 };
+        if (f.mir) return { d: 2, x: -16, y: null };
+        return { d: 0, x: VW + 16, y: null };
+    }
 
     _spawn() {
         const f = this.f;
@@ -1158,12 +1232,17 @@ export class Flight {
             for (let i = 0; i < 6; i++) { const c = one(); if (this._roomAt(c)) return c; }
             return one();
         };
-        /** 生成口:横着飞在右边缘,纵向在上边缘 */
+        /** 生成口:横着飞在左右某个边缘,纵向在上下某个边缘 */
+        const g = this._gate();
         const spot = () => (f.vert
-            ? { x: foodX(), y: -16, v: true }
-            : { x: VW + 16, y: foodY() });
+            ? { x: foodX(), y: g.y, d: g.d }
+            : { x: g.x, y: foodY(), d: g.d });
         /** 把一个刚放下的东西再往生成口外面推一段(天气加塞用,错开半屏) */
-        const shift = (o, d) => { if (o.v) o.y -= d; else o.x += d; return o; };
+        const shift = (o, n) => {
+            if (o.d === 1) o.y -= n; else if (o.d === 3) o.y += n;
+            else if (o.d === 2) o.x -= n; else o.x += n;
+            return o;
+        };
         const pick = a => a[Math.floor(rnd() * a.length)];
 
         // 窄道在场上、**或者已经预告了**的时候,不再撒障碍。
@@ -1183,9 +1262,8 @@ export class Flight {
         if (r < POWER_RATE && f.elapsed >= f.powerAt) {
             // 道具位里挑一个。颠倒够格的时候优先出它 —— 它是这里面唯一
             // **有代价**的那个,不该和三个纯加成抢同一个概率
-            const type = this._flipReady() && rnd() < FLIP_CHANCE
-                ? (this._vertReady() && rnd() < 0.5 ? VERT_TYPE : FLIP_TYPE)
-                : pick(POWERUPS);
+            const mode = this._modeReady();
+            const type = mode && rnd() < FLIP_CHANCE ? MODE_TYPE[mode] : pick(POWERUPS);
             f.powerups.push({ ...spot(), type });
             f.powerAt = f.elapsed + POWER_GAP;
         } else if (r < POWER_RATE + f.hazard) {
@@ -1245,10 +1323,11 @@ export class Flight {
             const j = Math.floor(rnd() * (i + 1));
             [lanes[i], lanes[j]] = [lanes[j], lanes[i]];
         }
+        const g = this._gate();
         for (const i of lanes.slice(0, Math.min(n, LANES - 1))) {
             f.obstacles.push(f.vert
-                ? { x: laneX(i), y: -16 - dx, v: true, type: pick(OBSTACLES) }
-                : { x: VW + 16 + dx, y: laneY(i), type: pick(OBSTACLES) });
+                ? { x: laneX(i), y: g.y + (g.d === 1 ? -dx : dx), d: g.d, type: pick(OBSTACLES) }
+                : { x: g.x + (g.d === 2 ? -dx : dx), y: laneY(i), d: g.d, type: pick(OBSTACLES) });
         }
     }
 
@@ -1298,7 +1377,9 @@ export class Flight {
         ctx.globalAlpha = 1;
         drawFarGulls(ctx, t * 2);
         ctx.restore();
-        drawSea(ctx, weather, HORIZON + off, VH + off, t * 2, this.phase);
+        // 底边取 VH 和 VH+off 里大的那个:俯冲时 off 是负的,湖面涨上来,
+        // 下面那一段得一直铺到屏幕底,否则会露出上一帧的残像
+        drawSea(ctx, weather, HORIZON + off, VH + Math.max(0, off), t * 2, this.phase);
         this._drawCeiling(ctx, f);
         this._drawVWalls(ctx, f);
 
@@ -1408,12 +1489,11 @@ export class Flight {
         const q = p < CUT_HOLD ? p / CUT_HOLD : 1 - (p - CUT_HOLD) / (1 - CUT_HOLD);
         const e = q * q * (3 - 2 * q);
         const KEEP_X = 90, KEEP_Y = 50;
-        const tx = c.to.vert ? V_MID : BIRD_X;
-        const ty = c.to.vert ? BIRD_Y_V : VH / 2;
-        const l = Math.round(Math.max(0, tx - KEEP_X) * e);
-        const r = Math.round(Math.max(0, VW - tx - KEEP_X) * e);
-        const t = Math.round(Math.max(0, ty - KEEP_Y) * e);
-        const b = Math.round(Math.max(0, VH - ty - KEEP_Y) * e);
+        const to = this._station(c.to);
+        const l = Math.round(Math.max(0, to.x - KEEP_X) * e);
+        const r = Math.round(Math.max(0, VW - to.x - KEEP_X) * e);
+        const t = Math.round(Math.max(0, to.y - KEEP_Y) * e);
+        const b = Math.round(Math.max(0, VH - to.y - KEEP_Y) * e);
         ctx.fillStyle = '#241a13';
         ctx.fillRect(0, 0, VW, t);
         ctx.fillRect(0, VH - b, VW, b);
@@ -1523,7 +1603,7 @@ export class Flight {
         // 颠倒不是纯加成,它要人付出点什么。**外面再套一圈闪的金边** ——
         // 三个白盘道具是「见了就吃」,这一个得让人认出来是另一类:
         // 看清了再决定要不要伸头,是这个道具的全部乐趣
-        if (o.type === FLIP_TYPE) {
+        if (MODE_TYPE[o.type]) {
             const on = Math.floor(t / 120) % 2 === 0;
             ctx.fillStyle = on ? '#f5b83d' : '#c98a1e';
             const d = r + 3;
@@ -1643,22 +1723,18 @@ export class Flight {
      * 翻的是画笔不是图:四帧、护盾、受伤变色全都跟着走。
      */
     _drawBird(ctx, f) {
-        if (f.vert) {
-            // 纵向:整只转 90°,头朝上。**90° 的旋转是无损的** ——
-            // 像素还是像素,不会像任意角度那样糊出半透明的边
-            ctx.save();
-            const bx = Math.round(f.birdX), by = Math.round(f.birdY);
-            ctx.translate(bx, by);
-            ctx.rotate(-Math.PI / 2);
-            ctx.translate(-bx, -by);
-            this._bird(ctx, f);
-            ctx.restore();
-            return;
-        }
-        if (f.gdir > 0) { this._bird(ctx, f); return; }
+        if (f.mode === 'flat') { this._bird(ctx, f); return; }
+        // **换的是画笔,不是图。** 四种飞法各是一次镜像或一次 90° 转 ——
+        // 这两种变换在像素画里都是无损的(像素还是像素,不会糊出半透明的边),
+        // 而哇鸥的素材是冻着的,一帧都不能新画
+        const bx = Math.round(f.birdX), by = Math.round(f.birdY);
         ctx.save();
-        ctx.translate(0, Math.round(f.birdY) * 2);
-        ctx.scale(1, -1);
+        ctx.translate(bx, by);
+        if (f.mode === 'climb') ctx.rotate(-Math.PI / 2);        // 头朝上
+        else if (f.mode === 'dive') ctx.rotate(Math.PI / 2);     // 头朝下
+        else if (f.mir) ctx.scale(-1, 1);                        // 照镜子
+        else ctx.scale(1, -1);                                   // 颠倒
+        ctx.translate(-bx, -by);
         this._bird(ctx, f);
         ctx.restore();
     }
@@ -1757,7 +1833,11 @@ export class Flight {
             const len = 12 + ((h >>> 4) % 24);
             const back = 20 + ((i * 37 + t * 9) % 150);
             ctx.fillStyle = i % 3 ? '#ffe08a' : '#f5b83d';
-            if (f.vert) ctx.fillRect(cx + off, cy + back, 1, len);
+            // 「身后」跟着飞法走:平常在右…不,平常在左(世界往左跑,
+            // 风从身后被甩到左边);镜像时在右,爬升时在下,俯冲时在上
+            if (f.mode === 'climb') ctx.fillRect(cx + off, cy + back, 1, len);
+            else if (f.mode === 'dive') ctx.fillRect(cx + off, cy - back - len, 1, len);
+            else if (f.mir) ctx.fillRect(cx + back, cy + off, len, 1);
             else if (cx - back + len > 0) ctx.fillRect(cx - back, cy + off, len, 1);
         }
         // 罩在身上的金:快到点的时候闪,和护盾一个道理

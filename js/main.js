@@ -280,6 +280,10 @@ function togglePause() {
     document.getElementById('flyPause').textContent = next ? '▶ 继续' : '⏸ 暂停';
 }
 
+/** 两个键在四种飞法里各叫什么。字得跟着意思走,不然玩家读的是错的 */
+const KEY_L = { flat: '跃起', flip: '俯冲', mirror: '跃起', climb: '左冲', dive: '左冲' };
+const KEY_R = { flat: '平飞', flip: '平飞', mirror: '平飞', climb: '稳住', dive: '稳住' };
+
 function startFlight(sprites) {
     const overlay = document.getElementById('flyOverlay');
     const canvas = document.getElementById('flyCanvas');
@@ -292,7 +296,8 @@ function startFlight(sprites) {
         wave: H_('flyWave'), dist: H_('flyDist'), hungry: H_('flyHungry'),
         count: H_('flyCount'),
         yaya: H_('flyYaya'), yayaText: H_('flyYayaText'),
-        buffs: H_('flyBuffs'), flapText: H_('flyFlapText'), glideText: H_('flyGlideText'),
+        buffs: H_('flyBuffs'), flapText: H_('flyFlapText'),
+        glideText: H_('flyGlideText'), glideKbd: H_('flyGlideKbd'),
     };
 
     // 道具在开局扣除
@@ -329,24 +334,28 @@ function startFlight(sprites) {
             }
             // 道具那一格。**只在文字真的变了的时候才重写** —— onTick 一秒六十次,
             // 而这行字一秒最多变一次(秒数);拿签名比一下就够,省掉 59 次 innerHTML
-            const sig = `${hud.flip}|${hud.vert}|${hud.rush}|${hud.magnet}|${hud.shieldN}:${hud.shield}`;
+            const sig = `${hud.mode}${hud.modeLeft}|${hud.rush}|${hud.magnet}|${hud.shieldN}:${hud.shield}`;
             if (sig !== flyHud.sig) {
                 flyHud.sig = sig;
                 const bits = [];
-                if (hud.flip) bits.push(`<i class="px-icon px-icon--flip"></i>${hud.flip}s 翻倍`);
-                if (hud.vert) bits.push(`<i class="px-icon px-icon--climb"></i>${hud.vert}s 翻倍`);
+                // 四个飞法各有各的图标,共用一个秒表
+                if (hud.modeLeft) {
+                    bits.push(`<i class="px-icon px-icon--${hud.mode}"></i>${hud.modeLeft}s 翻倍`);
+                }
                 if (hud.rush) bits.push(`<i class="px-icon px-icon--double"></i>${hud.rush}s 无敌`);
                 if (hud.magnet) bits.push(`<i class="px-icon px-icon--magnet"></i>${hud.magnet}s`);
                 if (hud.shieldN) bits.push(`<i class="px-icon px-icon--shield"></i>×${hud.shieldN}`);
                 flyHud.buffs.hidden = bits.length === 0;
                 flyHud.buffs.innerHTML = bits.join('　');
                 // **键上的字得跟着改。** 键没换、意思换了,而玩家看的是
-                // 键上写的那两个字:颠倒时左键是往下扎的,纵向时是往左蹬的
-                const mode = hud.vert ? 'v' : hud.flip ? 'f' : '';
-                if (flyHud.mode !== mode) {
-                    flyHud.mode = mode;
-                    flyHud.flapText.textContent = mode === 'v' ? '左冲' : mode === 'f' ? '俯冲' : '跃起';
-                    flyHud.glideText.textContent = mode === 'v' ? '稳住' : '平飞';
+                // 键上写的那两个字。镜像还要把两个按钮**整个对调**位置 ——
+                // 那是它要考的东西,不能只写在字上
+                if (flyHud.mode !== hud.mode) {
+                    flyHud.mode = hud.mode;
+                    flyHud.flapText.textContent = KEY_L[hud.mode] ?? '跃起';
+                    flyHud.glideText.textContent = KEY_R[hud.mode] ?? '平飞';
+                    flyHud.glideKbd.textContent = hud.mode === 'mirror' ? '←' : '→';
+                    overlay.classList.toggle('is-mirror', hud.mode === 'mirror');
                 }
             }
             // 开局那三秒的大数字。**用 DOM 不用画布** ——

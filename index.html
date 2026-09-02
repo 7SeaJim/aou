@@ -235,6 +235,10 @@
         }
         .fly-key--l { left: 18px; }
         .fly-key--r { right: 18px; }
+        /* 镜像那个飞法:两个按钮左右对调。**这就是它要考的东西** ——
+           世界照了镜子,手也得跟着照 */
+        #flyOverlay.is-mirror .fly-key--l { left: auto; right: 18px; }
+        #flyOverlay.is-mirror .fly-key--r { right: auto; left: 18px; }
         .fly-key kbd { font: inherit; font-size: 13px; opacity: .6; }
         .fly-key b { font-weight: normal; font-size: 20px; }
         @media (max-width: 560px) {
@@ -406,7 +410,7 @@
                     </div>
                 </div>
                 <button class="fly-key fly-key--l" id="flyFlap"><kbd>空格</kbd><b id="flyFlapText">跃起</b></button>
-                <button class="fly-key fly-key--r" id="flyGlide"><kbd>→</kbd><b id="flyGlideText">平飞</b></button>
+                <button class="fly-key fly-key--r" id="flyGlide"><kbd id="flyGlideKbd">→</kbd><b id="flyGlideText">平飞</b></button>
                 <div class="fly-count" id="flyCount" hidden></div>
                 <div class="px-mask" id="pauseMask">
                     <h2>暂停</h2>

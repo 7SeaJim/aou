@@ -494,8 +494,10 @@ export function installDev({ getState, mutate, storage, fly, getFlight, rules, u
          * 飞行里的道具:不用等它飘过来。
          *
          *   wa.buff()               看现在身上有什么
-         *   wa.buff('flip')         立刻起颠倒(重力翻个个儿)
-         *   wa.buff('vert')         立刻转纵向(镜头转 90°,往上钻)
+         *   wa.buff('flip')         重力翻个个儿
+         *   wa.buff('mirror')       世界照镜子,两个按钮也对调
+         *   wa.buff('climb')        镜头转 90°,往上钻
+         *   wa.buff('dive')         镜头转 90°,往下扎
          *   wa.buff('rush', 20)     无敌前冲 20 秒
          *   wa.buff('magnet' | 'shield', 秒)
          */
@@ -512,13 +514,16 @@ export function installDev({ getState, mutate, storage, fly, getFlight, rules, u
                 };
             }
             const ms = sec ? sec * 1000 : 0;
-            if (kind === 'flip' || kind === 'vert' || kind === 'climb') {
-                if (f.flip > 0 || f.cut) return '已经在颠倒/纵向里了';
+            const MODES = {
+                flip: '颠倒 —— 重力翻个个儿', mirror: '镜像 —— 世界和按钮一起照镜子',
+                climb: '纵向 —— 镜头转过来,往上钻', dive: '俯冲 —— 镜头转过来,往下扎',
+                vert: '纵向 —— 镜头转过来,往上钻',
+            };
+            if (MODES[kind]) {
+                if (f.flip > 0 || f.cut) return '已经在别的飞法里了,等它过去';
                 f.flipAt = 0;
-                const vert = kind !== 'flip';
-                F._startCut(vert ? { vert: true } : { gdir: -1 });
-                return (vert ? '纵向 —— 镜头转过来' : '颠倒 —— 重力翻个个儿')
-                     + '(二十秒,期间食材翻倍)';
+                F._startCut(kind === 'vert' ? 'climb' : kind);
+                return MODES[kind] + '(二十秒,期间食材翻倍)';
             }
             if (kind === 'magnet') { f.magnetMs = ms || 15_000; return `磁铁 ${f.magnetMs / 1000}s(整屏吸)`; }
             if (kind === 'rush' || kind === 'double') { f.rushMs = ms || 8000; return `无敌前冲 ${f.rushMs / 1000}s`; }
@@ -526,7 +531,7 @@ export function installDev({ getState, mutate, storage, fly, getFlight, rules, u
                 f.shieldMs = ms || 45_000; f.shieldN = 2;
                 return `护盾 2 次 / ${Math.ceil(f.shieldMs / 1000)}s`;
             }
-            return "只认 flip / vert / magnet / shield / rush";
+            return "只认 flip / mirror / climb / dive / magnet / shield / rush";
         },
 
         /** 小屋:把时钟拨到某个时段看效果。传 null 恢复真实时间。 */
@@ -639,7 +644,7 @@ export function installDev({ getState, mutate, storage, fly, getFlight, rules, u
                 'wa.wage()':       '看每天要发多少工钱、谁在请假;wa.wage(true) 立刻补发',
                 'wa.flight':       '当前这一局(可改 .f.lives / .f.speed)',
                 'wa.god()':        '飞行不死:不掉命也不掉肚子(照挨照闪);wa.god(false) 关',
-                'wa.buff(k, s)':   "飞行道具直接上身 — 'flip' 颠倒 / 'vert' 纵向 / 'rush' 无敌 / 'magnet' / 'shield';不传参看现状",
+                'wa.buff(k, s)':   "飞行道具直接上身 — flip 颠倒 / mirror 镜像 / climb 上钻 / dive 下扎 / rush 无敌 / magnet / shield;不传参看现状",
                 'wa.code()':       '导出存档码',
             });
             console.log('URL 参数(打开就生效):?scene=mid  ?seed=42  ?tries=99  ?weather=rainy  ?day=1  ?time=night(待机界面时段)');
