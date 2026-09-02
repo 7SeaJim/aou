@@ -334,6 +334,7 @@ const COUNTDOWN_MS = 3000;
  * 手还没热的时候不考,一件难事的当口不叠第二件。
  */
 const FLIP_TYPE = 'flip';
+const VERT_TYPE = 'climb';
 const FLIP_MS = 20_000;
 const FLIP_MS_MIN = 12_000;
 const FLIP_MS_DECAY = 300;      // 每过一波少这么多毫秒
@@ -351,6 +352,37 @@ const FLIP_HAUL = 2;            // 颠倒期间捡到的算几份
  */
 const CUT_MS = 1400;
 const CUT_HOLD = 0.62;          // 收到最紧的那一刻占过场的几成
+
+/* ---------- 纵向:镜头转 90°,从云缝里往上钻 ----------
+ *
+ * 「颠倒」他要的其实是这个 —— 我第一版只把重力翻了个个儿,飞行轴没动;
+ * 他想的是**镜头转过来,哇鸥往上飞**。水平那版他试过了,留着;这是另一档。
+ *
+ * 转轴之后两件事立刻变糟,都得治:
+ *
+ *   看得见的距离   横着飞是 560 像素,竖着只有 266 —— 反应时间少一半还多
+ *   要跑的宽度     反过来:能动的那条轴从 210 变成 620,换道要跑三倍远
+ *
+ * 治法各一条。**世界跑慢到 0.48 倍** —— 266 像素跑出和 560 一样的秒数,
+ * 「变的是镜头,不是难度」;而能动的那条轴**收进一条 192 像素宽的云缝里**,
+ * 五条道各差 48 —— 正好是一次跃起的距离,和横着飞时一模一样。
+ *
+ * 于是两个键一个字都不用改写:什么都不按往右漂(侧向重力),
+ * 空格往左蹬一下,方向键右把横向速度按住。**同一套手感,转了九十度。**
+ * 顺带,云缝这个形状本来就是窄道那一套的九十度版本,玩家见过。
+ */
+const VERT_AFTER = 120_000;     // 开局两分钟内不出 —— 它比颠倒还陌生
+const VERT_SPEED = 0.48;        // 纵向时世界跑多慢
+const BIRD_Y_V = 248;           // 纵向时哇鸥停在这个高度(靠下,好看清头顶)
+const V_HALF = 96;              // 五条道摊开的半宽。道距 48 = 一次跃起
+const V_PAD = 10;               // 同 LANE_PAD:贴着云墙也还在最外那条道的判定里
+const V_MID = VW / 2;
+const V_LEFT = V_MID - V_HALF - V_PAD;
+const V_RIGHT = V_MID + V_HALF + V_PAD;
+/** 纵向时第 i 条道的中心。左右两头正好离云墙 V_PAD */
+const laneX = i => V_MID - V_HALF + V_HALF * 2 * i / (LANES - 1);
+/** 爬升时画面往下让开多少 —— 大坝和湖沉下去,眼前只剩天 */
+const CLIMB_OFF = 132;
 
 /* ---------- 五分钟之后:饿 ---------- */
 /** 从这一刻起开始饿。前五分钟只用管躲 */
@@ -466,6 +498,8 @@ export class Flight {
             flipCount: 0,
             cut: null,           // 过场 { t, to, done }
             wallDue: false,      // 颠倒里欠下的那片窄道,翻回来要补
+            vert: false,         // 纵向:镜头转 90°,哇鸥往上钻
+            climbOff: 0,         // 爬升时画面往下让开多少(纯画面,不进判定)
             cutFrom: 0,
 
             hungryMs: HUNGRY_MS * (1 + rw.trough),  // 食槽:肚子撑得更久
@@ -596,8 +630,10 @@ export class Flight {
             yaya: this.f.yayaAt < 0 ? -1
                 : Math.max(0, Math.ceil((this.f.yayaAt - this.f.elapsed) / 1000)),
             hunger: this.f.hunger,
-            // 颠倒:还剩几秒。0 = 不在颠倒里
-            flip: this.f.flip > 0 ? Math.ceil(this.f.flip / 1000) : 0,
+            // 颠倒 / 纵向:还剩几秒。0 = 不在里头。**两个共用一个秒表**
+            // (它们不会同时在),但报给界面时得分开 —— 键上写什么不一样
+            flip: this.f.flip > 0 && !this.f.vert ? Math.ceil(this.f.flip / 1000) : 0,
+            vert: this.f.flip > 0 && this.f.vert ? Math.ceil(this.f.flip / 1000) : 0,
             // 磁铁 / 护盾:还剩几秒。**得倒数给他看** —— 一个不知道什么时候没的加成,
             // 没了的那一下只会被当成手感变差
             magnet: Math.ceil(this.f.magnetMs / 1000),
@@ -625,6 +661,11 @@ export class Flight {
         const f = this.f;
         const k = dt / 16.7;                 // 以 60fps 为基准的步长系数
         f.vt += dt;
+        // 爬升时画面往下让开,大坝和湖沉下去。**纯画面,不进任何判定** ——
+        // 「在往上飞」这件事光靠障碍从上面下来是读不出来的,背景得跟着走。
+        // 放在最上面:倒计时和过场里也要动(过场那一秒四正好用来沉下去)
+        const wantOff = (f.vert || f.cut?.to.vert) ? CLIMB_OFF : 0;
+        f.climbOff += (wantOff - f.climbOff) * Math.min(1, 0.05 * k);
 
         // 倒计时:先飞着玩三秒。这里 return 掉的是「计时、生成、判死」,
         // 不是「动」—— 手上的两个键从第一帧起就是通的
@@ -648,7 +689,7 @@ export class Flight {
             f.flip = Math.max(0, f.flip - dt);
             if (f.flip === 0) {
                 f.flipAt = f.elapsed + FLIP_COOLDOWN;
-                this._startCut(1);
+                this._startCut({});          // 回到横着飞
                 this._emit();
                 return;
             }
@@ -661,8 +702,12 @@ export class Flight {
 
         // 冲刺时哇鸥往前顶出去一截,回来的时候慢慢退。**这是「冲」唯一看得见的地方** ——
         // 世界跑得快不快,人眼其实分不太出来;而主角自己往前探了一头,一眼就知道
-        const wantX = BIRD_X + (f.rushMs > 0 ? RUSH_DX : 0);
-        f.birdX += (wantX - f.birdX) * Math.min(1, 0.06 * k);
+        // **纵向的时候不动它** —— 那会儿横轴归玩家管,冲刺再去拉一把
+        // 就成了两只手抢同一个方向盘
+        if (!f.vert) {
+            const wantX = BIRD_X + (f.rushMs > 0 ? RUSH_DX : 0);
+            f.birdX += (wantX - f.birdX) * Math.min(1, 0.06 * k);
+        }
 
         this._fly(k);
 
@@ -673,14 +718,19 @@ export class Flight {
             this._spawn();
         }
 
-        const move = f.speed * k * (f.rushMs > 0 ? RUSH_SPEED : 1);
+        const move = f.speed * k * (f.rushMs > 0 ? RUSH_SPEED : 1) * (f.vert ? VERT_SPEED : 1);
         const hit = (o, r) => Math.abs(f.birdX - o.x) < r && Math.abs(f.birdY - o.y) < r;
+        // 往哪边走:横着飞是从右往左,纵向是从上往下。**每个东西自己记着**
+        // (o.v),而不是问当下是哪个模式 —— 过场会清场,但万一没清干净,
+        // 半路改朝向的那些会当着玩家的面拐弯
+        const adv = o => { if (o.v) o.y += move; else o.x -= move; };
+        const gone = o => (o.v ? o.y > VH + 24 : o.x < -24);
 
         // 食材
         for (let i = f.foods.length - 1; i >= 0; i--) {
             const o = f.foods[i];
-            o.x -= move;
-            if (o.x < -24) { f.foods.splice(i, 1); continue; }
+            adv(o);
+            if (gone(o)) { f.foods.splice(i, 1); continue; }
 
             // 磁铁开着的时候**整屏**的食材都朝哇鸥来,不再只吸身边那一圈。
             // 拉力按距离给:远的快、近的稳 —— 一律按比例拉的话,
@@ -697,6 +747,7 @@ export class Flight {
                 f.foods.splice(i, 1);
                 // 颠倒的那二十秒里捡到的**算两份**:分数两份,带回摊上的食材也是两份。
                 // 只翻一个看不见的分数不算赌注 —— 拿命换的东西得能端上桌
+                // 颠倒和纵向共用 f.flip 这个秒表(两个不会同时在),都翻倍
                 const n = (f.flip > 0 ? FLIP_HAUL : 1) * (f.rushMs > 0 ? FLIP_HAUL : 1);
                 f.collected[o.type] = (f.collected[o.type] ?? 0) + n;
                 f.itemCount += n;
@@ -715,8 +766,8 @@ export class Flight {
         // 障碍
         for (let i = f.obstacles.length - 1; i >= 0; i--) {
             const o = f.obstacles[i];
-            o.x -= move;
-            if (o.x < -24) { f.obstacles.splice(i, 1); continue; }
+            adv(o);
+            if (gone(o)) { f.obstacles.splice(i, 1); continue; }
             if (!hit(o, f.hazR)) continue;
 
             f.obstacles.splice(i, 1);
@@ -739,14 +790,14 @@ export class Flight {
         // 道具
         for (let i = f.powerups.length - 1; i >= 0; i--) {
             const o = f.powerups[i];
-            o.x -= move;
-            if (o.x < -24) { f.powerups.splice(i, 1); continue; }
+            adv(o);
+            if (gone(o)) { f.powerups.splice(i, 1); continue; }
             if (!hit(o, FOOD_R)) continue;
             f.powerups.splice(i, 1);
-            if (o.type === FLIP_TYPE) {
-                // 颠倒:这一帧交给过场,底下的判定全不做 —— 世界从这里停住
+            if (o.type === FLIP_TYPE || o.type === VERT_TYPE) {
+                // 颠倒 / 纵向:这一帧交给过场,底下的判定全不做 —— 世界从这里停住
                 f.flipCount++;
-                this._startCut(-1);
+                this._startCut(o.type === VERT_TYPE ? { vert: true } : { gdir: -1 });
                 this._emit();
                 return;
             }
@@ -804,6 +855,18 @@ export class Flight {
      */
     _fly(k) {
         const f = this.f, g = f.gdir;
+        // 纵向:**同一套数,换一条轴**。什么都不按往右漂,空格往左蹬一下,
+        // 方向键右把横向速度按住 —— 三个状态各管一个方向,一个字都没改。
+        // 两边云墙只是顶住(不要命),要命的是道上的东西:
+        // 最外那条道离墙只有 10 像素,比判定半径小,**贴着墙也躲不掉**
+        if (f.vert) {
+            if (f.glide) f.vy += (0 - f.vy) * Math.min(1, GLIDE_K * k);
+            else f.vy = Math.min(MAX_VY, f.vy + GRAVITY * k);
+            f.birdX += f.vy * k;
+            if (f.birdX > V_RIGHT) { f.birdX = V_RIGHT; f.vy = 0; }
+            else if (f.birdX < V_LEFT) { f.birdX = V_LEFT; f.vy = 0; }
+            return;
+        }
         if (f.glide) f.vy += (0 - f.vy) * Math.min(1, GLIDE_K * k);
         else {
             f.vy += GRAVITY * g * k;
@@ -836,9 +899,13 @@ export class Flight {
      */
     _startCut(to) {
         const f = this.f;
-        f.cut = { t: 0, to, done: false };
-        f.cutFrom = f.birdY;
+        f.cut = { t: 0, to: { gdir: to.gdir ?? 1, vert: !!to.vert }, done: false };
+        f.cutFrom = { x: f.birdX, y: f.birdY };
         f.glide = false;
+        // **挨打的那一下就在这儿结清。** 过场里场上是空的、也不判死,
+        // 而闪烁的那半秒要是跨过过场,黑边张开时玩家会看见自己在闪 ——
+        // 找不到是被什么打的,只会以为新模式一上来就扣了他一下
+        f.hurtUntil = 0;
         f.obstacles.length = 0;
         f.foods.length = 0;
         f.powerups.length = 0;
@@ -855,15 +922,21 @@ export class Flight {
         const c = f.cut;
         c.t += dt;
         const p = Math.min(1, c.t / CUT_MS);
-        // 归中和黑边收拢同步:黑边收到最紧的时候人正好在正中
+        // 归位和黑边收拢同步:黑边收到最紧的时候人正好到位。
+        // **去哪儿看的是过完之后是哪个模式** —— 纵向要停在云缝正中、靠下,
+        // 横着飞要回到左边那个老位置
         const q = Math.min(1, p / CUT_HOLD);
         const e = q * q * (3 - 2 * q);                 // smoothstep,起落都软
-        f.birdY = f.cutFrom + (VH / 2 - f.cutFrom) * e;
+        const tx = c.to.vert ? V_MID : BIRD_X;
+        const ty = c.to.vert ? BIRD_Y_V : VH / 2;
+        f.birdX = f.cutFrom.x + (tx - f.cutFrom.x) * e;
+        f.birdY = f.cutFrom.y + (ty - f.cutFrom.y) * e;
         f.vy = 0;
         if (!c.done && p >= CUT_HOLD) {
             c.done = true;
-            f.gdir = c.to;
-            if (c.to < 0) f.flip = this._flipMs();
+            f.gdir = c.to.gdir;
+            f.vert = c.to.vert;
+            if (f.gdir < 0 || f.vert) f.flip = this._flipMs();
             sfx.play('event');
         }
         if (p >= 1) f.cut = null;
@@ -1024,10 +1097,15 @@ export class Flight {
         }
     }
 
-    /** 右边缘那一带还空不空。两个东西的圈都是 30 宽,离得比这近就会压在一起 */
-    _roomAt(y, minDy = 34) {
-        const near = o => o.x > VW - 24 && Math.abs(o.y - y) < minDy;
+    /**
+     * 生成口那一带还空不空。两个东西的圈都是 30 宽,离得比这近就会压在一起。
+     * 横着飞看右边缘,纵向看上边缘 —— 同一件事,换一条轴。
+     */
+    _roomAt(c, minD = 34) {
         const f = this.f;
+        const near = f.vert
+            ? o => o.y < 24 && Math.abs(o.x - c) < minD
+            : o => o.x > VW - 24 && Math.abs(o.y - c) < minD;
         return !f.obstacles.some(near) && !f.foods.some(near) && !f.powerups.some(near);
     }
 
@@ -1040,6 +1118,9 @@ export class Flight {
         const f = this.f;
         return f.flip <= 0 && !f.cut && f.elapsed >= f.flipAt;
     }
+
+    /** 纵向比颠倒还陌生,再往后挪一分钟。够格之后和颠倒对半开 */
+    _vertReady() { return this.f.elapsed >= VERT_AFTER; }
 
     _spawn() {
         const f = this.f;
@@ -1067,6 +1148,22 @@ export class Flight {
             }
             return Math.max(top, Math.min(top + span, f.birdY + (rnd() * 2 - 1) * REACH));
         };
+        /**
+         * 纵向时食材出在哪个横位。同 foodY,只是换了一条轴:
+         * 以哇鸥当下的横位为中心、左右各 REACH,并夹在云缝里。
+         */
+        const foodX = () => {
+            const lo = laneX(0), hi = laneX(LANES - 1);
+            const one = () => Math.max(lo, Math.min(hi, f.birdX + (rnd() * 2 - 1) * REACH));
+            for (let i = 0; i < 6; i++) { const c = one(); if (this._roomAt(c)) return c; }
+            return one();
+        };
+        /** 生成口:横着飞在右边缘,纵向在上边缘 */
+        const spot = () => (f.vert
+            ? { x: foodX(), y: -16, v: true }
+            : { x: VW + 16, y: foodY() });
+        /** 把一个刚放下的东西再往生成口外面推一段(天气加塞用,错开半屏) */
+        const shift = (o, d) => { if (o.v) o.y -= d; else o.x += d; return o; };
         const pick = a => a[Math.floor(rnd() * a.length)];
 
         // 窄道在场上、**或者已经预告了**的时候,不再撒障碍。
@@ -1086,15 +1183,17 @@ export class Flight {
         if (r < POWER_RATE && f.elapsed >= f.powerAt) {
             // 道具位里挑一个。颠倒够格的时候优先出它 —— 它是这里面唯一
             // **有代价**的那个,不该和三个纯加成抢同一个概率
-            const type = this._flipReady() && rnd() < FLIP_CHANCE ? FLIP_TYPE : pick(POWERUPS);
-            f.powerups.push({ x: VW + 16, y: foodY(), type });
+            const type = this._flipReady() && rnd() < FLIP_CHANCE
+                ? (this._vertReady() && rnd() < 0.5 ? VERT_TYPE : FLIP_TYPE)
+                : pick(POWERUPS);
+            f.powerups.push({ ...spot(), type });
             f.powerAt = f.elapsed + POWER_GAP;
         } else if (r < POWER_RATE + f.hazard) {
             // 障碍**不跟着哇鸥走** —— 跟着走就成了追着人扔石头,
             // 而它靠的是「一簇里必留一条空道」那套规矩
             this._hazard(1 + Math.floor(f.wave / 3));
         } else {
-            f.foods.push({ x: VW + 16, y: foodY(), type: pick(FOOD_TYPES) });
+            f.foods.push({ ...spot(), type: pick(FOOD_TYPES) });
         }
 
         // 天气影响额外生成。**x 要错开半屏** ——
@@ -1104,7 +1203,7 @@ export class Flight {
         const EXTRA_X = VW / 2;
         if (this.state.weather === 'rainy' && rnd() < 0.3) this._hazard(1, EXTRA_X);
         if (this.state.weather === 'foggy' && rnd() < 0.25) {
-            f.foods.push({ x: VW + 16 + EXTRA_X, y: foodY(), type: pick(FOOD_TYPES) });
+            f.foods.push(shift({ ...spot(), type: pick(FOOD_TYPES) }, EXTRA_X));
         }
     }
 
@@ -1131,8 +1230,10 @@ export class Flight {
     _hazard(n, dx = 0) {
         const f = this.f, rnd = this.rng;
         const pick = a => a[Math.floor(rnd() * a.length)];
+        // 纵向的道距是 48(一次跃起),横着飞是 47.5 —— 两边都按自己的算
+        const step = f.vert ? V_HALF * 2 / (LANES - 1) : LANE_H;
         const reach = CLIMB_PX_PER_SEC * (f.spawnInterval / 1000);
-        const jump = Math.max(1, Math.min(LANES - 1, Math.floor(reach / LANE_H)));
+        const jump = Math.max(1, Math.min(LANES - 1, Math.floor(reach / step)));
         const from = f.lastGap ?? Math.floor(rnd() * LANES);
         const lo = Math.max(0, from - jump), hi = Math.min(LANES - 1, from + jump);
         const gap = lo + Math.floor(rnd() * (hi - lo + 1));
@@ -1145,7 +1246,9 @@ export class Flight {
             [lanes[i], lanes[j]] = [lanes[j], lanes[i]];
         }
         for (const i of lanes.slice(0, Math.min(n, LANES - 1))) {
-            f.obstacles.push({ x: VW + 16 + dx, y: laneY(i), type: pick(OBSTACLES) });
+            f.obstacles.push(f.vert
+                ? { x: laneX(i), y: -16 - dx, v: true, type: pick(OBSTACLES) }
+                : { x: VW + 16 + dx, y: laneY(i), type: pick(OBSTACLES) });
         }
     }
 
@@ -1177,19 +1280,27 @@ export class Flight {
 
         this.phase = dayPhase(now());
         this._bakeSky(weather, this.phase);
-        ctx.drawImage(this.sky.cv, 0, 0);
+        const off = Math.round(f.climbOff);
+        ctx.drawImage(this.sky.cv, 0, off);
+        // 让开的那一条用天空最上面那一行**拉出来**填 —— 不用知道当下是什么天、
+        // 什么时辰,那一行本来就是那个颜色
+        if (off > 0) ctx.drawImage(this.sky.cv, 0, 0, VW, 1, 0, 0, VW, off);
         // 飞行时云和远处的鸟走得比大坝上快,才有在赶路的感觉。
         //
         // **但装饰云在这一场里得退到背景里去** —— 别处它只是天上的云,
         // 这一场里「云」是会要命的东西(障碍之一就是乌云),
         // 而入夜之后 shadedSprite 把装饰云也压成灰的,两者在天上一模一样。
         // 玩家分不清哪朵能穿、哪朵不能,飞一会儿眼睛就花了。
+        ctx.save();
+        ctx.translate(0, off);               // 云和远处的鸟属于天,跟着一起沉
         ctx.globalAlpha = this.phase === 'night' ? 0.42 : this.phase === 'day' ? 0.8 : 0.6;
         drawClouds(ctx, t * 3, weather, this.phase);
         ctx.globalAlpha = 1;
         drawFarGulls(ctx, t * 2);
-        drawSea(ctx, weather, HORIZON, VH, t * 2, this.phase);
+        ctx.restore();
+        drawSea(ctx, weather, HORIZON + off, VH + off, t * 2, this.phase);
         this._drawCeiling(ctx, f);
+        this._drawVWalls(ctx, f);
 
         for (const o of f.foods)     this._drawItem(ctx, o.type, o.x, o.y);
         for (const o of f.powerups)  this._drawPowerup(ctx, o, t);
@@ -1234,32 +1345,87 @@ export class Flight {
     }
 
     /**
-     * 过场的黑边。上下左右一起收拢,收到最紧的那一刻翻,然后张开。
+     * 纵向时两边的云墙 —— 「从云缝里往上钻」的那两片云。
      *
-     * **左边只收到 34。** 哇鸥站在 x=60,左边那道再往里就把主角盖住了 ——
-     * 「四边一起收」是要的那个感觉,而「看得见自己」是不能丢的那件事。
+     * 它同时是三件事,所以只画一次就够:**能动的范围有多宽**(玩法上是
+     * 192 像素的五条道)、**为什么这么宽**(云挤的,不是我规定的)、
+     * 以及**这一段和窄道是同一种东西**(玩家见过,不用重新学)。
+     *
+     * 疙瘩一律**往外长**,和窄道那条规矩一样:画面上的缝只会比判定的缝更宽,
+     * 绝不会出现「撞上一块看着明明没碰到的云」。
+     */
+    _drawVWalls(ctx, f) {
+        if (!f.vert) return;
+        const inL = V_LEFT - 18, inR = V_RIGHT + 18;   // 哇鸥贴住墙时正好挨着
+        /**
+         * **云纹是横的,而且往下淌。** 这一段唯一还在告诉玩家「你在往上爬」
+         * 的就是它 —— 天是一片渐变,不动;食材和障碍从上面下来,但那是
+         * 「东西在动」,不是「我在动」。两片云墙是画面上最大的一块面积,
+         * 让它的纹路匀速往下走,爬升这件事才成立。
+         *
+         * 纹路按「云自己的坐标」算(y + 走过的距离),不按屏幕坐标 ——
+         * 按屏幕算的话花纹会原地闪,而不是流过去。
+         */
+        const scroll = Math.floor(f.vt * 0.052);
+        for (let y = 0; y < VH; y += 4) {
+            const w = (y + scroll) & 0xffff;           // 云自己的坐标
+            const b = ((w * 2654435761) >>> 0) % 3 * 4;
+            const h = Math.min(4, VH - y);
+            const l = Math.round(inL - b), r = Math.round(inR + b);
+            ctx.fillStyle = '#8a99a3';
+            if (l > 0) ctx.fillRect(0, y, l, h);
+            if (r < VW) ctx.fillRect(r, y, VW - r, h);
+            // 横着的暗纹,每 28 像素一道 —— 往下淌的就是它
+            if (w % 28 < 4) {
+                ctx.fillStyle = '#78868f';
+                if (l > 0) ctx.fillRect(0, y, l, h);
+                if (r < VW) ctx.fillRect(r, y, VW - r, h);
+            }
+            ctx.fillStyle = '#5f6d78';                 // 贴着缝的那一面压暗
+            if (l > 6) ctx.fillRect(l - 6, y, 6, h);
+            if (r < VW) ctx.fillRect(r, y, Math.min(6, VW - r), h);
+            ctx.fillStyle = '#4a3628';                 // 描边
+            if (l > 0) ctx.fillRect(l - 1, y, 1, h);
+            if (r < VW) ctx.fillRect(r, y, 1, h);
+        }
+    }
+
+    /**
+     * 过场的黑边。四边一起收拢,收到最紧的那一刻切,然后张开。
+     *
+     * **收的中心是「哇鸥要去的地方」,不是画面正中。** 第一版四边各按屏幕
+     * 比例收,而横着飞时哇鸥在 x=60、纵向时它要去 (310, 248) ——
+     * 收到最紧的那一刻主角正好被下面那道黑边盖住了:
+     * 一段专门用来交代「你现在归哪条轴管」的动画,偏偏把人藏了起来。
+     *
+     * 现在每一边只收到**离目标点 KEEP 那么近**为止:窗口最后一定框着主角,
+     * 而且框的正是他落脚的地方 —— 黑边张开时他已经在那儿了。
      */
     _drawCut(ctx, f) {
         if (!f.cut) return;
-        const p = Math.min(1, f.cut.t / CUT_MS);
+        const c = f.cut;
+        const p = Math.min(1, c.t / CUT_MS);
         const q = p < CUT_HOLD ? p / CUT_HOLD : 1 - (p - CUT_HOLD) / (1 - CUT_HOLD);
         const e = q * q * (3 - 2 * q);
-        const l = Math.round(34 * e);
-        const r = Math.round(VW * 0.30 * e);
-        const v = Math.round(VH * 0.34 * e);
+        const KEEP_X = 90, KEEP_Y = 50;
+        const tx = c.to.vert ? V_MID : BIRD_X;
+        const ty = c.to.vert ? BIRD_Y_V : VH / 2;
+        const l = Math.round(Math.max(0, tx - KEEP_X) * e);
+        const r = Math.round(Math.max(0, VW - tx - KEEP_X) * e);
+        const t = Math.round(Math.max(0, ty - KEEP_Y) * e);
+        const b = Math.round(Math.max(0, VH - ty - KEEP_Y) * e);
         ctx.fillStyle = '#241a13';
-        ctx.fillRect(0, 0, VW, v);
-        ctx.fillRect(0, VH - v, VW, v);
+        ctx.fillRect(0, 0, VW, t);
+        ctx.fillRect(0, VH - b, VW, b);
         ctx.fillRect(0, 0, l, VH);
         ctx.fillRect(VW - r, 0, r, VH);
         // 黑块要有边。像素画里一块没有描边的纯黑不像幕布,像画布破了个洞
+        const w = VW - l - r, h = VH - t - b;
         ctx.fillStyle = '#c98a1e';
-        if (v) {
-            ctx.fillRect(l, v - 1, VW - l - r, 1);
-            ctx.fillRect(l, VH - v, VW - l - r, 1);
-        }
-        if (l) ctx.fillRect(l - 1, v, 1, VH - v * 2);
-        if (r) ctx.fillRect(VW - r, v, 1, VH - v * 2);
+        if (t) ctx.fillRect(l, t - 1, w, 1);
+        if (b) ctx.fillRect(l, VH - b, w, 1);
+        if (l) ctx.fillRect(l - 1, t, 1, h);
+        if (r) ctx.fillRect(VW - r, t, 1, h);
     }
 
     /**
@@ -1477,6 +1643,18 @@ export class Flight {
      * 翻的是画笔不是图:四帧、护盾、受伤变色全都跟着走。
      */
     _drawBird(ctx, f) {
+        if (f.vert) {
+            // 纵向:整只转 90°,头朝上。**90° 的旋转是无损的** ——
+            // 像素还是像素,不会像任意角度那样糊出半透明的边
+            ctx.save();
+            const bx = Math.round(f.birdX), by = Math.round(f.birdY);
+            ctx.translate(bx, by);
+            ctx.rotate(-Math.PI / 2);
+            ctx.translate(-bx, -by);
+            this._bird(ctx, f);
+            ctx.restore();
+            return;
+        }
         if (f.gdir > 0) { this._bird(ctx, f); return; }
         ctx.save();
         ctx.translate(0, Math.round(f.birdY) * 2);
@@ -1571,15 +1749,16 @@ export class Flight {
         const cx = Math.round(f.birdX), cy = Math.round(f.birdY);
         const t = Math.floor(f.vt / 40);
         // 身后的风线。**高低和长短都得散开** —— 等长等距的话是一把梳子,
-        // 而梳子看着是静止的;错开之后同样几根线才像风
+        // 而梳子看着是静止的;错开之后同样几根线才像风。
+        // 纵向的时候「身后」在下面,整组跟着转九十度
         for (let i = 0; i < 10; i++) {
             const h = (i * 1103515245 + 12345) >>> 0;
-            const dy = ((h >>> 9) % 31) - 15;
+            const off = ((h >>> 9) % 31) - 15;
             const len = 12 + ((h >>> 4) % 24);
-            const x = cx - 20 - ((i * 37 + t * 9) % 150);
-            if (x + len < 0) continue;
+            const back = 20 + ((i * 37 + t * 9) % 150);
             ctx.fillStyle = i % 3 ? '#ffe08a' : '#f5b83d';
-            ctx.fillRect(x, cy + dy, len, 1);
+            if (f.vert) ctx.fillRect(cx + off, cy + back, 1, len);
+            else if (cx - back + len > 0) ctx.fillRect(cx - back, cy + off, len, 1);
         }
         // 罩在身上的金:快到点的时候闪,和护盾一个道理
         const low = f.rushMs < 2000 && Math.floor(f.elapsed / 130) % 2 === 0;
