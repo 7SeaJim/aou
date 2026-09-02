@@ -515,7 +515,7 @@ export function installDev({ getState, mutate, storage, fly, getFlight, rules, u
                 if (f.flip > 0 || f.cut) return '已经在颠倒里了';
                 f.flipAt = 0;
                 F._startCut(-1);
-                return '颠倒 —— 过场走起(八秒,期间食材翻倍)';
+                return '颠倒 —— 过场走起(二十秒,期间食材翻倍)';
             }
             if (kind === 'magnet') { f.magnetMs = ms || 15_000; return `磁铁 ${f.magnetMs / 1000}s(整屏吸)`; }
             if (kind === 'rush' || kind === 'double') { f.rushMs = ms || 8000; return `无敌前冲 ${f.rushMs / 1000}s`; }
