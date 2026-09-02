@@ -5,7 +5,6 @@
 // 这个游戏是纯静态的(一个 index.html + 一堆 js/css/图),没有服务端逻辑,
 // 所以不需要 worker 脚本(不写 main),只需要一条 assets 绑定指向构建产物。
 {
-  "$schema": "node_modules/wrangler/config-schema.json",
   "name": "aou",
   "compatibility_date": "2025-09-01",
 
