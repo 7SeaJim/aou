@@ -87,6 +87,8 @@
       flex 子项默认不小于内容高度,overflow 根本不生效
 - [ ] **一份分辨率有三处要同步**(scene.js 的 VW/VH、三个 canvas 的 width/height、
       flight.js 的 W/H)。它们之间没有强制关系,全靠记得 —— 迟早还会漏
+- [x] ~~手机上双击会放大屏幕~~ —— `touch-action: manipulation` 写到 html/body 上
+      (整页生效,双指缩放照样留着)。顺带加 `text-size-adjust: 100%`
 - [ ] **还是得你在真机上再开一次。** 我只能模拟视口和「假装不支持 cqi」,
       模拟不了真实浏览器的内核差异
 

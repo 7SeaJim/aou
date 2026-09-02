@@ -23,9 +23,35 @@ html {
     /* 像素字体不做平滑,保持颗粒感 */
     -webkit-font-smoothing: none;
     font-smooth: never;
+
+    /**
+     * **整页禁掉「双击放大」。**
+     *
+     * 这是个一直在点的游戏 —— 拖食材、连点跃起、翻页,手指落得又快又近,
+     * 浏览器会把两下当成双击去放大。放大之后横屏又是锁死不能滚的
+     * (见 index.html 的 overflow: hidden),玩家就卡在一个放大的画面里出不来。
+     *
+     * `touch-action` **不是继承属性**,但浏览器判手势时取的是
+     * 「这一路祖先的交集」—— 所以写在 html 上就等于整页生效,
+     * 而底下那些写了 `none`(飞行画布)或 `auto`(占卜那张图)的地方
+     * 各自还是各自的。
+     *
+     * **不用 `user-scalable=no`。** 那条会把双指缩放也一起关掉 ——
+     * 看不清的人就没辙了;而且 iOS 从 10 开始就不认它。
+     * `manipulation` 只关双击,双指照样能放大。
+     */
+    touch-action: manipulation;
+
+    /* 横屏之后 iOS 会自作主张把字放大一档。像素字体一放大就不是整数倍了 */
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
 }
 
 body {
+    /* html 上那条靠「祖先交集」就能管到整页了(见上面的注释),
+       这儿再写一份是给 iOS 保险 —— 它有几个版本只认落在具体元素上的那条。
+       写两遍不冲突:交集还是 manipulation。 */
+    touch-action: manipulation;
     font-family: var(--font-pixel);
     font-size: 16px;
     line-height: 1.75;
