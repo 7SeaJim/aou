@@ -109,6 +109,13 @@ export class UI {
         this.$modalTitle = $('#modalTitle');
         this.$modalBody = $('#modalBody');
         this.$rails = ['#railLeft', '#railRight', '#railBottom'].map($);
+        this.$pager = $('#pager');
+        this.$console = $('#console');
+        this.$coach = $('#coach');
+        /** 当前在抽屉的第几页。**换一页内容才归零**,同一页重绘时保留 ——
+         *  摊子那一页每秒重绘一次,归零的话玩家翻到第二页就被弹回去 */
+        this._page = 0;
+        this._pageKey = '';
 
         for (const rail of this.$rails) {
             rail.addEventListener('click', e => {
@@ -146,6 +153,26 @@ export class UI {
             sfx.setVolume(Number(el.value) / 100);
             const tag = el.closest('.px-panel')?.querySelector('.px-tag');
             if (tag) tag.textContent = Math.round(sfx.getVolume() * 100) + '%';
+        });
+        // 翻页条和引导条都**在 #panel 外面**(一个在抽屉底、一个压在画面上),
+        // 走不到面板那个委托,得自己绑一条
+        for (const el of [this.$pager, this.$coach]) {
+            el.addEventListener('click', ev => {
+                const btn = ev.target.closest('[data-act]');
+                if (!btn) return;
+                sfx.play('click');
+                if (btn.dataset.act === 'pageprev') { this._page--; this.showPage(); }
+                else if (btn.dataset.act === 'pagenext') { this._page++; this.showPage(); }
+                else this.handle(btn.dataset.act, btn.dataset);
+            });
+        }
+        // 键盘左右键也翻 —— 桌面上比去点那两个小箭头顺手
+        window.addEventListener('keydown', ev => {
+            if (this.$pager.hidden || ev.target.matches('input, textarea')) return;
+            if (ev.key === 'ArrowLeft' && this._page > 0) { this._page--; this.showPage(); }
+            if (ev.key === 'ArrowRight' && this._page < (this._pages?.length ?? 1) - 1) {
+                this._page++; this.showPage();
+            }
         });
         // 面板内所有按钮走事件委托,重绘后不用重新绑定
         this.$panel.addEventListener('click', e => {
@@ -594,6 +621,9 @@ export class UI {
         this.advanceTutorial();
         this.renderHud();
         this.renderRails();
+        // **引导条要在分页之前量。** 它决定抽屉能有多高,
+        // 顺序反了的话第一次分页用的是上一次的高度
+        this.renderCoach();
 
         // 整页场景不走抽屉:画面铺满,操作条压在底下
         const full = FULL_SCENES.has(this.screen);
@@ -602,6 +632,7 @@ export class UI {
             this.$sceneBar.innerHTML = this.sceneBar();
             this.$drawer.hidden = true;
             this.$panel.innerHTML = '';
+            this.$pager.hidden = true;
             this.renderKitchen();
             this.renderModal();
             this.paintCanvases();
@@ -624,9 +655,13 @@ export class UI {
         }[this.screen];
 
         this.$drawer.hidden = !view;
-        if (!view) { this.$panel.innerHTML = ''; return; }
+        // 抽屉在矮屏上是压到画面顶的(见 pixel-ui.css),而状态条 z-index 比它高 ——
+        // 不收起来的话「背包」两个字正好被鸥币那个 chip 盖住
+        this.$console?.classList.toggle('is-drawer', !!view);
+        if (!view) { this.$panel.innerHTML = ''; this.$pager.hidden = true; return; }
         this.$drawerTitle.textContent = DRAWER_TITLE[this.screen] ?? '';
-        this.$panel.innerHTML = this.coachView() + view();
+        this.$panel.innerHTML = view();
+        this.paginate();
         this.paintCanvases();
     }
 
@@ -691,19 +726,132 @@ export class UI {
     }
 
     /** 引导条。走完了就什么都不画。 */
-    coachView() {
+    /**
+     * 新手引导。**画在画面上,不在抽屉里** —— 见 pixel-ui.css 的 .px-coach。
+     * 压成一行:序号 + 标题 + 一句话,读不完的那半句截断。
+     */
+    renderCoach() {
         const s = this.getState();
-        if (s.tutorial >= TUTORIAL.length) return '';
+        const on = s.tutorial < TUTORIAL.length;
+        this.$coach.hidden = !on;
+        // 引导条压在画面底下,正好是抽屉那条翻页器的位置(它 z-index 更高)——
+        // 开着引导的时候抽屉得往上让一条,不然翻页按钮点不着也看不见
+        this.$console?.classList.toggle('is-coach', on);
+        if (!on) { this.$console?.style.setProperty('--coach-h', '0px'); return; }
         const step = TUTORIAL[s.tutorial];
-        return `
-        <div class="px-coach">
-            <div class="px-coach__no">${s.tutorial + 1}/${TUTORIAL.length}</div>
-            <div style="flex:1">
-                <strong>${step.title}</strong>
-                <p>${step.text}</p>
-            </div>
-            <button class="px-btn px-btn--sm" data-act="skiptut">不用了</button>
-        </div>`;
+        this.$coach.innerHTML = `
+            <span class="px-coach__no">${s.tutorial + 1}/${TUTORIAL.length}</span>
+            <strong>${step.title}</strong>
+            <p>${step.text}</p>
+            <button class="px-btn px-btn--sm" data-act="skiptut">不用了</button>`;
+        // **让开的高度得量出来,不能写死。** 引导条的高随字号和断点变,
+        // 写死一个数迟早差几像素 —— 而差几像素的表现就是「翻页按钮点不着」
+        this.$console?.style.setProperty('--coach-h', `${this.$coach.offsetHeight + 5}px`);
+    }
+
+    /**
+     * 把抽屉里的内容切成一页一页。**一屏装不下就翻页,不上下滑。**
+     *
+     * 滑动的问题不是滑不动,是**看不见头也看不见尾** ——
+     * 玩家不知道自己在第几段、还有多少、刚才那块划过去了没有。
+     * 手机横过来抽屉只剩两百来高,一页能放的东西本来就少,
+     * 这种时候「2 / 3」比一条滚动条有用得多。
+     *
+     * 切法是**按顶层块贪心装箱**,不切开任何一块 ——
+     * 一张卡片被从中间截断比多翻一页难看得多。
+     * 单独一块比一页还高的(比如长表格),就让它自己占一页、内部可以滚。
+     */
+    /**
+     * 把抽屉里的内容切成一页一页。**一屏装不下就翻页,不上下滑。**
+     *
+     * 滑动的问题不是滑不动,是**看不见头也看不见尾** ——
+     * 玩家不知道自己在第几段、还有多少、刚才那块划过去了没有。
+     * 手机横过来抽屉只剩两百来高,这种时候「2 / 3」比一条滚动条有用得多。
+     *
+     * 装箱一边走一边拆:遇到装不下的网格,**就地按行切一刀** ——
+     * 能塞进这一页的那几行留下,剩下的自成一块接着排。
+     * 不切的话第一页会只剩一个瓶盖和一个「食材」标题,底下一大片空白,
+     * 而食材整块被顶到下一页 —— 那正是「弹窗显示很怪」的来源。
+     *
+     * 切的单位是**行**不是**格**:同一行的东西在网格里是并排的,
+     * 切到一半会让最后一行忽然变成一个孤零零的格子。
+     */
+    paginate() {
+        const body = this.$panel;
+        for (const el of body.children) el.hidden = false;
+        body.scrollTop = 0;
+        // **量高度之前先把翻页条摆出来。** 它是 flex 兄弟,一显示就从面板身上
+        // 拿走四十来像素 —— 按没有它的高度分页,每一页都会正好多出一点点
+        this.$pager.hidden = false;
+        const H = body.clientHeight;
+
+        const pages = [];
+        let cur = [], used = 0;
+        const nextPage = () => { if (cur.length) pages.push(cur); cur = []; used = 0; };
+
+        // 用下标走,因为切开之后会往队列里插新块
+        const kids = () => [...body.children];
+        for (let i = 0; i < kids().length; i++) {
+            const el = kids()[i];
+            const h = el.getBoundingClientRect().height;
+            if (h <= H - used) { cur.push(el); used += h; continue; }
+
+            const cut = this._cutGrid(el, H - used);
+            if (cut) { cur.push(el); used = H; continue; }   // 切下来的留在本页
+            nextPage();
+            cur.push(el);
+            used = h;
+        }
+        nextPage();
+        this._pages = pages;
+
+        // 换了一页内容才回到第一页。同一页重绘(摊子每秒一次)保留当前页
+        const key = this.screen + ':' + body.children.length;
+        if (key !== this._pageKey) { this._page = 0; this._pageKey = key; }
+        this._page = Math.max(0, Math.min(this._page, pages.length - 1));
+        this.showPage();
+    }
+
+    /**
+     * 把一个网格按行切开:前面能塞进 `room` 的那几行留在原块里,
+     * 剩下的搬进一个紧跟其后的同款新块。
+     * @returns {boolean} 切了没有(放不下一整行就不切,交给下一页)
+     */
+    _cutGrid(el, room) {
+        if (!el.classList.contains('px-grid')) return false;
+        const items = [...el.children];
+        if (items.length < 2) return false;
+
+        // 按 offsetTop 分行 —— 网格是 auto-fit 的,一行几个由宽度决定,数不出来
+        const rows = [];
+        let top = null;
+        for (const it of items) {
+            if (it.offsetTop !== top) { rows.push([]); top = it.offsetTop; }
+            rows[rows.length - 1].push(it);
+        }
+        if (rows.length < 2) return false;
+        const rowH = rows[1][0].offsetTop - rows[0][0].offsetTop;
+        const fit = Math.floor(room / rowH);
+        if (fit < 1 || fit >= rows.length) return false;
+
+        const rest = el.cloneNode(false);                 // 只复制壳,样式跟着来
+        el.after(rest);
+        for (const row of rows.slice(fit)) for (const it of row) rest.appendChild(it);
+        return true;
+    }
+
+    showPage() {
+        const pages = this._pages ?? [];
+        pages.forEach((page, i) => { for (const el of page) el.hidden = i !== this._page; });
+        this.$pager.hidden = pages.length <= 1;
+        if (pages.length > 1) {
+            this.$pager.querySelector('.px-pager__n').textContent =
+                `${this._page + 1} / ${pages.length}`;
+            this.$pager.querySelector('[data-act="pageprev"]').disabled = this._page <= 0;
+            this.$pager.querySelector('[data-act="pagenext"]').disabled =
+                this._page >= pages.length - 1;
+        }
+        this.$panel.scrollTop = 0;
     }
 
     /**
@@ -738,16 +886,13 @@ export class UI {
         // 原来这儿摞着出餐进度、客单价、哇鸥在哪三条 —— 那是按钮栏还是实心木头、
         // 底下空着一大片时候的填法。现在栏是透明的、压在画面上,
         // **多一行字就多糊住一块画**,而客单价是唯一一个「看一眼就影响下一步」的数。
-        const info = rules.stallInfo(s);
+        // **左边这条只剩四个按钮。**
+        // 底下原来挂着客单价 —— 它是「摊子现在卖多少钱」,属于摊子那一页;
+        // 挂在画面边上既看不清(手机上两行小字),也不是随时要瞄的东西。
         this.$rails[0].innerHTML = [
             ['dock', '大坝', 'map'], ['service', '出摊', 'shao_erkuai'],
             ['cook', '摊子', 'shop'], ['hut', '小屋', 'waou'],
-        ].map(btn).join('') + `
-        <div class="px-railfoot">
-            <div class="px-railstat">
-                ${icon('coin')}<small>×${info.priceMul.toFixed(2)}</small><small>客单价</small>
-            </div>
-        </div>`;
+        ].map(btn).join('');
 
         // 右边这条不再挂收集进度 —— 图鉴 / 明信片 / 成就那三条挪进「摊子」那一页
         this.$rails[1].innerHTML = [
@@ -1361,8 +1506,7 @@ export class UI {
                 ${icon('cap', 'lg')}
                 <div style="flex:1;min-width:0">
                     <strong>瓶盖</strong> <span class="px-tag">${s.caps}</span>
-                    <p class="px-muted">从成就来,只能买装扮 ——
-                       和鸥币分开,买帽子才不会跟升炉子抢钱</p>
+                    <p class="px-muted">从成就来,只买装扮</p>
                 </div>
                 <button class="px-btn px-btn--sm" data-screen="wear">去装扮</button>
             </div>`;
@@ -1392,12 +1536,14 @@ export class UI {
             </div>`;
         }).join('');
 
+        // 顺序:食材 → 道具 → 瓶盖。**你打开背包多半是来看食材的**,
+        // 让它占第一页;瓶盖只有一格,压在最后正好填满最后一页的边角
         return `
-        <div class="px-grid" style="--min:150px;margin-bottom:24px">${caps}</div>
         <p class="px-muted" style="margin-bottom:10px">食材</p>
-        <div class="px-grid" style="--min:150px;margin-bottom:24px">${foods}</div>
+        <div class="px-grid" style="--min:150px;margin-bottom:20px">${foods}</div>
         <p class="px-muted" style="margin-bottom:10px">道具 · 下次觅食自动使用</p>
-        <div class="px-grid" style="--min:190px">${items}</div>`;
+        <div class="px-grid" style="--min:190px;margin-bottom:20px">${items}</div>
+        <div class="px-grid" style="--min:150px">${caps}</div>`;
     }
 
     /**
@@ -1412,9 +1558,8 @@ export class UI {
         const off = sfx.isMuted();
         return `
         <h3 style="margin-bottom:6px">声音</h3>
-        <p class="px-muted" style="margin-bottom:14px;font-size:13px">
-            全部是即时合成的方波音,一个音频文件都不带 —— 所以它不吃流量,
-            但也确实有点扎耳朵,嫌吵就往下拉。</p>
+        <p class="px-muted" style="margin-bottom:12px;font-size:13px">
+            全是即时合成的方波音,不吃流量,但确实有点扎耳朵。</p>
 
         <div class="px-panel" style="padding:14px 16px;margin-bottom:12px">
             <p style="margin-bottom:10px">${icon('star', 'lg')} <strong>音效</strong>
@@ -1436,17 +1581,14 @@ export class UI {
         <div class="px-panel" style="padding:14px 16px;margin-bottom:24px">
             <p style="margin-bottom:10px">${icon('map', 'lg')} <strong>全屏</strong></p>
             <p class="px-muted" style="font-size:12.5px;line-height:1.7;margin-bottom:10px">
-                手机横过来,浏览器那条地址栏要吃掉三分之一的高度 ——
-                而这是个横屏游戏,<strong>高度每省 1 像素,画面就宽 2 像素</strong>。<br>
-                想彻底不要它:浏览器菜单里选「添加到主屏幕」,
-                从桌面图标进来就是一个全屏横屏的 app。</p>
+                地址栏在横屏下要吃掉三分之一的高度。
+                想彻底不要它:浏览器菜单里选<strong>「添加到主屏幕」</strong>。</p>
             <button class="px-btn px-btn--sm" data-act="fullscreen">进全屏</button>
         </div>
 
         <h3 style="margin-bottom:6px">这一份存档</h3>
-        <p class="px-muted" style="margin-bottom:14px;font-size:13px">
-            存在这台设备的浏览器里。<strong>换设备、清网站数据都会没</strong> ——
-            要留着就去存档那页导出一串码。</p>
+        <p class="px-muted" style="margin-bottom:12px;font-size:13px">
+            存在这台设备的浏览器里,<strong>清网站数据就没了</strong>。</p>
         <button class="px-btn px-btn--sm" data-screen="save">${icon('coin')} 去存档</button>`;
     }
 
@@ -1570,9 +1712,8 @@ export class UI {
                           >${icon('coin')} ${r.reward}</span>`
                      : `<span class="px-muted" style="font-size:12px;white-space:nowrap"
                           >Lv.${r.levelReq} 解锁</span>`}</p>
-                ${open ? `<div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:6px">${cost}</div>
-                <p class="px-muted" style="font-size:12px;line-height:1.6;margin:0">
-                    ${hand ? '摆到摊上自己卖,白天也能出摊亲手做(卖得更贵)' : '摆到摊上自己卖'}</p>` : ''}
+                ${open ? `<div style="display:flex;gap:5px;flex-wrap:wrap">${cost}
+                    ${hand ? '<span class="px-tag px-tag--gold">能亲手做</span>' : ''}</div>` : ''}
             </div>`;
         }).join('');
 
@@ -1580,7 +1721,7 @@ export class UI {
         <h3 style="margin-bottom:6px">食材图鉴
             <span class="px-muted" style="font-size:13px">${seen} / ${FOOD_KEYS.length}</span></h3>
         <p class="px-muted" style="margin-bottom:12px;font-size:13px">
-            记的是累计见过多少,用掉了也不会减。</p>
+            累计见过多少,用掉了不减。</p>
         <div class="px-grid" style="--min:190px;margin-bottom:26px">${rows}</div>
 
         <h3 style="margin-bottom:6px">菜谱
@@ -1641,10 +1782,13 @@ export class UI {
         }).join('');
 
         return `
-                <p class="px-muted" style="margin-bottom:18px">
-            摆上去的菜自己会卖 —— 买主是坝上溜达的野猫、麻雀和别的海鸥,
-            它们不挑,给什么吃什么,所以给的钱也少。你不在的时候也照卖,
-            不过没人看着,卖得慢些,货架也堆不下太多。<br>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px">
+            <span class="px-chip">${icon('coin')} 客单价 <strong>×${info.priceMul.toFixed(2)}</strong></span>
+            <span class="px-chip">${icon('shop')} 每份 <strong>${(info.serveMs / 1000).toFixed(1)}</strong> 秒</span>
+            <span class="px-chip">${icon('backpack')} 离线 <strong>${info.offlineCapMs / 3600000}</strong> 小时</span>
+        </div>
+        <p class="px-muted" style="margin-bottom:16px">
+            摆上去的菜自己会卖,你不在的时候也照卖(慢些)。
             <strong>想卖给真正的游客,白天去「出摊」亲手做。</strong></p>
         <div class="px-grid" style="--min:230px;margin-bottom:28px">${slots}</div>
 

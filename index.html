@@ -123,7 +123,12 @@
         @media (prefers-reduced-motion: reduce) {
             .rotate__phone { animation: none; transform: rotate(-90deg); }
         }
-        #panel { min-height: 320px; }
+        /* 这儿原来有一条 `#panel { min-height: 320px }` —— 上一版布局留的,
+           那时候抽屉是往下接的一长条,给个下限免得它空着太薄。
+           **它是这次「内容漏出抽屉」的真正原因**:pixel-ui.css 里给
+           .px-drawer__body 写的 `min-height: 0` 是类选择器,
+           被这条 id 选择器压得死死的,于是 overflow 永远不生效。
+           查了两轮才找到 —— 因为两边都写着 min-height,看着像是已经处理过了。 */
         /* 飞行覆盖层铺满舞台 */
         /* z-50:**要盖住那三条按钮栏**(z-40)。飞的时候按钮栏该整个消失,
            不然一屏上会有两套操作 —— 而且觅食那两个圆键就在同样的位置 */
@@ -392,6 +397,15 @@
                     <button class="px-btn px-btn--sm px-btn--coral" id="drawerClose">收起</button>
                 </div>
                 <div id="panel" class="px-drawer__body"></div>
+                <!-- 翻页。**一屏装不下就翻页,不上下滑** ——
+                     手机横过来抽屉只有两百来高,滑动的内容看不见头也看不见尾,
+                     玩家不知道自己在第几段、还有多少。分页至少把「还有几页」
+                     写在那儿。 -->
+                <div id="pager" class="px-pager" hidden>
+                    <button class="px-btn px-btn--sm" data-act="pageprev">‹ 上一页</button>
+                    <span class="px-pager__n"></span>
+                    <button class="px-btn px-btn--sm" data-act="pagenext">下一页 ›</button>
+                </div>
             </div>
 
             <!-- 出摊的厨房。**它是 DOM 不是画布** —— 核心动作是把食材拖到厨具上,
@@ -400,6 +414,12 @@
 
             <!-- 整页场景的操作条(小屋 / 出摊)。压在画面底下,不占画面外的地方 -->
             <div id="sceneBar" class="px-scenebar" hidden></div>
+
+            <!-- 新手引导。**压在画面上,不在抽屉里面** ——
+                 原来它是抽屉内容的第一块,一条四行的说明就吃掉抽屉一半的高度,
+                 而抽屉本来是用来看背包和摊子的。它是「贴在屏幕上的一张便签」,
+                 不是某一页的内容。 -->
+            <div id="coach" class="px-coach" hidden></div>
 
             <!-- 场景里的弹窗:占卜、下棋、请喝都在这儿开 -->
             <div id="modal" class="px-modal" hidden>

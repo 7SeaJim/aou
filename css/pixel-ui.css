@@ -678,17 +678,46 @@
 /* ============ 开场引导 ============ */
 /* 一条压在面板内容最上面的横幅。用海青底 + 白字,和面板的沙色拉开 ——
    引导必须一眼看出「这不是正常界面的一部分」,否则玩家会把它当装饰读过去。 */
+/**
+ * 新手引导:**贴在画面底下的一张便签,不是抽屉里的一块内容。**
+ *
+ * 原来它是 `#panel` 的第一个孩子 —— 一条四行的说明就吃掉抽屉一半的高度,
+ * 而抽屉本来是用来看背包和摊子的。手机横过来抽屉只剩两百来高,
+ * 于是「引导告诉你去点什么」和「你要点的那个东西」抢同一块地方。
+ *
+ * 压在画面上、贴着底下那条按钮栏的上沿:它指的东西就在下面一行,
+ * 而它自己只占一行。
+ */
 .px-coach {
+    position: absolute;
+    left: var(--rail-w); right: var(--rail-w);
+    bottom: var(--rail-h);
+    z-index: 35;
     display: flex;
     align-items: center;
-    gap: 14px;
-    padding: 12px 14px;
-    margin-bottom: 20px;
+    gap: 10px;
+    padding: 7px 10px;
     background: var(--sea-deep);
     color: var(--foam);
-    box-shadow: inset 0 0 0 3px var(--ink), inset 0 4px 0 var(--sea);
+    font-size: 13px;
+    box-shadow: inset 0 0 0 3px var(--ink), inset 0 3px 0 var(--sea);
 }
-.px-coach p { margin: 4px 0 0; font-size: 13px; line-height: 1.7; opacity: .92; }
+.px-coach[hidden] { display: none; }
+.px-console.is-coach { --coach-h: 34px; }
+@media (max-height: 620px) { .px-console.is-coach { --coach-h: 27px; } }
+.px-coach p {
+    margin: 0; font-size: 12.5px; line-height: 1.5; opacity: .92;
+    /* **一行装不下就截断。** 引导是提示不是说明书,读不完的那半句
+       多半也不影响照做 —— 而它多占一行,画面就少一行 */
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.px-coach strong { white-space: nowrap; }
+.px-coach .px-btn { flex: none; white-space: nowrap; }
+.px-coach__no { flex: none; padding: 3px 7px; background: var(--gold); color: var(--ink); }
+@media (max-height: 620px) {
+    .px-coach { padding: 5px 8px; gap: 7px; font-size: 11px; }
+    .px-coach p { font-size: 11px; }
+}
 .px-coach__no {
     flex: none;
     padding: 4px 8px;
@@ -1045,7 +1074,9 @@
      */
     top: calc(var(--rail-t) + 6px);
     right: calc(var(--rail-w) + 6px);
-    bottom: calc(var(--rail-h) + 6px);
+    /* --coach-h:新手引导那条的高度。它压在画面底下、z-index 比抽屉高,
+       不让开的话抽屉的翻页器正好被它盖住 —— 看不见也点不着 */
+    bottom: calc(var(--rail-h) + var(--coach-h, 0px) + 6px);
     width: min(58%, 760px);
     display: flex;
     flex-direction: column;
@@ -1099,9 +1130,26 @@
     .px-drawer {
         left: calc(var(--rail-w) + 6px);
         width: auto;
+        /**
+         * **上边直接压到画面顶,盖住那条状态。**
+         *
+         * 量过一次:横屏手机上抽屉正文只剩 121 像素 —— 一页放得下一个标题
+         * 加一行格子,背包要翻五页。而抽屉开着的时候,鸥币和经验条是看不看
+         * 都行的东西,底下那条按钮栏才是必须留着的(不然换不了页)。
+         * 省下来的三十几像素直接变成一页多放一行。
+         */
+        top: 4px;
+        bottom: calc(var(--rail-h) + var(--coach-h, 0px) + 2px);
     }
-    .px-drawer__bar { padding: 6px 10px; font-size: 14px; }
-    .px-drawer__body { padding: 10px 12px 14px; font-size: 13px; }
+    .px-drawer__bar { padding: 4px 10px; font-size: 13px; }
+    .px-drawer__body { padding: 8px 10px 10px; font-size: 12.5px; }
+    /* 格子也收窄:一行多放一个,总行数就少一行。
+       内联的 --min 是写在 style 属性上的,只能用 !important 压过去 */
+    .px-drawer .px-grid { --min: 108px !important; gap: 6px; }
+    .px-drawer .px-panel { padding: 8px 10px !important; }
+    /* 抽屉压到画面顶之后,状态条(z-40)会盖住抽屉(z-30)的标题。
+       抽屉开着的时候本来也不用看鸥币,收起来就是了 */
+    .px-console.is-drawer #hud { display: none; }
 }
 
 .px-drawer__body .px-btn { font-size: 16px; padding: 12px 20px; }
@@ -1109,6 +1157,32 @@
 .px-drawer__body h3 { font-size: 18px; }
 /* .px-drawer 设了 display:flex,会盖掉浏览器默认的 [hidden]{display:none} */
 .px-drawer[hidden] { display: none; }
+
+/* 翻页条。**一屏装不下就翻页,不上下滑。**
+   滑动的内容看不见头也看不见尾,玩家不知道自己在第几段、还有多少;
+   「2 / 3」至少把这件事说清楚了。 */
+.px-pager {
+    flex: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    padding: 5px;
+    /* 和抽屉顶上那条一样是木头色 —— **它得看得出是「条」不是内容**。
+       第一版用的沙色,和纸面几乎一样,整条翻页器隐形了 */
+    background: var(--wood);
+    color: var(--foam);
+    box-shadow: inset 0 3px 0 var(--ink);
+    font-family: var(--font-pixel);
+    font-size: 13px;
+    text-shadow: 1px 1px 0 var(--wood-d);
+}
+.px-pager[hidden] { display: none; }
+.px-pager .px-btn { min-width: 64px; }
+@media (max-height: 620px) {
+    .px-pager { padding: 3px; gap: 10px; font-size: 11px; }
+    .px-pager .px-btn { font-size: 11px; padding: 4px 8px; min-width: 0; }
+}
 
 /* ============ 整页场景 ============ */
 /* 小屋和出摊不走抽屉:它们本身就是一整个界面,塞进右边 56% 根本没法玩。
