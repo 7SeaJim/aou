@@ -89,8 +89,15 @@ const FLAP_VY = -5.4;
 const MAX_VY = 6.5;
 /** 平飞时把纵向速度按住的力度。不是直接归零 —— 那样切换起来像瞬移 */
 const GLIDE_K = 0.5;
-/** 能飞的上下边。上面撞天花板只是停住,下面碰水面要挨一下 */
-const SKY_TOP = 22;
+/**
+ * 能飞的上下边。上面撞天花板只是停住,下面碰水面要挨一下。
+ *
+ * 上边从 22 提到 44:**状态条压在画面最上面那一条**(分数、命、第几波、米数),
+ * 而原来食材和障碍就生在它底下 —— 玩家看见的是「一个东西从字后面钻出来」,
+ * 或者干脆没看见。哇鸥自己也能飞进去躲着。
+ * 让开这一条之后,那一带只剩状态条,**画面上会动的东西全在看得见的地方**。
+ */
+const SKY_TOP = 44;
 /**
  * 判「掉进湖里」的高度。
  *
@@ -169,6 +176,16 @@ const WAVE_MS = 20_000;
  * 密度上去之后如果不留道,就成了随机送死,那不叫难,叫不讲理。
  */
 const LANES = 5;
+/** 生成区的上下边。上面让开状态条,下面留出海面那一带 */
+const SPAWN_TOP = 46;
+const SPAWN_BOTTOM = HORIZON - 26;
+/**
+ * 哇鸥一秒能纵向挪多少像素(保守估计)。
+ * 拿来算「下一簇的空道最远可以离多远」—— 见 _hazard()。
+ * 拍翅膀连着按大约 2.7px/帧,松手掉到终速 6.5;取 150 是往低了算,
+ * **这个数宁可小,不能大** —— 大了就等于允许一次够不着的换道。
+ */
+const CLIMB_PX_PER_SEC = 150;
 /** 食材出现在哇鸥当下高度的上下这么多像素之内。约等于两下翅膀 */
 const REACH = 72;
 
@@ -308,6 +325,8 @@ export class Flight {
             denser: SPAWN_GROW * (1 + (lv - 1) * LV_GROW) * w.speed,
             hazard: Math.max(0.08, HAZARD_0 - rw.flag),   // 风向旗:障碍少一些
             flag: rw.flag,
+            // 上一簇障碍留的那条空道。下一簇只能开在它够得着的范围里
+            lastGap: null,
 
             hungryMs: HUNGRY_MS * (1 + rw.trough),  // 食槽:肚子撑得更久
             elapsed: 0,
@@ -673,8 +692,15 @@ export class Flight {
     _announceWall() {
         const f = this.f;
         if (f.warn || f.walls.length) return;      // 一片没过去不排下一片
-        const top = 30, span = HORIZON - 60;
-        const lane = Math.floor(this.rng() * LANES);
+        // **缝开在哪,也得是从上一簇的空道走得到的。** 预告有一秒半,
+        // 够走两三条道;但开在最远那一头,提前量再多也是白给
+        const top = SPAWN_TOP, span = SPAWN_BOTTOM - SPAWN_TOP;
+        const from = f.lastGap ?? Math.floor(this.rng() * LANES);
+        const jump = Math.max(1, Math.min(LANES - 1,
+            Math.floor(CLIMB_PX_PER_SEC * (CORRIDOR_WARN / 1000) / (span / LANES))));
+        const lo = Math.max(0, from - jump), hi = Math.min(LANES - 1, from + jump);
+        const lane = lo + Math.floor(this.rng() * (hi - lo + 1));
+        f.lastGap = lane;
         f.warn = { y: top + span * (lane + 0.5) / LANES, at: f.elapsed + CORRIDOR_WARN };
         sfx.play('event');
     }
@@ -725,7 +751,7 @@ export class Flight {
     _spawn() {
         const f = this.f;
         const rnd = this.rng;
-        const top = 30, span = HORIZON - 60;
+        const top = SPAWN_TOP, span = SPAWN_BOTTOM - SPAWN_TOP;
         /**
          * 食材出在哪个高度。**在够得着的范围里随机,而不是整片天随机。**
          *
@@ -752,18 +778,18 @@ export class Flight {
         const laneY = i => top + span * (i + 0.5) / LANES;
         const pick = a => a[Math.floor(rnd() * a.length)];
 
-        // 窄道在场上的时候不再撒障碍 —— 云已经把天占满了,
-        // 再塞东西就是在一条唯一的路上设伏。
-        // 缝里改放吃的:**按住平飞的那一秒同时也是在进食**,
-        // 这样它不只是一道关卡,还接上了第五分钟之后的肚子条
+        // 窄道在场上、**或者已经预告了**的时候,不再撒障碍。
+        //
+        // 只挡「在场上」是不够的:预告有一秒半,这一秒半里照常生成的那几个
+        // 障碍,等云推过来的时候正好和缝口叠在一起 ——
+        // **玩家一边要对准缝,一边要躲缝口上的东西,而缝只有一条。**
+        // 缝里改放吃的:按住平飞的那一秒同时也是在进食。
         const wall = this.f.walls[0];
-        if (wall) {
-            if (rnd() < 0.55) {
-                f.foods.push({ x: VW + 16, y: wall.gapY, type: pick(FOOD_TYPES) });
-            }
+        if (wall || this.f.warn) {
+            const gy = wall ? wall.gapY : this.f.warn.y;
+            if (rnd() < 0.55) f.foods.push({ x: VW + 16, y: gy, type: pick(FOOD_TYPES) });
             return;
         }
-
         const r = rnd();
 
         if (r < 0.05) {
@@ -794,10 +820,29 @@ export class Flight {
      * 满屏障碍没有缝,玩家学不到任何东西,只会觉得游戏在耍他。
      * 留的那条道随机,所以还是得看、得躲,只是保证躲得掉。
      */
+    /**
+     * 一簇障碍。**留出来的那条空道,必须是从上一簇的空道走得到的。**
+     *
+     * 原来每一簇各自 `Math.floor(rnd() * LANES)` 随机挑一条 —— 两簇之间
+     * 只隔一个生成间隔(后期 420 毫秒),而换一条道要 0.26 秒、换两条 0.5 秒。
+     * 于是迟早会出现「上一簇的口在最上面,下一簇的口在最下面」:
+     * **看得见、也知道该往哪走,就是来不及** —— 这就是「退无可退」。
+     *
+     * 现在按「这段时间哇鸥最多挪得动几条道」算出一个跨度,
+     * 新的空道只能落在上一条的这个范围里。间隔宽的时候(开局 860ms)
+     * 能跨三条,路线照样绕;间隔压到底线的时候只能跨一条,
+     * 但**那一条一定走得到**。
+     */
     _hazard(n, laneY, dx = 0) {
         const f = this.f, rnd = this.rng;
         const pick = a => a[Math.floor(rnd() * a.length)];
-        const gap = Math.floor(rnd() * LANES);
+        const laneH = (SPAWN_BOTTOM - SPAWN_TOP) / LANES;
+        const reach = CLIMB_PX_PER_SEC * (f.spawnInterval / 1000);
+        const jump = Math.max(1, Math.min(LANES - 1, Math.floor(reach / laneH)));
+        const from = f.lastGap ?? Math.floor(rnd() * LANES);
+        const lo = Math.max(0, from - jump), hi = Math.min(LANES - 1, from + jump);
+        const gap = lo + Math.floor(rnd() * (hi - lo + 1));
+        f.lastGap = gap;
         const lanes = [];
         for (let i = 0; i < LANES; i++) if (i !== gap) lanes.push(i);
         // 洗牌后取前 n 条 —— 直接随机取会重复,重复了等于少放一个

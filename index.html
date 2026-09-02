@@ -150,7 +150,27 @@
             display: flex; flex-wrap: wrap; align-items: center;
             gap: 6px; pointer-events: none;
         }
-        .fly-hud .px-chip { font-size: 13px; padding: 4px 9px; gap: 5px; }
+        /**
+         * 飞行时的状态条**不要实心底**。
+         *
+         * 大坝那条状态条是有底色的(读数需要一块安静的底,见 pixel-ui.css)——
+         * 但那是压在一张不动的画上。飞行这一场画面是**动的**,
+         * 一排深色方块横在天上,东西从它后面钻出来,玩家看见的时候已经晚了。
+         * 所以这一条反过来:去掉底色,靠描边读。
+         * (生成区也一并从这一条底下让开,见 flight.js 的 SPAWN_TOP。)
+         */
+        .fly-hud .px-chip {
+            font-size: 13px; padding: 2px 6px; gap: 5px;
+            background: none;
+            box-shadow: none;
+            color: var(--foam);
+            text-shadow:
+                -1px -1px 0 var(--ink),  0 -1px 0 var(--ink),  1px -1px 0 var(--ink),
+                -1px  0   0 var(--ink),                        1px  0   0 var(--ink),
+                -1px  1px 0 var(--ink),  0  1px 0 var(--ink),  1px  1px 0 var(--ink);
+        }
+        /* 暂停/收工保留底色 —— 它们是按钮,得看得出能点 */
+        .fly-ctrl .px-btn { text-shadow: none; }
         .fly-hud .px-icon { width: 13px; height: 13px; }
         .fly-ctrl {
             margin-left: auto;              /* 顶到最右,和 chip 挤不到一起 */
