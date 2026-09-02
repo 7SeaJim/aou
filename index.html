@@ -24,17 +24,27 @@
            (标题、状态条、内衬、底下那道厚边)占掉的高度。 */
         /* 状态条也压进画面之后,画面之外就只剩标题和内衬了 */
         :root { --chrome: 118px; }
-        /* **先写 vh 再写 dvh。** dvh 是新单位,老浏览器不认 ——
-           不认的话整条 --stage-max-w 作废,舞台的 width 跟着回落到 auto,
-           画面长过一屏、底下那条按钮栏要滚才看得到。
-           先给一条 vh 版兜底,支持 dvh 的浏览器再用后面那条覆盖。 */
+        /**
+         * **svh,不是 dvh,更不是 vh。**
+         *
+         * dvh 是「动态视口高度」—— 手机浏览器的地址栏一收一放它就变,
+         * 于是玩家上下一划,整个画面跟着放大缩小。那不是 bug,
+         * 是 dvh 的定义,只不过我们要的正好是反面。
+         * vh 在手机上等于「地址栏收起时」的高度,地址栏在的时候会溢出、
+         * 出滚动条 —— 一滚地址栏又收,又变。
+         * **svh 是「视口最小的时候有多高」** —— 地址栏在也好收了也好,
+         * 这个数不变,画面就不会动。
+         *
+         * 先写 vh 兜底(老浏览器三个新单位都不认),
+         * 再在 @supports 里换成 svh。
+         */
         .px-console { --stage-max-w: calc((100vh - var(--chrome) - 28px) * 1.4158 + 28px); }
         /* 待机界面铺满整屏,它的舞台也得被高度夹住 —— 不夹的话
            笔记本上万达双塔和「开始游戏」都会掉到屏幕外面去 */
         .title-screen { --stage-max-w: calc((100vh - 60px) * 1.4158 + 28px); }
-        @supports (height: 1dvh) {
-            .px-console { --stage-max-w: calc((100dvh - var(--chrome) - 28px) * 1.4158 + 28px); }
-            .title-screen { --stage-max-w: calc((100dvh - 60px) * 1.4158 + 28px); }
+        @supports (height: 1svh) {
+            .px-console { --stage-max-w: calc((100svh - var(--chrome) - 28px) * 1.4158 + 28px); }
+            .title-screen { --stage-max-w: calc((100svh - 60px) * 1.4158 + 28px); }
         }
 
         /* 窄屏 / 矮屏:标题和状态条都收一收,把高度全让给画面。
@@ -58,10 +68,13 @@
             .px-stage { padding: 6px; }
             /* 内衬变了,反解那条也得跟着变:6×2 = 12,不是 14×2 = 28 */
             .px-console { --stage-max-w: calc((100vh - var(--chrome) - 12px) * 1.4158 + 12px); }
+            /* 横屏时整页**不许滚**。没得滚,地址栏就不会收放,
+               画面也就不会跟着一惊一乍 —— 这是上面那条 svh 的另一半 */
+            html, body { height: 100%; overflow: hidden; overscroll-behavior: none; }
         }
-        @supports (height: 1dvh) {
+        @supports (height: 1svh) {
             @media (max-height: 560px) {
-                .px-console { --stage-max-w: calc((100dvh - var(--chrome) - 12px) * 1.4158 + 12px); }
+                .px-console { --stage-max-w: calc((100svh - var(--chrome) - 12px) * 1.4158 + 12px); }
             }
         }
 
@@ -117,13 +130,18 @@
         }
         /* 状态条让开右上角那两个小按钮,窄屏上自己换行 */
         .fly-hud {
-            position: absolute; top: 12px; left: 12px; right: 128px; z-index: 25;
-            display: flex; flex-wrap: wrap; gap: 8px; pointer-events: none;
+            position: absolute; top: 10px; left: 10px; right: 10px; z-index: 25;
+            display: flex; flex-wrap: wrap; align-items: center;
+            gap: 6px; pointer-events: none;
         }
+        .fly-hud .px-chip { font-size: 13px; padding: 4px 9px; gap: 5px; }
+        .fly-hud .px-icon { width: 13px; height: 13px; }
         .fly-ctrl {
-            position: absolute; top: 12px; right: 12px; z-index: 25;
-            display: flex; gap: 8px;
+            margin-left: auto;              /* 顶到最右,和 chip 挤不到一起 */
+            display: flex; gap: 6px;
+            pointer-events: auto;           /* 状态条是 none,这两个要能点 */
         }
+        .fly-ctrl .px-btn { font-size: 12px; padding: 6px 10px; }
         /* 两个键。**左边的键放画面左下,右边的键放右下** ——
            一个手一个,和键盘上空格在左、方向键在右是同一套位置关系。
            挤在同一边的话,一只手要横着够两个,而平飞是要一直按住的。
@@ -184,18 +202,46 @@
         .fly-key kbd { font: inherit; font-size: 13px; opacity: .6; }
         .fly-key b { font-weight: normal; font-size: 20px; }
         @media (max-width: 560px) {
-            .fly-key { --d: 80px; }        /* 80/16 = 5,里圈 64/16 = 4,都是整数 */
-            .fly-key kbd { font-size: 11px; }
-            .fly-key b { font-size: 16px; }
-            /* 窄屏上画面只有两百多像素高,五个状态条按原尺寸要占三行 ——
-               **状态条吃掉的是能飞的地方**。收紧到两行 */
-            .fly-hud { right: 116px; gap: 5px; }
-            .fly-hud .px-chip { padding: 3px 7px; font-size: 12px; gap: 5px; }
-            .fly-hud .px-icon { width: 12px; height: 12px; }
-            /* 右上角那两个也收一收 —— 状态条让开的那一截就是按它们算的,
-               它们不收,最后一个 chip 就会钻到「暂停」底下 */
-            .fly-ctrl { gap: 6px; }
-            .fly-ctrl .px-btn { padding: 5px 8px; font-size: 12px; }
+            .fly-key { --d: 64px; }
+            .fly-key kbd { font-size: 10px; }
+            .fly-key b { font-size: 13px; }
+            .fly-hud .px-chip { padding: 3px 7px; font-size: 11px; gap: 4px; }
+            .fly-hud .px-icon { width: 11px; height: 11px; }
+            .fly-ctrl .px-btn { padding: 5px 8px; font-size: 11px; }
+        }
+        /**
+         * 手机横过来是「宽而矮」—— **只判宽度的话这一档永远不会触发**。
+         * 视口八百多宽,而画面被高度夹住之后只有四百来宽,
+         * 96px 的圆键在上面就是两块大饼,把能飞的地方盖掉一大片。
+         * (真机截图里就是这样。和前面栏那次是同一个毛病:
+         *  视口的宽度不等于画面的宽度。)
+         */
+        @media (max-height: 620px) {
+            .fly-key { --d: 64px; }
+            .fly-key kbd { font-size: 10px; }
+            .fly-key b { font-size: 13px; }
+            .fly-hud { top: 6px; left: 6px; right: 6px; gap: 4px; }
+            .fly-hud .px-chip { padding: 3px 6px; font-size: 11px; gap: 4px; }
+            .fly-hud .px-icon { width: 11px; height: 11px; }
+            .fly-ctrl .px-btn { padding: 4px 7px; font-size: 11px; }
+        }
+        /**
+         * 支持容器查询就按**画面自己的宽度**分档 —— 这才是真正想问的那个数。
+         * 直径只在 {48, 64, 80, 96} 里挑:配上 8px 的圈,里外都是 16 的整数倍,
+         * 阶梯轮廓才不会被抹一圈灰(见上面 --d 那条注释)。
+         */
+        @supports (width: 1cqi) {
+            @container (max-width: 900px) { .fly-key { --d: 80px; } }
+            @container (max-width: 660px) {
+                .fly-key { --d: 64px; }
+                .fly-key kbd { font-size: 10px; }
+                .fly-key b { font-size: 13px; }
+            }
+            @container (max-width: 480px) {
+                .fly-key { --d: 48px; --ring: 8px; }
+                .fly-key kbd { display: none; }
+                .fly-key b { font-size: 12px; }
+            }
         }
         /* 开局那三秒的数字。压在画面正中,不吃点击 —— 这三秒里
            两个键是通的,数字挡住按钮就白给了 */
@@ -207,7 +253,7 @@
             text-shadow: 4px 4px 0 rgba(36, 26, 19, .85);
             pointer-events: none;
         }
-        @media (max-width: 560px) { .fly-count { font-size: 60px; } }
+        @media (max-width: 560px), (max-height: 620px) { .fly-count { font-size: 56px; } }
 
         /* 待机界面 */
         .title-screen {
@@ -309,13 +355,18 @@
                           style="color:var(--coral)">
                         <i class="px-icon px-icon--erkuai"></i> 饿了!快吃
                     </span>
+                    <!-- 暂停/收工**放在同一行里**,不是另开一个绝对定位的角。
+                         原来它们各占一个角,状态条靠 `right: 128px` 手动躲开 ——
+                         而那个 128 是照桌面量的,手机上按钮和 chip 都是另一个尺寸,
+                         「第 1 波」就钻到「暂停」底下去了。
+                         同一行 + margin-left:auto,**它们从结构上就不可能重叠**。 -->
+                    <div class="fly-ctrl">
+                        <button class="px-btn px-btn--sm" id="flyPause">⏸ 暂停</button>
+                        <button class="px-btn px-btn--sm px-btn--coral" id="flyQuit">收工</button>
+                    </div>
                 </div>
                 <button class="fly-key fly-key--l" id="flyFlap"><kbd>空格</kbd><b>跃起</b></button>
                 <button class="fly-key fly-key--r" id="flyGlide"><kbd>→</kbd><b>平飞</b></button>
-                <div class="fly-ctrl">
-                    <button class="px-btn px-btn--sm" id="flyPause">⏸ 暂停</button>
-                    <button class="px-btn px-btn--sm px-btn--coral" id="flyQuit">收工</button>
-                </div>
                 <div class="fly-count" id="flyCount" hidden></div>
                 <div class="px-mask" id="pauseMask">
                     <h2>暂停</h2>

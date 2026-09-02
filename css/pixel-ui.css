@@ -1149,6 +1149,26 @@
  * 新写的哪儿不对一眼看得见,旧的那块是从背后生效的。
  */
 
+/**
+ * 矮屏(手机横过来)上,出摊整套 UI 收一档。
+ *
+ * 真机上是这样的:右边那块食谱面板写死 200px —— 而画面只有四百来宽,
+ * 它一个人占掉一半;底下「卖出 / 出餐台 / 后厨 / 收摊」四个按钮按桌面尺寸排,
+ * 高得盖住半个案子。**结果是操作界面把要操作的东西挡住了。**
+ *
+ * 和前面那几次是同一个毛病:**尺寸写的是像素,而画面的大小是变的。**
+ */
+@media (max-height: 620px) {
+    .px-kside { width: min(150px, 32%); font-size: 11px; gap: 4px; }
+    .px-kside .px-btn, .px-kside .px-recipebtn { font-size: 11px; padding: 5px 7px; }
+    .px-scenebar { padding: 5px; gap: 5px; }
+    .px-scenebar .px-btn { font-size: 12px; padding: 6px 10px; }
+    .px-scenebar .px-chip { font-size: 11px; padding: 4px 8px; }
+    .px-station__tag { font-size: 10px; }
+    /* 操作条矮了,右边那块也跟着少让一点 */
+    .px-kside { bottom: 38px; }
+}
+
 /* ============ 出摊的厨房 ============ */
 /* 布局照着老爹快餐店那一路压成一屏:
    上是订单(画在 canvas 上)、中是砧板/煎盘/灶台、左下是烤箱、右是食谱。
@@ -1190,7 +1210,7 @@
 .px-kside {
     position: absolute;
     top: 0; right: 0; bottom: 48px;   /* 48 = 底下那条操作条,插到底会被它压住 */
-    width: 200px;
+    width: min(200px, 30%);           /* 手机上 200px 是画面的一半 —— 见下面那条 */
     display: flex;
     flex-direction: column;
     gap: 6px;
