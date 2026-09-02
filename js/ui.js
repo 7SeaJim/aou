@@ -793,6 +793,15 @@ export class UI {
         const kids = () => [...body.children];
         for (let i = 0; i < kids().length; i++) {
             const el = kids()[i];
+            // **小标题一律另起一页。** 一页 = 一件事。
+            //
+            // 不这么定的话,贪心装箱迟早会出现「一整页只写着『升级』」——
+            // 上一页正好还剩二十像素,标题塞得进去,它底下那四张卡塞不进去。
+            // 而且按标题分页之后,「3 / 8」这个数对玩家是有意义的:
+            // 摊子这一页本来就是八件事(摊位、市场、升级、后厨、餐盘、
+            // 收集进度、跑道、伙计),翻到第几页就是在看第几件。
+            if (el.tagName === 'H3' && cur.length) nextPage();
+
             const h = el.getBoundingClientRect().height;
             if (h <= H - used) { cur.push(el); used += h; continue; }
 

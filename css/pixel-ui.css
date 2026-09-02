@@ -1128,7 +1128,17 @@
  */
 @media (max-height: 560px) {
     .px-drawer {
-        left: calc(var(--rail-w) + 6px);
+        /**
+         * **点开一页就铺满大半个屏幕。**
+         *
+         * 原来它只是「让开四条栏」—— 结果在手机上正文只剩一百多像素,
+         * 摊子那一页要翻十一页,「升级」两个字还独占一页。那不叫分页,
+         * 那叫把一页内容剁碎。
+         * 现在贴着机身四边(引导条那一条除外),左右两条竖栏被盖住 ——
+         * 反正右上角就有「收起」,出得去。**够大才谈得上分页。**
+         */
+        left: 4px;
+        right: 4px;
         width: auto;
         /**
          * **上边直接压到画面顶,盖住那条状态。**
@@ -1139,14 +1149,32 @@
          * 省下来的三十几像素直接变成一页多放一行。
          */
         top: 4px;
-        bottom: calc(var(--rail-h) + var(--coach-h, 0px) + 2px);
+        bottom: calc(var(--coach-h, 0px) + 4px);
     }
-    .px-drawer__bar { padding: 4px 10px; font-size: 13px; }
+    /* 抽屉盖住了三条栏,让它们也别再画上来抢点击 */
+    .px-console.is-drawer .px-rail--v,
+    .px-console.is-drawer #railBottom { display: none; }
+    /* 抽屉自己的头尾也要省。矮屏上正文只有一百九十来像素,
+       标题条和翻页条每收 6px,正文就多 6px —— 而一行卡片是 86px */
+    .px-drawer__bar { padding: 3px 10px; font-size: 13px; }
     .px-drawer__body { padding: 8px 10px 10px; font-size: 12.5px; }
-    /* 格子也收窄:一行多放一个,总行数就少一行。
-       内联的 --min 是写在 style 属性上的,只能用 !important 压过去 */
-    .px-drawer .px-grid { --min: 108px !important; gap: 6px; }
+    /**
+     * 格子只收间距和内衬,**不再强压 --min**。
+     *
+     * 试过一版把 --min 压到 108px,想着「一行多放一个,总行数就少一行」——
+     * 结果反了:升级那几张卡里是成句的说明,格子一窄字就换行,
+     * **卡片变矮不成反而更高**。抽屉现在铺满大半个屏幕,原来那些 --min
+     * (食材 150、升级 190)本来就排得下四列。
+     *
+     * 窄=省地方,只对一行能写完的东西成立。
+     */
+    /* 段与段之间的空白也收:内联写的是 margin-bottom:26~28px,
+       那是桌面上一屏能滚很长时候的排版。矮屏上**每省 18px 就可能少翻一页** */
+    .px-drawer .px-grid { gap: 6px; margin-bottom: 10px !important; }
+    .px-drawer h3 { margin-bottom: 6px !important; }
+    .px-drawer > .px-drawer__body > p { margin-bottom: 8px !important; }
     .px-drawer .px-panel { padding: 8px 10px !important; }
+    .px-drawer .px-panel p { line-height: 1.5; }
     /* 抽屉压到画面顶之后,状态条(z-40)会盖住抽屉(z-30)的标题。
        抽屉开着的时候本来也不用看鸥币,收起来就是了 */
     .px-console.is-drawer #hud { display: none; }
@@ -1180,8 +1208,10 @@
 .px-pager[hidden] { display: none; }
 .px-pager .px-btn { min-width: 64px; }
 @media (max-height: 620px) {
-    .px-pager { padding: 3px; gap: 10px; font-size: 11px; }
-    .px-pager .px-btn { font-size: 11px; padding: 4px 8px; min-width: 0; }
+    .px-pager { padding: 2px; gap: 10px; font-size: 11px; }
+    .px-pager .px-btn { font-size: 11px; padding: 3px 8px; min-width: 0; box-shadow:
+        -3px 0 0 var(--ink), 3px 0 0 var(--ink), 0 -3px 0 var(--ink), 0 3px 0 var(--ink),
+        inset 0 3px 0 var(--gold-l), inset 0 -3px 0 var(--gold-d); }
 }
 
 /* ============ 整页场景 ============ */
