@@ -353,6 +353,25 @@ node tools/sim.mjs --csv                    # 输出 CSV 拿去画图
 **改了数值就跑一遍。** 一个放置游戏的问题都在第十天、第三十天那儿,
 而没人会为了调数值真玩一个月。当前跑出来的结论记在 `DESIGN.md` 的「数值体检」。
 
+## 部署
+
+Cloudflare Workers,配置在 `wrangler.jsonc`。
+
+    构建命令      npm run build
+    输出目录      dist
+    伺服方式      assets 绑定,没有 worker 脚本(纯静态,不需要服务端)
+
+**面板上「Bindings 0 · No workers bound」就是没配这个的样子** ——
+worker 建起来了,但没人告诉它要伺服什么,打开是空的。
+
+两个坑:
+
+- **`not_found_handling` 不要用 `single-page-application`。** 这个游戏没有前端
+  路由,所有东西都在 `/` 这一页。设成 SPA 的话,`/随便什么错路径` 也会返回
+  index.html 并且是 200 —— 打错一个字看到的是完整的游戏,而不是「没这个页面」。
+- **构建机不装 fontTools。** 所以 `font.py --check` 改成读 `waou-pixel.chars.json`,
+  不再依赖它(见 `tools/README.md`)。
+
 ## 调试玩法
 
 每天 5 次觅食、等级靠攒经验、天气 5 分钟随机换一次 —— 这些是给玩家的节奏,
