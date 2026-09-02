@@ -24,12 +24,18 @@
            (标题、状态条、内衬、底下那道厚边)占掉的高度。 */
         /* 状态条也压进画面之后,画面之外就只剩标题和内衬了 */
         :root { --chrome: 118px; }
-        .px-console {
-            --stage-max-w: calc((100dvh - var(--chrome) - 28px) * 1.4158 + 28px);
-        }
+        /* **先写 vh 再写 dvh。** dvh 是新单位,老浏览器不认 ——
+           不认的话整条 --stage-max-w 作废,舞台的 width 跟着回落到 auto,
+           画面长过一屏、底下那条按钮栏要滚才看得到。
+           先给一条 vh 版兜底,支持 dvh 的浏览器再用后面那条覆盖。 */
+        .px-console { --stage-max-w: calc((100vh - var(--chrome) - 28px) * 1.4158 + 28px); }
         /* 待机界面铺满整屏,它的舞台也得被高度夹住 —— 不夹的话
            笔记本上万达双塔和「开始游戏」都会掉到屏幕外面去 */
-        .title-screen { --stage-max-w: calc((100dvh - 60px) * 1.4158 + 28px); }
+        .title-screen { --stage-max-w: calc((100vh - 60px) * 1.4158 + 28px); }
+        @supports (height: 1dvh) {
+            .px-console { --stage-max-w: calc((100dvh - var(--chrome) - 28px) * 1.4158 + 28px); }
+            .title-screen { --stage-max-w: calc((100dvh - 60px) * 1.4158 + 28px); }
+        }
 
         /* 窄屏 / 矮屏:标题和状态条都收一收,把高度全让给画面。
            画面本身不用管 —— 真机 DPR 2~3 下 1320 的位图落在 780~2550 个
@@ -41,10 +47,22 @@
         }
         /* 手机横过来之后视口就剩三四百高。**标题让位** ——
            它每局只读一次,而画面是一直在看的 */
+        /* 手机横过来之后视口只剩两三百高,而画面是 1.42:1 的 ——
+           高度每省下 1px,宽度就能多出 1.42px。所以这一档把画面之外的东西
+           压到最少:标题不要、内衬收到 6px、页面留白收到 4px。 */
         @media (max-height: 560px) {
-            :root { --chrome: 30px; }
-            body { padding: 4px 4px 6px; }
+            :root { --chrome: 16px; }
+            body { padding: 3px 3px 4px; }
             .title { display: none; }
+            .px-console { margin-bottom: 0; }
+            .px-stage { padding: 6px; }
+            /* 内衬变了,反解那条也得跟着变:6×2 = 12,不是 14×2 = 28 */
+            .px-console { --stage-max-w: calc((100vh - var(--chrome) - 12px) * 1.4158 + 12px); }
+        }
+        @supports (height: 1dvh) {
+            @media (max-height: 560px) {
+                .px-console { --stage-max-w: calc((100dvh - var(--chrome) - 12px) * 1.4158 + 12px); }
+            }
         }
 
         /* ---------- 竖屏:请把手机横过来 ----------

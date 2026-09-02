@@ -452,10 +452,7 @@
 /* 舞台内的屏幕:canvas / 界面都放这里 */
 .px-screen {
     position: relative;
-    /* 四条栏的粗细、字号都按**画面本身**的宽度算,不按视口 ——
-       画面被视口高度夹住的时候,它可能只有视口的一半宽,
-       按视口算的话栏会大得离谱,一边一条就吃掉四成 */
-    container-type: inline-size;
+    /* container-type 在下面的 @supports 里给 —— 见那儿的注释 */
     /* 888 / 628 而不是 880 / 620 —— box-sizing 是 border-box,
        aspect-ratio 算的是**含边框**的盒子。写 880/620 的话内容区会变成
        1320×928,整块画面竖着被压掉两行:横向是整数倍、纵向不是,
@@ -800,14 +797,22 @@
 }
 .px-console > .px-stage { margin-inline: auto; }
 
-/* 四条栏的厚度。抽屉、厨房、场景条都按它往里让,免得被按钮压住。
-   cqi = 画面自己的宽度的百分之一。**下限 44px 是手指的下限**,
-   上限 78 是「再宽也没用」—— 图标就那么大。 */
+/**
+ * 四条栏的厚度。抽屉、厨房、场景条都按它往里让,免得被按钮压住。
+ *
+ * **这一套必须是所有浏览器都认的 px。** 底下 @supports 里才换成 cqi ——
+ * 自定义属性在**解析**时什么都收,只有真的代入 `width:` 的那一刻才发现
+ * `cqi` 不认识,那时候整条声明作废、回落到 auto。
+ * 于是四条栏一起塌到左上角、抽屉飘到画面正中 —— 而 CSS 里一个报错都没有。
+ * (真机上踩过:某国产浏览器的 Chromium 内核不支持容器查询。)
+ */
 :root {
-    --rail-w: clamp(44px, 5.8cqi, 78px);    /* 左右两条的宽 */
-    --rail-h: clamp(42px, 4.8cqi, 64px);    /* 底下那条的高 */
-    --rail-t: clamp(32px, 3.6cqi, 46px);    /* 上面那条状态的高(chip 要放得下) */
+    --rail-w: 56px;
+    --rail-h: 48px;
+    --rail-t: 34px;
 }
+@media (min-width: 900px) { :root { --rail-w: 70px; --rail-h: 58px; --rail-t: 42px; } }
+@media (max-width: 560px) { :root { --rail-w: 46px; --rail-h: 42px; --rail-t: 32px; } }
 
 .px-rail {
     position: absolute;
@@ -836,7 +841,11 @@
     align-items: center;
     padding: 4px 0;
     gap: 1px;
+    /* 再矮也不许把按钮压扁 —— 压扁的按钮点不中,而且图标会糊。
+       实在摞不下就让它溢出到画面外,总比四个都点不中强 */
+    overflow: visible;
 }
+.px-rail--v > .px-railbtn { flex: none; }
 
 /* ---- 最上面那条:钱 / 天 / 等级 / 经验 ----
    **这一条和底下三条不一样:chip 和经验条保留自己的边框和底色。**
@@ -848,7 +857,7 @@
     top: 0; left: 0; right: 0;
     height: var(--rail-t);
     align-items: center;
-    gap: clamp(5px, .9cqi, 12px);
+    gap: 8px;
     padding: 0 8px;
     /* chip 自己有底色,不需要描边;留着反而会在字外面糊一圈 */
     text-shadow: none;
@@ -856,9 +865,9 @@
 /* 画面窄的时候整条按比例缩 —— 手机横过来只有五百来宽,
    原尺寸的 chip 四个就顶到经验条了 */
 .px-rail--t .px-chip {
-    font-size: clamp(11px, 1.15cqi, 15px);
-    padding: clamp(3px, .45cqi, 6px) clamp(6px, 1cqi, 14px);
-    gap: clamp(4px, .6cqi, 8px);
+    font-size: 13px;
+    padding: 4px 9px;
+    gap: 6px;
     white-space: nowrap;
     /* **不许被压扁。** flex 默认会挤,而 chip 里是 nowrap 的字 ——
        挤的结果不是变窄,是字从框里溢出去压到下一个 chip 上。
@@ -866,18 +875,18 @@
     flex-shrink: 0;
 }
 /* 窄画面上把单位字去掉:图标已经说了是钱,而九位数的鸥币能把整条顶穿 */
-@container (max-width: 620px) {
+@media (max-width: 760px), (max-height: 620px) {
     .px-rail--t .px-unit { display: none; }
     .px-rail--t { padding: 0 5px; }
 }
-.px-rail--t .px-icon { width: clamp(12px, 1.3cqi, 16px); height: clamp(12px, 1.3cqi, 16px); }
+.px-rail--t .px-icon { width: 14px; height: 14px; }
 .px-rail--t .px-bar {
     flex: 1;
     min-width: 60px;
-    max-width: clamp(110px, 26cqi, 340px);
-    height: clamp(16px, 1.9cqi, 24px);
+    max-width: 240px;
+    height: 20px;
 }
-.px-rail--t .px-bar__label { font-size: clamp(9px, .95cqi, 13px); }
+.px-rail--t .px-bar__label { font-size: 11px; }
 
 #railLeft   { left: 0; }
 #railRight  { right: 0; }
@@ -913,7 +922,7 @@
     font-family: var(--font-pixel);
     /* 像素字体没有抗锯齿,小字号在手机上直接糊成一团 ——
        这一栏是给人瞄一眼的,瞄不清就等于没有。 */
-    font-size: clamp(11px, 1.2cqi, 15px);
+    font-size: 13px;
     line-height: 1.3;
     text-align: center;
 }
@@ -927,7 +936,7 @@
     width: 68px;
     padding: 6px 2px 5px;
     font-family: var(--font-pixel);
-    font-size: clamp(11px, 1.3cqi, 16px);
+    font-size: 13px;
     line-height: 1.25;
     color: inherit;
     /* **必须显式写一遍。** text-shadow 是继承属性,但 <button> 在浏览器
@@ -968,7 +977,22 @@
  * 字要跟着缩到 9px —— 而像素字体没有抗锯齿,9px 就是一团。
  * **认不出的字不如不画**,图标本来就是给这个尺寸准备的。
  */
-@container (max-width: 620px) {
+/**
+ * 画面窄的时候**只留图标,不留字**。
+ *
+ * 手机横过来也就四五百像素宽,一边一条 44px 的栏已经是手指的下限;
+ * 字要跟着缩到 9px —— 而像素字体没有抗锯齿,9px 就是一团。
+ * **认不出的字不如不画**,图标本来就是给这个尺寸准备的。
+ *
+ * 用视口断点写(不是容器查询),因为这一条**必须所有浏览器都吃**。
+ * 支持容器查询的浏览器下面还会再按画面自己的宽度判一次,两条效果一样,
+ * 重复生效没有副作用。
+ *
+ * **矮也要算。** 手机横过来是「宽而矮」—— 只判宽度的话它不触发,
+ * 而画面被高度夹住之后只有四百来宽,竖栏里四个带字的按钮根本摞不下,
+ * 最后一个会被挤到画面外面去。
+ */
+@media (max-width: 760px), (max-height: 620px) {
     .px-railbtn > span { display: none; }
     /* width:100% 只给竖着那两条 —— 底下那条是横排,
        给 100% 的话第一个按钮就把整条撑开了 */
@@ -1012,39 +1036,53 @@
     display: flex;
     flex-direction: column;
     background: var(--sand);
+    z-index: 30;
     /* 四面都描边 + 一道投影。贴着边的时候只描左边就够,浮起来之后不够 */
     box-shadow:
         0 0 0 4px var(--ink),
         8px 8px 0 rgba(36, 26, 19, .35);
-    /* 里面的字号跟着抽屉自己的宽度走 —— 画面大了之后
-       13px 的按钮在一千二百宽的屏上小得像脚注 */
-    container-type: inline-size;
+
 }
 .px-drawer__bar {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 12px;
-    padding: clamp(8px, 1.6cqi, 14px) clamp(10px, 2cqi, 18px);
+    padding: 10px 14px;
     background: var(--wood);
     box-shadow: inset 0 -3px 0 var(--ink);
-    font-size: clamp(15px, 2.6cqi, 20px);
+    font-size: 17px;
 }
 .px-drawer__body {
     flex: 1;
     overflow-y: auto;
-    padding: clamp(12px, 2.4cqi, 22px) clamp(12px, 2.4cqi, 22px) clamp(18px, 3cqi, 28px);
-    font-size: clamp(14px, 2.1cqi, 17px);
+    padding: 16px 16px 22px;
+    font-size: 15px;
 }
 /**
  * 抽屉里的按钮跟着放大。**空间富余的时候小按钮不是克制,是浪费** ——
  * 一块七百宽的板子上摆一堆 13px 的按钮,手指按不准、眼睛也得凑近。
  */
-.px-drawer__body .px-btn { font-size: clamp(14px, 2.1cqi, 18px); padding: clamp(10px, 1.8cqi, 15px) clamp(16px, 2.8cqi, 26px); }
-.px-drawer__body .px-btn--sm { font-size: clamp(13px, 1.9cqi, 16px); padding: clamp(8px, 1.5cqi, 12px) clamp(12px, 2.2cqi, 20px); }
-.px-drawer__body h3 { font-size: clamp(16px, 2.6cqi, 21px); }
-.px-drawer__body .px-icon { width: clamp(16px, 2.4cqi, 20px); height: clamp(16px, 2.4cqi, 20px); }
-.px-drawer__body .px-icon--lg { width: clamp(24px, 3.6cqi, 32px); height: clamp(24px, 3.6cqi, 32px); }
+/**
+ * 矮屏(手机横过来)上抽屉**撑满两条竖栏之间**。
+ *
+ * 竖着只剩两百来像素,再留 58% 的宽,内容就得挤成一列细条,
+ * 一屏放不下三行字。横向本来就是这个姿势里富余的那一维 ——
+ * **该省的是高度,不是宽度。**
+ * 左边那条竖栏照样露着,换页不受影响;真要看画面,「收起」就在右上角。
+ */
+@media (max-height: 560px) {
+    .px-drawer {
+        left: calc(var(--rail-w) + 6px);
+        width: auto;
+    }
+    .px-drawer__bar { padding: 6px 10px; font-size: 14px; }
+    .px-drawer__body { padding: 10px 12px 14px; font-size: 13px; }
+}
+
+.px-drawer__body .px-btn { font-size: 16px; padding: 12px 20px; }
+.px-drawer__body .px-btn--sm { font-size: 14px; padding: 10px 16px; }
+.px-drawer__body h3 { font-size: 18px; }
 /* .px-drawer 设了 display:flex,会盖掉浏览器默认的 [hidden]{display:none} */
 .px-drawer[hidden] { display: none; }
 
@@ -1096,29 +1134,20 @@
 .px-modal__body { flex: 1; overflow-y: auto; padding: 14px; }
 
 /* ============ 机身:窄屏 ============ */
-@media (max-width: 1059px) {
-    /* 塞不下左右两条竖排就全挪到画面下面横着摆。
-       1059 这个断点 = 画面 916 + 两条按钮和缝 —— 再窄一格,竖排就要从画面
-       身上抢宽度,canvas 掉出整数倍缩放。 */
-    .px-console {
-        grid-template-columns: minmax(0, 1fr);
-        grid-template-areas: "stage" "left" "right" "bottom";
-    }
-    .px-rail--v {
-        flex-direction: row;
-        flex-wrap: wrap;
-        justify-content: center;
-        margin: 0 14px;
-        padding: 5px 6px;
-    }
-    #railLeft  { margin-right: 14px; margin-top: -4px; }
-    #railRight { margin-left: 14px; }
-    #railBottom { margin-top: 0; }
-    .px-railbtn { width: 54px; font-size: 11px; }
-    /* 抽屉改成从下面拉上来。盖到 46% —— 再往上就只剩天空了,
-       那算不上「看得见码头」;46% 这条线正好还留着西山、湖面和远处那段堤。 */
-    .px-drawer { top: 46%; left: 0; width: auto; box-shadow: 0 -4px 0 var(--ink); }
-}
+/* **这儿原来有一整块 `@media (max-width: 1059px)`,已经删掉。**
+ *
+ * 它是上一版布局的:那时候三条按钮栏占位置,窄屏塞不下就把左右两条
+ * 拆成横排摆到画面下面,抽屉也改成从底下拉上来(`top: 46%`)。
+ *
+ * 按钮栏搬到画面上之后这些全成了反作用 —— 而且 1059 这个断点
+ * **把每一台手机和大半笔记本都盖住了**:竖栏被强行改成横排、
+ * 抽屉被钉在 46% 高度上。真机上打开是一堆按钮糊在中间,
+ * 而本地按视口截图反而看不出来,因为改的是几条 later-wins 的声明,
+ * 浏览器一个警告都不会给。
+ *
+ * **改布局的时候,旧布局的断点比新布局的 bug 更危险** ——
+ * 新写的哪儿不对一眼看得见,旧的那块是从背后生效的。
+ */
 
 /* ============ 出摊的厨房 ============ */
 /* 布局照着老爹快餐店那一路压成一屏:
@@ -1268,4 +1297,66 @@
 @media (max-width: 1059px) {
     .px-korders { right: 158px; }
     .px-korder { width: 108px; }
+}
+
+/* ============================================================
+   进阶:支持容器查询的浏览器,把尺寸改成跟着**画面本身**的宽度走
+
+   上面那一套是按视口断点近似的,所有浏览器都吃。但画面被视口高度夹住的
+   时候,它可能只有视口的一半宽 —— 按视口算的话,一边一条栏又会吃掉四成。
+   容器查询能直接问「画面现在多宽」,这才是真正想要的那个数。
+
+   **整块包在 @supports 里。** 自定义属性在解析时什么都收,
+   只有代入 `width:` 那一刻才发现 cqi 不认识,那时候整条声明作废、
+   回落到 auto —— 四条栏一起塌到左上角,而 CSS 里一个报错都没有。
+   ============================================================ */
+@supports (width: 1cqi) {
+    .px-screen { container-type: inline-size; }
+    .px-drawer { container-type: inline-size; }
+
+    :root {
+        --rail-w: clamp(44px, 5.8cqi, 78px);
+        --rail-h: clamp(42px, 4.8cqi, 64px);
+        --rail-t: clamp(32px, 3.6cqi, 46px);
+    }
+    .px-rail--t { gap: clamp(5px, .9cqi, 12px); }
+    .px-rail--t .px-chip {
+        font-size: clamp(11px, 1.15cqi, 15px);
+        padding: clamp(3px, .45cqi, 6px) clamp(6px, 1cqi, 14px);
+        gap: clamp(4px, .6cqi, 8px);
+    }
+    .px-rail--t .px-icon { width: clamp(12px, 1.3cqi, 16px); height: clamp(12px, 1.3cqi, 16px); }
+    .px-rail--t .px-bar {
+        max-width: clamp(110px, 26cqi, 340px);
+        height: clamp(16px, 1.9cqi, 24px);
+    }
+    .px-rail--t .px-bar__label { font-size: clamp(9px, .95cqi, 13px); }
+    .px-railstat { font-size: clamp(11px, 1.2cqi, 15px); }
+    .px-railbtn { font-size: clamp(11px, 1.3cqi, 16px); }
+
+    .px-drawer__bar {
+        padding: clamp(8px, 1.6cqi, 14px) clamp(10px, 2cqi, 18px);
+        font-size: clamp(15px, 2.6cqi, 20px);
+    }
+    .px-drawer__body {
+        padding: clamp(12px, 2.4cqi, 22px) clamp(12px, 2.4cqi, 22px) clamp(18px, 3cqi, 28px);
+        font-size: clamp(14px, 2.1cqi, 17px);
+    }
+    .px-drawer__body .px-btn { font-size: clamp(14px, 2.1cqi, 18px); padding: clamp(10px, 1.8cqi, 15px) clamp(16px, 2.8cqi, 26px); }
+    .px-drawer__body .px-btn--sm { font-size: clamp(13px, 1.9cqi, 16px); padding: clamp(8px, 1.5cqi, 12px) clamp(12px, 2.2cqi, 20px); }
+    .px-drawer__body h3 { font-size: clamp(16px, 2.6cqi, 21px); }
+    .px-drawer__body .px-icon { width: clamp(16px, 2.4cqi, 20px); height: clamp(16px, 2.4cqi, 20px); }
+    .px-drawer__body .px-icon--lg { width: clamp(24px, 3.6cqi, 32px); height: clamp(24px, 3.6cqi, 32px); }
+
+    /* 画面窄的时候只留图标。和上面那条视口版效果一样,这条更准 */
+    @container (max-width: 620px) {
+        .px-railbtn > span { display: none; }
+        .px-rail--v .px-railbtn { width: 100%; padding: 5px 0; }
+        #railBottom .px-railbtn { width: auto; padding: 5px 6px; }
+        .px-railbtn--go > span { display: inline; font-size: 11px; }
+        .px-railbtn--go { padding-inline: 10px; }
+        .px-railstat small:first-of-type { display: none; }
+        .px-rail--t .px-unit { display: none; }
+        .px-rail--t { padding: 0 5px; }
+    }
 }
