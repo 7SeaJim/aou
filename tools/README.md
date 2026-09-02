@@ -30,7 +30,12 @@ python3 tools/emit.py     # 或 npm run icons
 | `wear.py` | 装扮(哇鸥戴的东西)。每件两套图:小屋近景的大图 + 大坝上的小图 |
 | `frames.py` | 28×28 边框,程序生成:45° 斜接倒角 + 转角铆钉 + 木板接缝 |
 | `emit.py` | 把上面几个编译成 CSS 和 JS |
-| `font.py` | 像素字体子集化(588KB → 50KB)。`--check` 挂在 `npm run build` 上 |
+| `font.py` | 像素字体子集化(588KB → 52KB)。`--check` 挂在 `npm run build` 上 |
+
+`font.py --check` **不依赖 fontTools**:生成子集的时候顺手把「里面有哪些字」
+写进 `css/fonts/waou-pixel.chars.json`,检查只读这个清单。
+这不是为了省事 —— 在线部署的构建机不装 fontTools,而**一个只能在作者机器上
+跑的检查不是检查,是习惯**。清单要跟着 woff2 一起提交。
 | `sim.mjs` | 数值模拟,`node tools/sim.mjs` |
 
 分表的图最后都汇进 `icons.py` 的 `ICONS`,用法上没区别 ——
