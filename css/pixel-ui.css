@@ -766,6 +766,17 @@
     height: 320px;
     flex: none;
     image-rendering: pixelated;
+    /**
+     * **这张图必须能长按保存。**
+     *
+     * body 上有一条 `user-select: none`(整个界面都不该被选中,那是对的),
+     * 但它连带把图片的长按菜单也关掉了 —— 手机上长按不出「保存图片」,
+     * 而这张签**本来就是画给玩家发出去的**,存不下来等于白画。
+     * 这几行是专门给它开的例外,`-webkit-touch-callout` 是 iOS 那一份。
+     */
+    user-select: auto; -webkit-user-select: auto;
+    -webkit-touch-callout: default;
+    touch-action: auto;
     background: var(--sand-2);
     box-shadow: inset 0 0 0 3px var(--ink), 4px 4px 0 rgba(74, 54, 40, .25);
 }

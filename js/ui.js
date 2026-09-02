@@ -177,7 +177,16 @@ export class UI {
         // 面板内所有按钮走事件委托,重绘后不用重新绑定
         this.$panel.addEventListener('click', e => {
             const nav = e.target.closest('[data-screen]');
-            if (nav) return this.go(nav.dataset.screen);
+            // **面板里的链接是「去那儿」,不是开关。**
+            // go() 本身是开关(再点一次正开着的那一页就收起来),
+            // 那是给边上按钮栏用的语义。而收集进度里「菜谱 · 去看」这种链接
+            // 指向的正好是当前这一页 —— 一点就把抽屉整个关了,
+            // 玩家看到的是「点了查看反而回到主界面」。
+            if (nav) {
+                const to = nav.dataset.screen;
+                if (to === this.screen) return;      // 已经在这儿了,什么也不做
+                return this.go(to);
+            }
             const btn = e.target.closest('[data-act]');
             // 点击音统一在这儿发,不在每个 case 里各发各的 —— 那样迟早漏。
             // 有自己音色的动作(落子、转卦)在 case 里再补一个,限流会挡掉重复。
@@ -1868,7 +1877,8 @@ export class UI {
                         <div class="px-bar__fill" style="width:${pct}%"></div>
                     </div>
                 </div>
-                <button class="px-btn px-btn--sm px-btn--wood" data-screen="${to}">去看</button>
+                ${to === this.screen ? ''
+                    : `<button class="px-btn px-btn--sm px-btn--wood" data-screen="${to}">去看</button>`}
             </div>`;
         };
         return `
