@@ -845,7 +845,10 @@ export class UI {
      * @returns {boolean} 切了没有(放不下一整行就不切,交给下一页)
      */
     _cutGrid(el, room) {
-        if (!el.classList.contains('px-grid')) return false;
+        // 网格,或者一个**没有样式的裸 div**(那种就是「一摞行」的包装盒)。
+        // 有 class 的不切 —— 那是一块有边框的整体,切开就成了两个半块。
+        const bare = el.tagName === 'DIV' && !el.className;
+        if (!el.classList.contains('px-grid') && !bare) return false;
         const items = [...el.children];
         if (items.length < 2) return false;
 
@@ -1021,22 +1024,21 @@ export class UI {
             const u = RUNWAY[k];
             const lv = r[k] ?? 0;
             const cost = runwayCost(k, lv);
-            return `<div class="px-panel" style="padding:12px 14px">
-                <p style="margin-bottom:4px">${icon(u.icon, 'lg')} ${u.name}
-                   <span class="px-muted">Lv.${lv}</span></p>
-                <p class="px-muted" style="font-size:12px;margin-bottom:10px">
-                    ${u.desc}${lv ? ` · 现在 ${shown[k]}` : ''}</p>
+            return `<div class="px-ach">
+                ${icon(u.icon, 'lg')}
+                <div style="flex:1;min-width:0">
+                    <strong>${u.name}</strong> <span class="px-muted">Lv.${lv}</span>
+                    <p class="px-muted">${u.desc}${lv ? ` · 现在 ${shown[k]}` : ''}</p>
+                </div>
                 ${cost === null
-                    ? '<span class="px-tag px-tag--leaf">已满级</span>'
+                    ? '<span class="px-tag px-tag--leaf">满级</span>'
                     : `<button class="px-btn px-btn--sm" data-act="runway" data-key="${k}"
                          ${s.coins < cost ? 'disabled' : ''}>${icon('coin')} ${cost}</button>`}
             </div>`;
         }).join('');
         return `
-        <h3 style="margin-bottom:6px">跑道</h3>
-        <p class="px-muted" style="margin-bottom:12px;font-size:13px">
-            三条线各管觅食里的一项,不叠同类。改这儿只影响飞行,不影响摊子。</p>
-        <div class="px-grid" style="--min:190px;margin-bottom:28px">${cards}</div>`;
+        <h3 style="margin-bottom:8px">跑道</h3>
+        <div>${cards}</div>`;
     }
 
     crewView() {
@@ -1047,15 +1049,15 @@ export class UI {
             const hired = s.crew.includes(c.id);
             const off = idle.includes(c.id);
             const okAff = s.affinity >= c.affinity;
-            return `<div class="px-panel ${hired && !off ? 'px-panel--gold' : ''}" style="padding:12px 14px">
-                <p style="margin-bottom:4px">${icon(hired || okAff ? c.icon : 'waou', 'lg')}
-                   <strong>${hired || okAff ? c.name : '???'}</strong>
-                   ${off ? '<span class="px-tag px-tag--coral">今天请假</span>'
-                         : hired ? '<span class="px-tag px-tag--leaf">在摊上</span>' : ''}</p>
-                <p class="px-muted" style="font-size:12.5px;line-height:1.6;margin-bottom:8px">
-                    ${hired || okAff ? c.desc : `好感度 ${c.affinity} 解锁`}
-                    ${hired || okAff ? `<br>工钱 ${icon('coin')} ${c.wage} / 天` : ''}
-                    ${hired ? `<br>${c.line}` : ''}</p>
+            return `<div class="px-ach ${hired && !off ? 'px-ach--got' : ''}">
+                ${icon(hired || okAff ? c.icon : 'waou', 'lg')}
+                <div style="flex:1;min-width:0">
+                    <strong>${hired || okAff ? c.name : '???'}</strong>
+                    ${off ? '<span class="px-tag px-tag--coral">请假</span>'
+                          : hired ? '<span class="px-tag px-tag--leaf">在摊上</span>' : ''}
+                    <p class="px-muted">${hired || okAff ? c.desc : `好感度 ${c.affinity} 解锁`}
+                       ${hired || okAff ? ` · 工钱 ${c.wage}/天` : ''}</p>
+                </div>
                 ${hired ? '' : this.hireBtn(c, s, season)}
             </div>`;
         }).join('');
@@ -1064,30 +1066,24 @@ export class UI {
         return `
         <h3 style="margin-bottom:6px">伙计鸥
             <span class="px-muted" style="font-size:13px">${s.crew.length} / ${CREW.length}</span></h3>
-        <p class="px-muted" style="margin-bottom:12px;font-size:13px">
-            招人付的是<strong>安家费</strong> —— 让它从鸥群里专程飞过来落脚,一次性的。
-            之后<strong>每天还要发一份工钱</strong>,一觉醒来自动扣。
-            ${wage ? `现在摊上这几只,一天 ${icon('coin')} <strong>${wage}</strong>。` : ''}
-            ${season.hireMul <= 1
-                ? '鸥群这会儿就在坝上,安家费最便宜。'
-                : `现在是${season.name}季,鸥群不在昆明 —— 得托人捎信让它专程飞一趟,
-                   安家费是冬天的 <strong>${season.hireMul}</strong> 倍(工钱不变)。
-                   等到<strong>冬天(11 月–次年 3 月)</strong>就是原价,${daysToWinter()}`}
-            好感度越高,哇鸥肯介绍的亲戚越多。</p>
+        <p class="px-muted" style="margin-bottom:8px;font-size:12.5px">
+            先付<strong>安家费</strong>,之后每天再发一份工钱${wage ? `(现在一天 ${wage})` : ''}。
+            ${season.hireMul <= 1 ? '冬天鸥群在坝上,安家费最便宜。'
+                : `${season.name}季要托人捎信,安家费 <strong>×${season.hireMul}</strong>,${daysToWinter()}`}</p>
         ${owed.length ? `
-        <div class="px-panel" style="padding:12px 14px;margin-bottom:12px">
-            <p style="margin-bottom:6px">${icon('coin', 'lg')}
-               <strong>今天的工钱还欠着</strong></p>
-            <p class="px-muted" style="font-size:12.5px;line-height:1.6;margin-bottom:10px">
-                ${owed.map(c => c.name).join('、')}没来上工,这几只的加成今天都不算。
-                补上就回来 —— <strong>不用等到明天</strong>。</p>
+        <div class="px-ach">
+            ${icon('coin', 'lg')}
+            <div style="flex:1;min-width:0">
+                <strong>工钱还欠着</strong>
+                <p class="px-muted">${owed.map(c => c.name).join('、')}没来上工,加成今天不算</p>
+            </div>
             <button class="px-btn px-btn--sm" data-act="payWages"
                 ${s.coins < owed[0].wage ? 'disabled' : ''}>
                 ${s.coins < owed[0].wage
-                    ? `还差 ${owed[0].wage - s.coins} 鸥币`
+                    ? `差 ${owed[0].wage - s.coins}`
                     : `${icon('coin')} ${owed.reduce((n, c) => n + c.wage, 0)} 补发`}</button>
         </div>` : ''}
-        <div class="px-grid" style="--min:210px;margin-bottom:28px">${cards}</div>`;
+        <div>${cards}</div>`;
     }
 
     /**
@@ -1625,9 +1621,13 @@ export class UI {
      * 那不是操作,那是抽奖。
      */
     // 旧的 viewService 删了 —— 出摊现在是整页 + DOM 厨房,见 renderKitchen()
-    /** 图鉴单独一页。它记的是「见过什么」,背包记的是「手上有什么」,两件事。 */
+    /**
+     * 图鉴单独一页。它记的是「见过什么」,背包记的是「手上有什么」,两件事。
+     * **三条收集进度也放这儿** —— 它们本来在摊子那一页,但「还差几张明信片」
+     * 和「炉子升到几级」根本不是一回事;图鉴才是收集线的门厅。
+     */
     viewCodex() {
-        return this.codexView();
+        return this.progressView() + this.codexView();
     }
 
     /** 哇鸥回屋了就在大坝页说一声,免得玩家以为表演坏了 */
@@ -1799,14 +1799,27 @@ export class UI {
         }).join('');
 
         /* ---- 升级 ---- */
+        /**
+         * 一条升级 = **一行**:左图标、中名字和说明、右价钱。
+         *
+         * 原来是竖着摞三行(名字 / 说明 / 价钱按钮),一张卡 86 像素高。
+         * 手机上正文只有两百来像素 —— 四条线要翻两页,而每一行右边
+         * 都空着一大片。**价钱挪到图标那一侧,高度直接砍一半。**
+         *
+         * 用的是 .px-ach 那套行式样,厨具和餐盘本来就是这么排的 ——
+         * 一个界面里同一种东西(「一件可以买的东西」)不该有两种画法。
+         */
         const ups = Object.entries(UPGRADES).map(([key, u]) => {
             const lv = s.upgrades[key] ?? 1;
             const cost = upgradeCost(key, lv);
-            return `<div class="px-panel" style="padding:12px 14px">
-                <p style="margin-bottom:4px">${icon(u.icon, 'lg')} ${u.name} <span class="px-muted">Lv.${lv}</span></p>
-                <p class="px-muted" style="font-size:12px;margin-bottom:10px">${u.desc}</p>
+            return `<div class="px-ach">
+                ${icon(u.icon, 'lg')}
+                <div style="flex:1;min-width:0">
+                    <strong>${u.name}</strong> <span class="px-muted">Lv.${lv}</span>
+                    <p class="px-muted">${u.desc}</p>
+                </div>
                 ${cost === null
-                    ? '<span class="px-tag px-tag--leaf">已满级</span>'
+                    ? '<span class="px-tag px-tag--leaf">满级</span>'
                     : `<button class="px-btn px-btn--sm" data-act="upgrade" data-key="${key}"
                          ${s.coins < cost ? 'disabled' : ''}>${icon('coin')} ${cost}</button>`}
             </div>`;
@@ -1825,12 +1838,8 @@ export class UI {
 
         ${this.marketView()}
 
-        <h3 style="margin-bottom:12px">升级</h3>
-        <div class="px-grid" style="--min:190px;margin-bottom:28px">${ups}</div>
-
-        ${this.kitchenShop()}
-
-        ${this.progressView()}`;
+        <h3 style="margin-bottom:8px">升级</h3>
+        <div>${ups}</div>`;
     }
 
     /**
@@ -1845,18 +1854,20 @@ export class UI {
         const s = this.getState();
         const bar = (ico, name, have, total, to) => {
             const pct = total ? Math.round(have / total * 100) : 0;
-            return `<div class="px-panel" style="padding:12px 14px">
-                <p style="margin-bottom:8px">${icon(ico, 'lg')} ${name}
-                   <span class="px-muted">${have} / ${total}</span></p>
-                <div class="px-bar" style="height:14px;margin-bottom:10px">
-                    <div class="px-bar__fill" style="width:${pct}%"></div>
+            return `<div class="px-ach">
+                ${icon(ico, 'lg')}
+                <div style="flex:1;min-width:0">
+                    <strong>${name}</strong> <span class="px-muted">${have} / ${total}</span>
+                    <div class="px-bar" style="height:10px;margin-top:4px">
+                        <div class="px-bar__fill" style="width:${pct}%"></div>
+                    </div>
                 </div>
-                <button class="px-btn px-btn--sm px-btn--wood" data-screen="${to}">去看看</button>
+                <button class="px-btn px-btn--sm px-btn--wood" data-screen="${to}">去看</button>
             </div>`;
         };
         return `
-        <h3 style="margin-bottom:12px">收集进度</h3>
-        <div class="px-grid" style="--min:190px;margin-bottom:28px">
+        <h3 style="margin-bottom:8px">收集进度</h3>
+        <div>
             ${bar('erkuai', '菜谱', s.unlockedRecipes.length, RECIPES.length, 'codex')}
             ${bar('postcard', '明信片', s.postcards.length, POSTCARDS.length, 'postcard')}
             ${bar('trophy', '成就', s.achievements.length, ACHIEVEMENTS.length, 'achievement')}
@@ -1906,7 +1917,7 @@ export class UI {
         // 代码注释和界面文案共用一套强调符号,迟早会串。界面上只用 <strong>。
         return `
         <h3 style="margin-bottom:6px">后厨</h3>
-        <div style="margin-bottom:12px">${tools}</div>
+        <div>${tools}</div>
         <h4 style="margin-bottom:6px">餐盘</h4>
         <div>${plates}</div>`;
     }
