@@ -652,6 +652,15 @@
     box-shadow: inset 0 0 0 3px var(--ink), inset 0 4px 0 var(--foam);
 }
 .px-ach p { margin: 2px 0 0; font-size: 13px; }
+/* 排进两列网格的时候,行与行之间的 margin 交给网格的 gap ——
+   两套间距叠在一起会让每行都多出八像素,四行就是一行的高度 */
+.px-grid > .px-ach { margin-bottom: 0; }
+/* 两列里的行:字不许换行。**换一行就等于这一条高一倍**,
+   而两列本来就是为了把行数减半的 —— 换回来就白排了 */
+.px-grid > .px-ach > div { overflow: hidden; }
+.px-grid > .px-ach p,
+.px-grid > .px-ach strong { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.px-grid > .px-ach .px-btn { flex: none; }
 
 /* 装扮的画布。像素图必须关掉插值,不然浏览器会给它抹一层糊。 */
 .px-wear-item,

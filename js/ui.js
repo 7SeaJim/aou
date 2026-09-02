@@ -505,21 +505,24 @@ export class UI {
                 ${icon(FOODS[k].icon, 'lg')}
                 <div style="flex:1">
                     <strong>${FOODS[k].name}</strong>
-                    <p class="px-muted">${icon('coin')} ${m.price} / 个 ·
-                        今天还剩 <strong>${left}</strong> / ${m.daily}</p>
+                    <!-- 「今天还剩 30 / 30」写全了要换行,而换行就等于这一条高一倍。
+                         两列的格子里,**一句话必须一行写得完** —— 这是排两列的前提 -->
+                    <p class="px-muted">${icon('coin')}${m.price} · 剩 <strong>${left}</strong></p>
                 </div>
                 <button class="px-btn px-btn--sm" data-act="buy" data-key="${k}" data-n="1"
-                        ${can ? '' : 'disabled'}>买 1</button>
+                        ${can ? '' : 'disabled'}>1</button>
                 <button class="px-btn px-btn--sm px-btn--sea" data-act="buy" data-key="${k}" data-n="99"
                         ${can ? '' : 'disabled'}>全要</button>
             </div>`;
         }).join('');
+        // 一行两条。**行式的卡本来就用不满一行的宽度** ——
+        // 左边图标、右边两个按钮,中间那段字撑不到七百像素。
+        // 排成两列,页数直接减半。
         return `
         <h3 style="margin-bottom:6px">篆新市场</h3>
-        <p class="px-muted" style="margin-bottom:12px">
-            收摊的阿姨顺路来坝上摆一小摊。<strong>每样每天就那么点</strong> ——
-            她也只是顺路,不是给你开批发的。零点补货。</p>
-        <div style="margin-bottom:28px">${rows}</div>`;
+        <p class="px-muted" style="margin-bottom:8px">
+            <strong>每样每天就那么点</strong> —— 她只是顺路,不是开批发的。零点补货。</p>
+        <div class="px-grid" style="--min:250px">${rows}</div>`;
     }
 
     /**
@@ -1038,7 +1041,7 @@ export class UI {
         }).join('');
         return `
         <h3 style="margin-bottom:8px">跑道</h3>
-        <div>${cards}</div>`;
+        <div class="px-grid" style="--min:250px">${cards}</div>`;
     }
 
     crewView() {
@@ -1083,7 +1086,7 @@ export class UI {
                     ? `差 ${owed[0].wage - s.coins}`
                     : `${icon('coin')} ${owed.reduce((n, c) => n + c.wage, 0)} 补发`}</button>
         </div>` : ''}
-        <div>${cards}</div>`;
+        <div class="px-grid" style="--min:250px">${cards}</div>`;
     }
 
     /**
@@ -1834,12 +1837,15 @@ export class UI {
         <!-- 介绍那一段删了。三个 chip 已经把数说清楚,引导里也讲过一遍 ——
              而它在手机上占掉一页的四分之一,正好把摊位格子挤到下一页去。
              **说明文字的代价在手机上是按「几分之一页」算的。** -->
-        <div class="px-grid" style="--min:230px;margin-bottom:16px">${slots}</div>
+        <!-- 三个格子排成**一行三个**,不是 2×2。
+             卡片本身压扁之后(价钱和材料并成一行),150 的宽度就够放下了 ——
+             而少一行网格,省的是一百多像素,比卡里多换一次行值钱得多。 -->
+        <div class="px-grid" style="--min:150px;margin-bottom:16px">${slots}</div>
 
         ${this.marketView()}
 
         <h3 style="margin-bottom:8px">升级</h3>
-        <div>${ups}</div>`;
+        <div class="px-grid" style="--min:250px">${ups}</div>`;
     }
 
     /**
@@ -1867,7 +1873,7 @@ export class UI {
         };
         return `
         <h3 style="margin-bottom:8px">收集进度</h3>
-        <div>
+        <div class="px-grid" style="--min:250px">
             ${bar('erkuai', '菜谱', s.unlockedRecipes.length, RECIPES.length, 'codex')}
             ${bar('postcard', '明信片', s.postcards.length, POSTCARDS.length, 'postcard')}
             ${bar('trophy', '成就', s.achievements.length, ACHIEVEMENTS.length, 'achievement')}
