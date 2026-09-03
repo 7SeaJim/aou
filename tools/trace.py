@@ -149,6 +149,45 @@ def despeckle(grid, rounds=2):
     return grid
 
 
+def purge(grid, ch, keep=1):
+    """某个颜色只留最大的几块。
+
+    描出来的红嘴周围会散几个红点(JPEG 在高对比边上的振铃),
+    而**红色在这只鸟身上只出现在嘴和脚** —— 散在别处的红点一定是噪点,
+    按连通块挑一遍比调阈值稳。
+    """
+    h, w = len(grid), len(grid[0])
+    seen = [[0] * w for _ in range(h)]
+    blobs = []
+    for y0 in range(h):
+        for x0 in range(w):
+            if grid[y0][x0] != ch or seen[y0][x0]:
+                continue
+            q = deque([(x0, y0)])
+            seen[y0][x0] = 1
+            cells = []
+            while q:
+                x, y = q.popleft()
+                cells.append((x, y))
+                for dx in (-1, 0, 1):
+                    for dy in (-1, 0, 1):
+                        nx, ny = x + dx, y + dy
+                        if (0 <= nx < w and 0 <= ny < h and not seen[ny][nx]
+                                and grid[ny][nx] == ch):
+                            seen[ny][nx] = 1
+                            q.append((nx, ny))
+            blobs.append(cells)
+    blobs.sort(key=len, reverse=True)
+    for cells in blobs[keep:]:
+        for x, y in cells:
+            ns = [grid[y + dy][x + dx]
+                  for dy in (-1, 0, 1) for dx in (-1, 0, 1)
+                  if (dx or dy) and 0 <= y + dy < h and 0 <= x + dx < w
+                  and grid[y + dy][x + dx] != ch]
+            grid[y][x] = Counter(ns).most_common(1)[0][0] if ns else '.'
+    return grid
+
+
 def to_py(name, grid):
     body = ',\n'.join('"%s"' % ''.join(r) for r in grid)
     return '%s = [\n%s,\n]\n' % (name, body)
@@ -163,6 +202,8 @@ def main():
     ap.add_argument('--crop', default='', help='先裁一刀,四个 0~1 的比例 l,t,r,b')
     ap.add_argument('--keys', default=''.join(BIRD_KEYS))
     ap.add_argument('--keep', type=int, default=0, help='只留最大的 n 块(0 = 全留)')
+    ap.add_argument('--purge', default='', help='某色只留最大的 n 块,如 X:1')
+    ap.add_argument('--rounds', type=int, default=2, help='去噪跑几遍')
     ap.add_argument('--out', default='')
     a = ap.parse_args()
 
@@ -182,7 +223,10 @@ def main():
     else:
         s = a.h / H
     im = im.resize((max(1, round(W * s)), max(1, round(H * s))), Image.BOX)
-    grid = despeckle(snap(im, list(a.keys)))
+    grid = despeckle(snap(im, list(a.keys)), a.rounds)
+    for spec in filter(None, a.purge.split(',')):
+        ch, n = spec.split(':')
+        grid = purge(grid, ch, int(n))
     src = to_py(a.name, grid)
     if a.out:
         open(a.out, 'w', encoding='utf-8').write(src)

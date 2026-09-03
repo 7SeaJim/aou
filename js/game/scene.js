@@ -740,6 +740,21 @@ export function drawPierFoam(ctx, weather, deckY, t, phase = 'day') {
 }
 
 /**
+ * 待机时那两下弹跳。**这不是我编的曲线,是从形象稿的 16 张待机关键帧里量出来的。**
+ *
+ * 朋友交过来的那 16 张是一轮完整的待机:它不是「轻轻起伏」,是**两次小跳** ——
+ * 蹲下去的时候压扁变宽,弹起来的时候拉长变窄,落地的那一格身子最扁。
+ * 量的办法是逐帧取内容框的底边:底边一直贴在 114,只有第 1、6、8、9 帧离地。
+ *
+ * 表里存的是「离地几个像素」,按 16 像素那只换算过(原图 128 高,÷8)。
+ * **压扁拉长那一半没做** —— 像素画里非整数缩放就是糊,
+ * 与其糊一版不如只取时间上的节奏,而节奏本来就是这段动画的骨头。
+ *
+ * 12fps(每帧 83 毫秒)× 16 帧 = 1.33 秒,正好是待机那一段的长度。
+ */
+const IDLE_HOP = [3, 0, 0, 0, 0, 2, 0, 3, 2, 1, 0, 0, 0, 0, 0, 0];
+
+/**
  * 大坝上的表演。哇鸥不出去觅食的时候就在这儿演,路人围着看、看完投喂 ——
  * 这是食材的被动来源(规则在 rules.js 的 perform()),不是纯装饰。
  *
@@ -758,7 +773,7 @@ export function drawPerformance(ctx, x, baseY, t, shows = 1, fedNow = false,
     const p = t % CYCLE;
 
     let grid = ICON_GRIDS.waou, hop = 0;
-    if (p < 1400)      { grid = ICON_GRIDS.waou;      hop = Math.sin(t * 0.0022) > 0 ? 0 : 1; }
+    if (p < 1400)      { grid = ICON_GRIDS.waou;      hop = -IDLE_HOP[Math.floor(t / 83) % 16]; }
     else if (p < 2200) { grid = SCENERY.waou_wing;    hop = p < 1800 ? -3 : -1; }
     else if (p < 2800) { grid = ICON_GRIDS.waou;      hop = 0; }
     else if (p < 3400) { grid = SCENERY.waou_bow;     hop = 0; }
