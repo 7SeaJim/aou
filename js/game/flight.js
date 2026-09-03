@@ -194,6 +194,14 @@ const SPAWN_GROW = 110;
  */
 const SPAWN_MIN = 520;
 /**
+ * 生成节奏的抖动。**均匀的间隔是可以数拍子的** ——
+ * 原来每 spawnInterval 精确一次,东西等距过来,玩家闭着眼按节奏动都行
+ * (他说「分布太均匀」)。抖 ±35%:平均密度一点没变,
+ * 而每一簇要真看一眼才知道在哪。
+ */
+const SPAWN_JITTER_LO = 0.65;
+const SPAWN_JITTER_HI = 1.35;
+/**
  * 两簇障碍之间至少隔多久。**这一条是按秒定的,不是按像素。**
  *
  * 他报的「一竖排障碍中间的空路后面又生成一个障碍把路堵死」就是这儿:
@@ -210,15 +218,18 @@ const HAZ_MIN_MS = 700;
  * 障碍占生成的比例:开局 42%,涨到 55% 封顶(约两分半)。
  *
  * 原来开局是 22%,配上 860 毫秒的生成间隔,等于**平均 3.9 秒才来一个障碍**,
- * 而一个障碍横穿画面要 3.2 秒 —— 头一分钟没有游戏。42% 大约是场上常驻
- * 一个多障碍:一上来就得躲,但还留得出吃东西的空当。
+ * 而一个障碍横穿画面要 3.2 秒 —— 头一分钟没有游戏。
+ *
+ * 52%:他说「初期障碍物过少」。42% 那一档场上常驻一个多,头一分钟仍然偏闲。
+ * 52% 大概是场上两个多,而**留给吃的空当靠的是「两簇之间至少 700 毫秒」
+ * 那条硬保证**,不是靠占比留白。
  *
  * **上限从 62% 压到 55%,斜率从 0.09 减到 0.05。** 这一档和速度上限、
  * 簇宽上限一起,在两分半到三分钟之间**全部封顶** —— 那之后障碍这条线
  * 不再变难,玩家会有一段「不过如此」。**那段松弛是故意的**,
  * 它是后面那件事的铺垫:见 MODE_CD_FROM。
  */
-const HAZARD_0 = 0.42;
+const HAZARD_0 = 0.52;
 const HAZARD_MAX = 0.55;
 /** 多久算一波。到点报一次,让玩家知道是游戏变难了不是自己变菜了 */
 const WAVE_MS = 20_000;
@@ -293,8 +304,16 @@ const MAGNET_MAX = 30_000;
 /** 磁铁的吸力(像素/帧)。远的拉得快、近的收得稳,不然会绕着头打转 */
 const MAGNET_PULL_MIN = 1.6;
 const MAGNET_PULL_MAX = 6.5;
-const SHIELD_MS = 45_000;
-const SHIELD_MAX = 90_000;
+/**
+ * 护盾管多久。**十二秒**(原来 45 秒)。
+ *
+ * 四十五秒长到跟「一直带着」没多少区别 —— 拿到之后照常飞,它自己就用掉了,
+ * 玩家甚至不知道它挡的是哪一下。十二秒短到必须**主动去用**:
+ * 这十二秒里得刻意往险处伸头,不然它就白过期了。
+ * **一个会过期的保命才会被用掉**,而用掉正是它存在的理由。
+ */
+const SHIELD_MS = 12_000;
+const SHIELD_MAX = 24_000;
 const SHIELD_N = 2;             // 一个护盾能挡几次
 const SHIELD_N_MAX = 4;
 /**
@@ -327,6 +346,25 @@ const RUSH_SMASH = 4;           // 撞碎一个障碍给多少分
 const CORRIDOR_EVERY = 3;       // 每几波来一次
 const CORRIDOR_WARN = 1500;     // 提前多久预告
 const CORRIDOR_S = 1.3;         // 穿过去要多久(秒)。宽度按当时的速度换算
+/**
+ * 三分钟之后,窄道**变长、而且缝会上下走**。
+ *
+ * 他要的:「竖向尖刺在 3 分钟后变为可伸缩,即远处尖刺逐渐下降或上升,
+ * 且尖刺整体宽度变宽,即需要通过的路程变长」。
+ *
+ * 原来的窄道是一条**直的**缝:飞到那个高度、按住平飞、等它过去 ——
+ * 考的只是「按不按得稳」,而那一下学会了就永远会。缝斜起来之后,
+ * 里面那一秒多得**一边按住一边挪**,平飞和跃起要同时用;
+ * 走得越长,挪的次数越多。
+ *
+ * 「远处尖刺逐渐下降或上升」在实现上就是给缝一个斜率:进口在预告的高度,
+ * 出口偏出一两条道。**斜率在预告里就定下来**,所以预告能把它画出来 ——
+ * 不预告的话它不是考验,是埋伏(这条规矩是窄道刚做出来时定的)。
+ */
+const CORRIDOR_BEND_AT = 180_000;
+const CORRIDOR_BEND_LANES = 2;  // 出口最多偏出几条道
+const CORRIDOR_S_MAX = 2.4;     // 穿过去最长要多久
+const CORRIDOR_S_PER_MIN = 0.3; // 三分钟之后每分钟长这么多秒
 const CORRIDOR_GAP = 32;        // 缝的半高。哇鸥 32 高,判定半径 15
 /* 场地宽了之后跟着放 —— 这两个夹的是「云有多长」,单位是像素 */
 const CORRIDOR_MIN_W = 310;
@@ -470,6 +508,28 @@ const CLIMB_OFF = 132;
  */
 const DIVE_OFF = 70;
 
+/* ---------- 觅食狂潮 ----------
+ *
+ * 他要的:「玩家连击次数达到 110 后开启觅食狂潮(进一段动画,中间闪烁炫目金光,
+ * 四周烟花绚烂),生成大量食材且获得数量翻倍,速度加快,玩家变成无敌」。
+ *
+ * 一百一十连击**不是随手能到的数**:连击碰一下就清零,而这一局的密度下
+ * 一百一十次不漏地吃下来要三四分钟。所以它不是一个道具,是**一条给
+ * 「一直没失手」的人留的路** —— 前面所有加成都是运气(飘过来就捡),
+ * 只有这一个是手上功夫换的。
+ *
+ * 也正因为如此,它给的是**当场兑现的东西**:满屏食材 + 翻倍 + 无敌。
+ * 十秒里能把前一分钟的收获再挣一遍。
+ *
+ * 清零之后门槛回到 110,再攒。攒到 220 会再来一次 —— 上限交给手,不交给冷却。
+ */
+const FRENZY_COMBO = 110;
+const FRENZY_MS = 10_000;
+const FRENZY_SPEED = 1.35;
+const FRENZY_FOOD = 3;          // 狂潮里一次生成撒几样
+const FRENZY_HAZARD = 0.15;     // 还留一点障碍 —— 全清的话「无敌」就没有意义
+const FRENZY_IN = 900;          // 开场那一下的金光多久
+
 /* ---------- 五分钟之后:饿 ---------- */
 /** 从这一刻起开始饿。前五分钟只用管躲 */
 const HUNGRY_AT = 300_000;
@@ -488,6 +548,13 @@ const HUNGRY_FEED = 0.17;
  * 40:2000 米(第一档成就)约 50 秒,8000 米(第二档)约 3 分半。
  */
 const M_PER_SEC = 40;
+
+/**
+ * 窄道那条缝在某个横位上的高度。
+ * 三分钟前 slope 是 0(直缝),之后缝会一路往上或往下走 ——
+ * **判定和画面都从这一个函数取**,不然会出现「看着在缝里,算作撞上了」。
+ */
+const gapAt = (o, x) => o.gapY + (o.slope ?? 0) * (x - o.x);
 
 /** 切角方块。像素画里的「圆」,比正方形软,又不用画 arc() */
 function plate(ctx, x, y, r, color) {
@@ -562,6 +629,7 @@ export class Flight {
             walls: [],        // 窄道。同一时间最多一片
             warn: null,       // 窄道的预告:{ y, at }
             spawnTimer: 0,
+            spawnNext: SPAWN_0,
             // 开局的节奏和速度。往后都是从这两个数按飞行时长推的,见 _difficulty()
             // **开局这一档谁都一样** —— 等级和天气全挪到下面的 grow 上
             baseInterval: SPAWN_0,
@@ -602,6 +670,9 @@ export class Flight {
             wave: 0,          // 第几波。每 20 秒一波,HUD 上要报
             combo: 0,
             maxCombo: 0,
+            frenzy: 0,           // 觅食狂潮还剩多少毫秒
+            frenzyMark: FRENZY_COMBO,   // 连击到这个数开下一次
+            frenzyN: 0,
             collected: {},
             itemCount: 0,
             /* ---- 伙计鸥 ---- */
@@ -734,6 +805,8 @@ export class Flight {
             // 四种各不一样
             mode: this.f.mode,
             modeLeft: this.f.flip > 0 ? Math.ceil(this.f.flip / 1000) : 0,
+            // 觅食狂潮:还剩几秒。0 = 不在狂潮里
+            frenzy: this.f.frenzy > 0 ? Math.ceil(this.f.frenzy / 1000) : 0,
             // 磁铁 / 护盾:还剩几秒。**得倒数给他看** —— 一个不知道什么时候没的加成,
             // 没了的那一下只会被当成手感变差
             magnet: Math.ceil(this.f.magnetMs / 1000),
@@ -795,6 +868,7 @@ export class Flight {
                 return;
             }
         }
+        if (f.frenzy > 0) f.frenzy = Math.max(0, f.frenzy - dt);
         if (f.magnetMs > 0) f.magnetMs = Math.max(0, f.magnetMs - dt);
         if (f.rushMs > 0) f.rushMs = Math.max(0, f.rushMs - dt);
         // 护盾的期限一到,剩下的次数一起作废 —— 两个数得同生共死,
@@ -815,12 +889,16 @@ export class Flight {
 
         // 生成
         f.spawnTimer += dt;
-        if (f.spawnTimer >= f.spawnInterval) {
+        if (f.spawnTimer >= f.spawnNext) {
             f.spawnTimer = 0;
+            // **下一次隔多久,当场摇一次** —— 见 SPAWN_JITTER
+            f.spawnNext = f.spawnInterval * (SPAWN_JITTER_LO
+                          + this.rng() * (SPAWN_JITTER_HI - SPAWN_JITTER_LO));
             this._spawn();
         }
 
-        const move = f.speed * k * (f.rushMs > 0 ? RUSH_SPEED : 1) * (f.vert ? VERT_SPEED : 1);
+        const move = f.speed * k * (f.rushMs > 0 ? RUSH_SPEED : 1)
+                   * (f.frenzy > 0 ? FRENZY_SPEED : 1) * (f.vert ? VERT_SPEED : 1);
         const hit = (o, r) => Math.abs(f.birdX - o.x) < r && Math.abs(f.birdY - o.y) < r;
         // 往哪边走。**每个东西自己记着**(o.d),而不是问当下是哪个模式 ——
         // 过场会清场,但万一没清干净,半路改朝向的那些会当着玩家的面拐弯。
@@ -855,12 +933,23 @@ export class Flight {
                 f.foods.splice(i, 1);
                 // 颠倒的那二十秒里捡到的**算两份**:分数两份,带回摊上的食材也是两份。
                 // 只翻一个看不见的分数不算赌注 —— 拿命换的东西得能端上桌
-                // 颠倒和纵向共用 f.flip 这个秒表(两个不会同时在),都翻倍
-                const n = (f.flip > 0 ? FLIP_HAUL : 1) * (f.rushMs > 0 ? FLIP_HAUL : 1);
+                // 颠倒和纵向共用 f.flip 这个秒表(两个不会同时在),都翻倍。
+                // 狂潮也翻倍 —— 叠起来最多四倍,那是「一直没失手 + 正好捡到金币」,
+                // 值得
+                const n = (f.flip > 0 ? FLIP_HAUL : 1) * (f.rushMs > 0 ? FLIP_HAUL : 1)
+                        * (f.frenzy > 0 ? FLIP_HAUL : 1);
                 f.collected[o.type] = (f.collected[o.type] ?? 0) + n;
                 f.itemCount += n;
                 f.combo++;
                 if (f.combo > f.maxCombo) f.maxCombo = f.combo;
+                // **一百一十连击:开狂潮。** 门槛每开一次往上加一档,
+                // 所以吃得住的人可以连开第二次
+                if (f.combo >= f.frenzyMark) {
+                    f.frenzyMark += FRENZY_COMBO;
+                    f.frenzyN++;
+                    f.frenzy = FRENZY_MS;
+                    sfx.play('event');
+                }
 
                 let gain = 5;
                 if (f.combo >= 5) gain += 2;
@@ -879,9 +968,9 @@ export class Flight {
             if (!hit(o, f.hazR)) continue;
 
             f.obstacles.splice(i, 1);
-            // 冲刺:**撞碎,而且给分**。无敌只是「不掉血」,那八秒里
+            // 冲刺和狂潮:**撞碎,而且给分**。无敌只是「不掉血」,那几秒里
             // 玩家什么反馈都拿不到;撞碎才是「我在冲」这件事本身
-            if (f.rushMs > 0) {
+            if (f.rushMs > 0 || f.frenzy > 0) {
                 f.score += RUSH_SMASH;
                 f.smash = f.elapsed + 120;
                 sfx.play('pickup');
@@ -891,6 +980,7 @@ export class Flight {
             sfx.play('hit');
             if (!f.god) f.lives--;              // wa.god():照挨照闪,就是不掉命
             f.combo = 0;
+            f.frenzyMark = FRENZY_COMBO;        // 连击断了,门槛回到一百一十
             f.hurtUntil = f.elapsed + 450;      // 闪一下,给个挨打的反馈
             if (f.lives <= 0) { this._finish('crash'); return; }
         }
@@ -1105,7 +1195,7 @@ export class Flight {
         // 一个走神扣两三条,那是在罚玩家没盯着屏幕,不是在考他会不会飞
         f.vy = (up ? -FLAP_VY : FLAP_VY) * 1.6;
         if (f.countdown > 0) return;          // 倒计时里随便掉,不算
-        if (f.rushMs > 0) return;             // 冲刺里连水面都不咬人
+        if (f.rushMs > 0 || f.frenzy > 0) return;   // 冲刺和狂潮里连水面都不咬人
         if (f.elapsed < f.hurtUntil) return;  // 挨打的那几百毫秒里不重复扣
         // **掉进湖里丫丫不管。** 她挡的是迎面来的东西,
         // 而沉下去是自己没拍翅膀 —— 一个连自己失误都替你兜的伙计,
@@ -1118,6 +1208,7 @@ export class Flight {
         sfx.play('hit');
         if (!f.god) f.lives--;
         f.combo = 0;
+        f.frenzyMark = FRENZY_COMBO;
         f.hurtUntil = f.elapsed + 450;
         if (f.lives <= 0) this._finish('crash');
     }
@@ -1181,7 +1272,16 @@ export class Flight {
         const lo = Math.max(0, from - jump), hi = Math.min(LANES - 1, from + jump);
         const lane = lo + Math.floor(this.rng() * (hi - lo + 1));
         f.lastGap = lane;
-        f.warn = { y: laneY(lane), at: f.elapsed + CORRIDOR_WARN };
+        // 出口偏出去几条道(三分钟前是 0,也就是一条直缝)。
+        // **在预告里就定下来** —— 这样预告画得出「它会往哪边走」
+        let bend = 0;
+        if (f.elapsed >= CORRIDOR_BEND_AT) {
+            const k = 1 + Math.floor(this.rng() * CORRIDOR_BEND_LANES);
+            const dir = this.rng() < 0.5 ? -1 : 1;
+            const end = Math.max(0, Math.min(LANES - 1, lane + dir * k));
+            bend = laneY(end) - laneY(lane);
+        }
+        f.warn = { y: laneY(lane), at: f.elapsed + CORRIDOR_WARN, bend };
         sfx.play('event');
     }
 
@@ -1195,9 +1295,13 @@ export class Flight {
     _walls(move) {
         const f = this.f;
         if (f.warn && f.elapsed >= f.warn.at) {
-            const w = Math.max(CORRIDOR_MIN_W,
-                      Math.min(CORRIDOR_MAX_W, f.speed * 60 * CORRIDOR_S));
-            f.walls.push({ x: VW + 8, w: Math.round(w), gapY: f.warn.y });
+            // 三分钟之后越走越长:穿过去要的秒数一路涨到 CORRIDOR_S_MAX
+            const late = Math.max(0, f.elapsed - CORRIDOR_BEND_AT) / 60000;
+            const secs = Math.min(CORRIDOR_S_MAX, CORRIDOR_S + late * CORRIDOR_S_PER_MIN);
+            const w = Math.round(Math.max(CORRIDOR_MIN_W,
+                      Math.min(CORRIDOR_MAX_W, f.speed * 60 * secs)));
+            f.walls.push({ x: VW + 8, w, gapY: f.warn.y,
+                           slope: (f.warn.bend ?? 0) / w });
             f.warn = null;
         }
         for (let i = f.walls.length - 1; i >= 0; i--) {
@@ -1205,18 +1309,19 @@ export class Flight {
             o.x -= move;
             if (o.x + o.w < -8) { f.walls.splice(i, 1); continue; }
             const inX = f.birdX + f.hazR > o.x && f.birdX - f.hazR < o.x + o.w;
-            if (!inX || Math.abs(f.birdY - o.gapY) < CORRIDOR_GAP) continue;
-            if (f.rushMs > 0) continue;       // 冲刺:直接从云里穿过去
+            if (!inX || Math.abs(f.birdY - gapAt(o, f.birdX)) < CORRIDOR_GAP) continue;
+            if (f.rushMs > 0 || f.frenzy > 0) continue;   // 无敌:直接从云里穿过去
             if (f.elapsed < f.hurtUntil) continue;
             if (this._absorb()) continue;
             sfx.play('hit');
             if (!f.god) f.lives--;
             f.combo = 0;
+            f.frenzyMark = FRENZY_COMBO;
             f.hurtUntil = f.elapsed + 450;
             // **撞了就把它卷进缝里。** 一片云要走一秒多,不这么做的话
             // 挨打的无敌时间一过又撞一下,一片墙能吃掉三条命 ——
             // 那是在罚「没躲开」这一个错误三次
-            f.birdY = o.gapY;
+            f.birdY = gapAt(o, f.birdX);
             f.vy = 0;
             if (f.lives <= 0) { this._finish('crash'); return; }
         }
@@ -1347,6 +1452,21 @@ export class Flight {
             if (rnd() < 0.55) f.foods.push({ x: VW + 16, y: gy, type: pick(FOOD_TYPES) });
             return;
         }
+        // **狂潮:一次撒好几样,几乎不放障碍。**
+        // 留一点障碍是故意的 —— 全清的话「无敌」这件事就没有意义了,
+        // 而撞碎障碍本身是这十秒里最痛快的一件
+        if (f.frenzy > 0) {
+            if (rnd() < FRENZY_HAZARD) {
+                this._hazard(1);
+            } else {
+                for (let i = 0; i < FRENZY_FOOD; i++) {
+                    f.foods.push(shift({ ...spot(), type: pick(FOOD_TYPES) },
+                                       i * 46 + rnd() * 20));
+                }
+            }
+            return;
+        }
+
         const r = rnd();
 
         // 飞法道具自己一条线:自己掷骰子、自己的间隔、放在门上。
@@ -1377,7 +1497,10 @@ export class Flight {
         } else if (r < POWER_RATE + f.hazard && f.elapsed >= f.hazAt) {
             // 障碍**不跟着哇鸥走** —— 跟着走就成了追着人扔石头,
             // 而它靠的是「一簇里必留一条空道」那套规矩
-            this._hazard(1 + Math.floor(f.wave / 4));
+            // 开局那几波偶尔来两个,不再是清一色的单个 ——
+            // **「每次都恰好一个」本身就是一种均匀**
+            const n = 1 + Math.floor(f.wave / 4) + (f.wave < 4 && rnd() < 0.3 ? 1 : 0);
+            this._hazard(n);
             f.hazAt = f.elapsed + HAZ_MIN_MS;
         } else {
             f.foods.push({ ...spot(), type: pick(FOOD_TYPES) });
@@ -1532,6 +1655,7 @@ export class Flight {
 
         if (weather === 'rainy') drawRain(ctx, t, HORIZON);
         if (weather === 'foggy') drawFog(ctx, t, HORIZON);
+        this._drawFrenzy(ctx, f);
         this._drawWave(ctx, f);
         this._drawHunger(ctx, f);
         this._drawCut(ctx, f);          // 黑边压在最上面
@@ -1644,6 +1768,63 @@ export class Flight {
         if (b) ctx.fillRect(l, VH - b, w, 1);
         if (l) ctx.fillRect(l - 1, t, 1, h);
         if (r) ctx.fillRect(VW - r, t, 1, h);
+    }
+
+    /**
+     * 觅食狂潮的画面:开场一片金光,全程四处放烟花。
+     *
+     * **这十秒是奖励,画面得说出来。** 一百一十连击是这一局最难的一件事,
+     * 如果兑现的时候只是「食材变多了」,那玩家未必知道自己达成了什么 ——
+     * 金光和烟花不是装饰,是**收据**。
+     *
+     * 烟花不存粒子:按时间算出「现在有哪三簇、各自炸开多久了」,
+     * 位置用时间哈希出来。**不存状态的特效不会漏、不会泄、不会在暂停后爆一堆。**
+     */
+    _drawFrenzy(ctx, f) {
+        if (f.frenzy <= 0) return;
+        const t = f.elapsed;
+        const since = FRENZY_MS - f.frenzy;
+        // 开场那一下:整屏压一层金,中间一圈扩开的环
+        if (since < FRENZY_IN) {
+            const p = 1 - since / FRENZY_IN;
+            ctx.fillStyle = `rgba(255, 224, 138, ${(p * 0.5).toFixed(3)})`;
+            ctx.fillRect(0, 0, VW, VH);
+            const r = Math.round((1 - p) * VW * 0.6) + 8;
+            ctx.fillStyle = `rgba(255, 253, 244, ${(p * 0.9).toFixed(3)})`;
+            for (let n = 0; n < 40; n++) {
+                const th = n / 40 * Math.PI * 2;
+                ctx.fillRect(Math.round(VW / 2 + Math.cos(th) * r),
+                             Math.round(VH / 2 + Math.sin(th) * r * 0.55), 3, 3);
+            }
+        }
+        // 全程:四处炸烟花。同时最多五簇,每簇活 700 毫秒 ——
+        // 三簇的时候一眼只看得见一两朵,「绚烂」这个词撑不起来
+        for (let i = 0; i < 5; i++) {
+            const k = Math.floor(t / 240) - i;
+            if (k < 0) continue;
+            const age = t - k * 240;
+            if (age > 700) continue;
+            const h = (k * 2654435761) >>> 0;
+            const cx = 40 + (h % (VW - 80));
+            const cy = 26 + ((h >>> 9) % 130);
+            const p = age / 700;
+            const rad = 5 + p * 44;
+            const a = (1 - p) * 0.92;
+            ctx.fillStyle = k % 3 === 0 ? `rgba(255, 253, 244, ${a.toFixed(3)})`
+                          : k % 3 === 1 ? `rgba(245, 184, 61, ${a.toFixed(3)})`
+                                        : `rgba(239, 119, 87, ${a.toFixed(3)})`;
+            for (let n = 0; n < 12; n++) {
+                const th = n / 12 * Math.PI * 2 + k;
+                ctx.fillRect(Math.round(cx + Math.cos(th) * rad),
+                             Math.round(cy + Math.sin(th) * rad), 2, 2);
+            }
+        }
+        // 快结束的时候上下压两条金边闪一闪 —— 「要没了」也得看得见
+        if (f.frenzy < 2200 && Math.floor(t / 140) % 2 === 0) {
+            ctx.fillStyle = 'rgba(245, 184, 61, 0.55)';
+            ctx.fillRect(0, 0, VW, 3);
+            ctx.fillRect(0, VH - 3, VW, 3);
+        }
     }
 
     /**
@@ -1772,6 +1953,25 @@ export class Flight {
             ctx.fillRect(VW - 10, y - CORRIDOR_GAP, 4, CORRIDOR_GAP * 2);
             ctx.fillRect(VW - 22, y - CORRIDOR_GAP, 16, 2);
             ctx.fillRect(VW - 22, y + CORRIDOR_GAP - 2, 16, 2);
+            // **缝会往哪边走,也得预告。** 三分钟之后它是斜的,
+            // 而「进得去」和「走得完」是两件事 —— 只标进口等于只说了一半:
+            // 出口那条线画暗一档,中间几个箭头指出往哪挪
+            const bend = f.warn.bend ?? 0;
+            if (bend) {
+                const y2 = Math.round(y + bend);
+                ctx.fillStyle = '#c98a1e';
+                for (let x = 0; x < VW; x += 24) ctx.fillRect(x, y2, 4, 1);
+                const dir = Math.sign(bend);
+                ctx.fillStyle = blink ? '#f5b83d' : '#c98a1e';
+                for (let i = 1; i <= 3; i++) {
+                    const ax = Math.round(VW * i / 4);
+                    const ay = Math.round(y + bend * i / 4);
+                    for (let k = 0; k < 4; k++) {          // 一个小人字箭头
+                        ctx.fillRect(ax - 4 + k, ay + dir * k, 2, 2);
+                        ctx.fillRect(ax + 4 - k, ay + dir * k, 2, 2);
+                    }
+                }
+            }
         }
 
         for (const o of f.walls) this._drawWall(ctx, o);
@@ -1779,10 +1979,12 @@ export class Flight {
 
     _drawWall(ctx, o) {
         const x0 = Math.round(o.x);
-        const gTop = Math.round(o.gapY - CORRIDOR_GAP);
-        const gBot = Math.round(o.gapY + CORRIDOR_GAP);
         for (let dx = 0; dx < o.w; dx += 4) {
             const x = x0 + dx;
+            // **缝的高度逐列算** —— 和判定用的是同一个 gapAt
+            const gc = gapAt(o, x);
+            const gTop = Math.round(gc - CORRIDOR_GAP);
+            const gBot = Math.round(gc + CORRIDOR_GAP);
             if (x + 4 <= 0 || x >= VW) continue;
             const w = Math.min(4, VW - x, x0 + o.w - x);
             // 疙瘩按「离云的左边多远」算,不按屏幕坐标 ——

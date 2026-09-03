@@ -335,7 +335,7 @@ function startFlight(sprites) {
             }
             // 道具那一格。**只在文字真的变了的时候才重写** —— onTick 一秒六十次,
             // 而这行字一秒最多变一次(秒数);拿签名比一下就够,省掉 59 次 innerHTML
-            const sig = `${hud.mode}${hud.modeLeft}|${hud.rush}|${hud.magnet}|${hud.shieldN}:${hud.shield}`;
+            const sig = `${hud.mode}${hud.modeLeft}|${hud.frenzy}|${hud.rush}|${hud.magnet}|${hud.shieldN}:${hud.shield}`;
             if (sig !== flyHud.sig) {
                 flyHud.sig = sig;
                 const bits = [];
@@ -343,6 +343,8 @@ function startFlight(sprites) {
                 if (hud.modeLeft) {
                     bits.push(`<i class="px-icon px-icon--${hud.mode}"></i>${hud.modeLeft}s 翻倍`);
                 }
+                // 觅食狂潮:一百一十连击换来的十秒,摆在最前面
+                if (hud.frenzy) bits.push(`<i class="px-icon px-icon--star"></i>${hud.frenzy}s 狂潮`);
                 if (hud.rush) bits.push(`<i class="px-icon px-icon--double"></i>${hud.rush}s 无敌`);
                 if (hud.magnet) bits.push(`<i class="px-icon px-icon--magnet"></i>${hud.magnet}s`);
                 if (hud.shieldN) bits.push(`<i class="px-icon px-icon--shield"></i>×${hud.shieldN}`);

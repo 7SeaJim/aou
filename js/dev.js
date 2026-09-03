@@ -509,6 +509,7 @@ export function installDev({ getState, mutate, storage, fly, getFlight, getHut, 
             const f = F.f;
             if (!kind) {
                 return {
+                    狂潮: f.frenzy / 1000 + 's',
                     颠倒: f.flip / 1000 + 's',
                     无敌: f.rushMs / 1000 + 's',
                     磁铁: f.magnetMs / 1000 + 's',
@@ -527,13 +528,18 @@ export function installDev({ getState, mutate, storage, fly, getFlight, getHut, 
                 F._startCut(kind === 'vert' ? 'climb' : kind);
                 return MODES[kind] + '(二十秒,期间食材翻倍)';
             }
+            if (kind === 'frenzy' || kind === 'chao') {
+                f.frenzy = ms || 10_000;
+                f.combo = Math.max(f.combo, 110);
+                return `觅食狂潮 ${f.frenzy / 1000}s(满屏食材 + 翻倍 + 无敌)`;
+            }
             if (kind === 'magnet') { f.magnetMs = ms || 15_000; return `磁铁 ${f.magnetMs / 1000}s(整屏吸)`; }
             if (kind === 'rush' || kind === 'double') { f.rushMs = ms || 8000; return `无敌前冲 ${f.rushMs / 1000}s`; }
             if (kind === 'shield') {
                 f.shieldMs = ms || 45_000; f.shieldN = 2;
                 return `护盾 2 次 / ${Math.ceil(f.shieldMs / 1000)}s`;
             }
-            return "只认 flip / mirror / climb / dive / magnet / shield / rush";
+            return "只认 flip / mirror / climb / dive / frenzy / magnet / shield / rush";
         },
 
         /** 小屋:把时钟拨到某个时段看效果。传 null 恢复真实时间。 */
@@ -647,7 +653,7 @@ export function installDev({ getState, mutate, storage, fly, getFlight, getHut, 
                 'wa.flight':       '当前这一局(可改 .f.lives / .f.speed)',
                 'wa.hut':          '小屋那一场;wa.hut.hopAt = wa.hut.t 让它跳一下',
                 'wa.god()':        '飞行不死:不掉命也不掉肚子(照挨照闪);wa.god(false) 关',
-                'wa.buff(k, s)':   "飞行道具直接上身 — flip 颠倒 / mirror 镜像 / climb 上钻 / dive 下扎 / rush 无敌 / magnet / shield;不传参看现状",
+                'wa.buff(k, s)':   "飞行道具直接上身 — flip 颠倒 / mirror 镜像 / climb 上钻 / dive 下扎 / frenzy 觅食狂潮 / rush 无敌 / magnet / shield;不传参看现状",
                 'wa.code()':       '导出存档码',
             });
             console.log('URL 参数(打开就生效):?scene=mid  ?seed=42  ?tries=99  ?weather=rainy  ?day=1  ?time=night(待机界面时段)');
