@@ -9,7 +9,7 @@
  */
 
 import { PixelScreen, sprite, drawStanding } from './pixmap.js';
-import { SCENERY } from './pixels.js';
+import { SCENERY, HUT_IDLE } from './pixels.js';
 import { VW, VH } from './scene.js';
 import { drawWear } from './wear.js';
 
@@ -189,59 +189,47 @@ function paintBedding(c, L) {
 
 /* ---------- 哇鸥 ---------- */
 
+/** 待机一帧多久。原稿的 GIF 是 150ms 一帧,照抄 */
+const IDLE_MS = 150;
+/** 待机那套图里眼睛离底边多高(112 高的图,眼睛在第 28 行)。装扮按这条线对齐 */
+const IDLE_EYE = 112 - 28;
+
 /**
- * 它多数时候是窝着的一团;每隔一阵伸出两条细腿站起来,在棚里走两步再窝回去。
- * 腿是画上去的,不做成精灵图 —— 走路时腿的角度一直在变,做成帧图要画一大堆。
+ * 白天窝在棚里的那只:**直接播原作者给的四帧**。
+ *
+ * 原来这儿是「一张静图 + 每隔九秒站起来走两步」——
+ * 走那一段的腿是代码画的(`drawLegs`),身子是那张静图上下挪,
+ * 是在没有动画素材的时候攒出来的一段动。现在有真的了:
+ * 四帧一轮的扇翅膀,连起来就是待机,那段自造的走路逻辑一起删掉。
+ *
+ * > **有了真的动画素材,就该把攒出来的那段动删干净。**
+ * > 留着它等于同一个角色有两套动的逻辑,而其中一套是替补。
+ *
+ * 表情改过(眼泪抹掉、嘴换成红三角),细账在 tools/idleart.py。
  */
 function drawWaou(ctx, slot, t, wearing = null) {
-    // 近景这套图 99 高,装扮的锚点是从**顶行**算的,所以传的是顶边不是底边
-    const top = base => base - 99;
-
     if (slot === 'night') {
+        // 夜里那张还是原来的近景图(99 高,装扮锚点从顶行算)
         const cv = sprite('hut_sleep', SCENERY.hut_sleep);
         const breathe = Math.sin(t * 0.0012) > 0 ? 0 : 1;
         drawStanding(ctx, cv, GULL_X, GROUND + 22 + breathe);
-        drawWear(ctx, wearing, 'big', GULL_X, top(GROUND + 22 + breathe));
+        drawWear(ctx, wearing, 'big', GULL_X, GROUND + 22 + breathe - 99);
         drawZzz(ctx, GULL_X + 72, GROUND - 62, t);
         return;
     }
 
-    const CYCLE = 9000;
-    const p = t % CYCLE;
-    const cv = sprite('hut_waou', SCENERY.hut_waou);
-
-    if (p < 5200) {                                  // 窝着,轻轻起伏
-        const breathe = Math.sin(t * 0.0022) > 0 ? 0 : 1;
-        drawStanding(ctx, cv, GULL_X, GROUND + 22 + breathe);
-        drawWear(ctx, wearing, 'big', GULL_X, top(GROUND + 22 + breathe));
-        return;
-    }
-
-    // 站起来走两步。走的这段里 x 来回挪,腿交替迈
-    const w = (p - 5200) / (CYCLE - 5200);           // 0..1
-    const swing = Math.sin(w * Math.PI * 2);
-    const x = Math.round(GULL_X + swing * 62);
-    const lift = w < 0.08 ? Math.round(w / 0.08 * 26)
-               : w > 0.92 ? Math.round((1 - w) / 0.08 * 26) : 26;
-    const step = Math.sin(w * Math.PI * 10);
-
-    drawLegs(ctx, x, GROUND + 22, lift, step);
-    drawStanding(ctx, cv, x, GROUND + 22 - lift);
-    drawWear(ctx, wearing, 'big', x, top(GROUND + 22 - lift));
-}
-
-/** 两条细长腿。抬起来多少由 lift 定,迈步靠 step 让两条腿反相。 */
-function drawLegs(ctx, x, baseY, lift, step) {
-    if (lift <= 0) return;
-    for (const [side, phase] of [[-1, 0], [1, Math.PI]]) {
-        const kx = x + side * 16;
-        const off = Math.round(Math.sin(step * 3 + phase) * 4);
-        ctx.fillStyle = '#e8384f';
-        ctx.fillRect(kx, baseY - lift, 4, lift);            // 腿
-        ctx.fillRect(kx - 3 + off, baseY - 3, 10, 4);       // 脚
-        ctx.fillStyle = '#c14e33';
-        ctx.fillRect(kx, baseY - 5, 4, 4);
-    }
+    const i = Math.floor(t / IDLE_MS) % HUT_IDLE.length;
+    const cv = sprite('hut_idle' + i, HUT_IDLE[i]);
+    const base = GROUND + 22;
+    drawStanding(ctx, cv, GULL_X, base);
+    // **装扮的锚点按「眼线」对齐,不按图的顶边。**
+    //
+    // `WEAR.bigY` 是照夜里那张(99 高、眼睛在第 46 行)标的,所以它其实是
+    // 「离眼线多少」+ 46。换成这套新图(112 高、眼睛在第 28 行)之后,
+    // 照顶边传就会把斗笠压到眼睛上、围巾掉到肚子上 ——
+    // 两张图的「额头」不一样高,而帽子该落在头顶、围巾该落在下巴底下,
+    // **这两处都是相对脸的,不是相对图框的。**
+    drawWear(ctx, wearing, 'big', GULL_X, base - IDLE_EYE - 46);
 }
 
 /** 睡着的时候飘出来的 Z */

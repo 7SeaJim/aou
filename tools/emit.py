@@ -3,7 +3,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'css', '')
 from pal import PAL, to_svg, to_uri
 from icons import ICONS
-from scenery import SCENERY, waou_frames
+from scenery import SCENERY, waou_frames, HUT_IDLE
 from wear import WEAR
 import frames
 from urllib.parse import quote
@@ -145,6 +145,14 @@ for name, v in WEAR.items():
     js.append("    %s: { big: %s, bigY: %d, small: %s, smallY: %d }," % (
         name, js_grid(v['big']), v['big_y'], js_grid(v['small']), v['small_y']))
 js.append("};")
+js.append("")
+js.append("""/** 小屋里的待机四帧(原作者给的像素稿,表情改过 —— 见 tools/idleart.py)。
+ *  **四帧共用一个并集框**,所以它们不走 SCENERY 那条路(那条会各自裁空白,
+ *  裁完播起来身子会跳)。 */""")
+js.append("export const HUT_IDLE = [")
+for g in HUT_IDLE:
+    js.append("    %s," % js_grid(g))
+js.append("];")
 js.append("")
 js.append("/** 哇鸥飞行四帧:身体不动只换翅膀,重心恒定,播起来不抖 */")
 js.append("export const WAOU = [")
