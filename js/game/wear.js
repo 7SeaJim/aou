@@ -24,10 +24,15 @@ const ORDER = ['neck', 'hat'];
  * @param {number} topY     精灵图**内容顶行**的 y(锚点从这里算起)
  * @param {string} [phase]  时段。装扮也得跟着天色走,不然傍晚整个画面暗下来,
  *                          只有它头上那顶帽子还是白天那么亮
+ * @param {string} [only]   只画这一格('hat' / 'neck')。
+ *   **给「一张图上帽子和围巾要按两个基准摆」的情况用的** ——
+ *   `bigY` 是照某一张图标的(帽子离眼睛多远、围巾离下巴多远),
+ *   换一张脸的比例不一样的图,一个锚点就同时对不上这两处了。
  */
-export function drawWear(ctx, wearing, which, cx, topY, phase = 'day') {
+export function drawWear(ctx, wearing, which, cx, topY, phase = 'day', only = null) {
     if (!wearing) return;
     for (const slot of ORDER) {
+        if (only && slot !== only) continue;
         const id = wearing[slot];
         const w = id && WEAR[id];
         if (!w) continue;

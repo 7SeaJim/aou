@@ -37,7 +37,10 @@ NATIVE_H = 58               # 原生格子的高(2048 里一格 22 像素)
 ZOOM = 2                    # 整数倍放大
 FACE_SRC = 'art/形象稿/形象稿_正面.png'
 FACE_SRC_H = 77             # 形象稿缩到这个高,它的球正好和身子的球一样宽(68)
-FACE_EYE_TOP = 19           # 眼睛的上沿落在身子的第几行(原生格)
+EYE_SRC_H = 66              # **眼睛单独缩一档**:同一张脸稿缩得小一点再抠眼睛,
+                            # 比把抠出来的眼睛再缩一次干净 —— 后者会把梯子的横档抹掉
+FACE_EYE_TOP = 16           # 眼睛的上沿落在身子的第几行(原生格)
+BEAK_DROP = 13              # 嘴的上沿比眼睛低多少
 FACE_CLEAR = (6, 44, 8, 70)     # 先推平的那块(上,下,左,右),原生格
 
 
@@ -67,28 +70,38 @@ def blobs(g, chars):
     return out
 
 
+def _trace_face(h):
+    im = Image.open(FACE_SRC)
+    im = im.crop(im.getbbox())
+    w, hh = im.size
+    return despeckle(snap(im.resize((round(w * h / hh), h), Image.BOX), list('KwVX')), 1)
+
+
 def face_parts():
     """从形象稿里抠出两只眼和一张嘴,已经缩到和身子一个尺度。
 
     **按连通块抠,不按矩形框。** 框住的那一片里还有形象稿自己的翅膀尖,
     整块搬过来会在身上多出两个黑三角(第一版就是这样)。
+
+    眼睛和嘴各按各的尺度抠:眼睛用 EYE_SRC_H 那一档(小一点),嘴用 FACE_SRC_H。
+    **不是抠出来再缩** —— 梯子眼的横档只有一格宽,再缩一次就没了。
+    返回 (眼睛, 嘴) 两组,让调用方分别摆位。
     """
-    im = Image.open(FACE_SRC)
-    im = im.crop(im.getbbox())
-    w, h = im.size
-    g = despeckle(snap(im.resize((round(w * FACE_SRC_H / h), FACE_SRC_H), Image.BOX),
-                       list('KwVX')), 1)
-    parts = []
-    for bl in blobs(g, 'K'):                      # 两只眼:大小和位置都在这一档
+    ge = _trace_face(EYE_SRC_H)
+    eyes = []
+    for bl in blobs(ge, 'K'):
         ys = [y for _, y in bl]
-        if 90 < len(bl) < 200 and 18 <= min(ys) and max(ys) <= 38:
-            parts.append(bl)
-    for bl in blobs(g, 'KXr'):                    # 嘴:红 + 描边,在眼睛下面一点
+        if 60 < len(bl) < 200 and 14 <= min(ys) and max(ys) <= 36:
+            eyes.append(bl)
+    gm = _trace_face(FACE_SRC_H)
+    beak = []
+    for bl in blobs(gm, 'KXr'):
         ys = [y for _, y in bl]
         if 30 < len(bl) < 400 and 28 <= min(ys) <= 36:
-            parts.append(bl)
+            beak = bl
             break
-    return [(x, y, g[y][x]) for bl in parts for x, y in bl]
+    return ([(x, y, ge[y][x]) for bl in eyes for x, y in bl],
+            [(x, y, gm[y][x]) for x, y in beak])
 
 
 def calm(g, face):
@@ -118,18 +131,92 @@ def calm(g, face):
         for x in range(w):
             if g[y][x] in RED:
                 g[y][x] = 'w'
+    smooth_belly(g)
+    close_outline(g)
     # **先对折,再贴脸。** 顺序反过来的话眼睛也会被镜像成一模一样的两只
     cx = axis(g)
     symmetrize(g, cx)
     if not face:
         return g
-    # 贴脸:横向对中轴,纵向按眼睛的上沿
-    fx0 = (min(x for x, _, _ in face) + max(x for x, _, _ in face)) // 2
-    fy0 = min(y for _, y, _ in face)
-    for x, y, ch in face:
-        nx, ny = cx + (x - fx0), FACE_EYE_TOP + (y - fy0)
-        if 0 <= ny < h and 0 <= nx < w and g[ny][nx] != '.':
-            g[ny][nx] = ch
+    eyes, beak = face
+    # 贴脸:横向对中轴,纵向按各自的上沿。眼睛和嘴分开摆 ——
+    # 眼睛那一档缩得小,两组的坐标系不是同一个
+    def stamp(cells, top):
+        if not cells:
+            return
+        x0 = (min(x for x, _, _ in cells) + max(x for x, _, _ in cells)) // 2
+        y0 = min(y for _, y, _ in cells)
+        for x, y, ch in cells:
+            nx, ny = cx + (x - x0), top + (y - y0)
+            if 0 <= ny < h and 0 <= nx < w and g[ny][nx] != '.':
+                g[ny][nx] = ch
+    stamp(eyes, FACE_EYE_TOP)
+    stamp(beak, FACE_EYE_TOP + BEAK_DROP)
+    return g
+
+
+def close_outline(g):
+    """把描边补齐成一整圈。
+
+    他说「边缘部分有描边部分没有,翅膀和身体的连接太生硬了」——
+    量了一下:**轮廓上有四成的格子不是描边**。原因是点取样:原稿的描边只有
+    一格宽,取样点落在描边上就有、落在旁边的白上就没有,于是断断续续。
+    (这是 NEAREST 换来干净边线的代价,躲不掉,只能补。)
+
+    补法是像素画里最老的一条:**凡是挨着透明的格子,一律改成描边色。**
+    这样轮廓一定闭合,而且厚度恒为一格。翅膀和身子的接缝也跟着有了边 ——
+    原来那儿是深色直接切白色,看着像贴上去的。
+    """
+    h, w = len(g), len(g[0])
+    edge = []
+    for y in range(h):
+        for x in range(w):
+            if g[y][x] == '.':
+                continue
+            for dy in (-1, 0, 1):
+                for dx in (-1, 0, 1):
+                    if dx == 0 and dy == 0:
+                        continue
+                    ny, nx = y + dy, x + dx
+                    if not (0 <= ny < h and 0 <= nx < w) or g[ny][nx] == '.':
+                        edge.append((x, y))
+                        break
+                else:
+                    continue
+                break
+    for x, y in edge:
+        g[y][x] = 'K'
+    return g
+
+
+def smooth_belly(g):
+    """把肚皮那片浅灰的上沿抹平。
+
+    原稿里肚皮和身子之间是一道**软**的过渡;按原生格子点取样之后,
+    那道软边变成一排随机的尖刺 —— 他说的「阴影太尖了」就是这个。
+    (这是点取样必然的副作用:软边上每一格取到什么,取决于取样点正好落在
+    深的那半格还是浅的那半格。)
+
+    做法是把每一列的上沿取出来,用中位数滤一遍再照它重画。
+    **只动肚皮那一段**(身子下半),碰不到嘴和轮廓。
+    """
+    h, w = len(g), len(g[0])
+    y0 = int(h * 0.66)
+    tops = []
+    for x in range(w):
+        col = [y for y in range(y0, h) if g[y][x] == 'V']
+        tops.append(min(col) if col else None)
+    xs = [x for x in range(w) if tops[x] is not None]
+    if len(xs) < 6:
+        return g
+    sm = dict()
+    for x in xs:
+        near = [tops[i] for i in range(x - 3, x + 4) if 0 <= i < w and tops[i] is not None]
+        sm[x] = sorted(near)[len(near) // 2]
+    for x in xs:
+        for y in range(y0, h):
+            if g[y][x] in 'wV':
+                g[y][x] = 'V' if y >= sm[x] else 'w'
     return g
 
 
