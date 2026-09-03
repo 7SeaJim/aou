@@ -138,6 +138,22 @@ const SPEED_0 = 2.9;
  */
 const SPEED_GROW = 0.22;
 /**
+ * 速度的上限。**原来不封顶,理由是「一局的终点应该是撞死了,
+ * 不是不再变难了」—— 那句话没错,错在把它交给了速度。**
+ *
+ * 速度决定的是「从露头到眼前有几秒」,而那几秒是玩家**读得过来读不过来**
+ * 的门槛,不是难度旋钮:
+ *
+ *     开局 2.9  → 174 px/s → 3.2 秒
+ *     3 分半 5.0 → 302 px/s → 1.85 秒   ← 他撞墙的地方
+ *     6 分  6.7 → 402 px/s → 1.4 秒    ← 已经不是「难」,是看不清
+ *
+ * 封在 4.6(276 px/s,2.0 秒)。**再往后要变难,靠的是路线,不是眼力** ——
+ * 密度、簇的宽度、窄道、饿,这几样都还在涨,而且都是**能练的**。
+ * 助跑坡照旧管用:它让你更晚才碰到这个顶。
+ */
+const SPEED_MAX = 4.6;
+/**
  * 等级每一级把**提速的斜率**加多少,以及生成间隔缩多快。
  *
  * 原来等级和天气是乘在 `baseSpeed` 和 `baseInterval` 上的,
@@ -170,22 +186,40 @@ const SPAWN_0 = 780;
  * 第二下永远来不及 —— 那时候躲不躲得掉就跟操作没关系了。
  */
 const SPAWN_GROW = 110;
-const SPAWN_MIN = 420;
+/**
+ * 生成间隔的下限。420 → 520。
+ *
+ * 420 毫秒 × 后期的速度 = 两次生成之间只隔 127 像素,而哇鸥换一条道
+ * 最快要 0.26 秒 —— **连着两簇之间根本没有换道的余地**。
+ */
+const SPAWN_MIN = 520;
+/**
+ * 两簇障碍之间至少隔多久。**这一条是按秒定的,不是按像素。**
+ *
+ * 他报的「一竖排障碍中间的空路后面又生成一个障碍把路堵死」就是这儿:
+ * 生成是每 `spawnInterval` 掷一次骰子,后期 62% 的面都是障碍,
+ * 于是**连着两次掷出障碍**是常事 —— 两簇只差一个间隔,而且第二簇的空道
+ * 允许挪一条,那一条正好压在第一簇的空道后面。画面上看就是一堵墙。
+ *
+ * 换道要 0.26~0.35 秒,700 毫秒是两倍的余量。掷到障碍但没到点的,
+ * 这一次改放吃的 —— **该密的是东西,不是墙。**
+ */
+const HAZ_MIN_MS = 700;
 
 /**
- * 障碍占生成的比例:开局 36%,一路涨到 62%。
+ * 障碍占生成的比例:开局 42%,涨到 55% 封顶(约两分半)。
  *
  * 原来开局是 22%,配上 860 毫秒的生成间隔,等于**平均 3.9 秒才来一个障碍**,
- * 而一个障碍横穿画面要 3.2 秒 —— 场上长时间只有零点几个东西。
- * 那不是「先热热身」,是**头一分钟没有游戏**:玩家在空荡荡的天上飞,
- * 学不到任何东西,等难度上来了才发现自己什么都没练过。
+ * 而一个障碍横穿画面要 3.2 秒 —— 头一分钟没有游戏。42% 大约是场上常驻
+ * 一个多障碍:一上来就得躲,但还留得出吃东西的空当。
  *
- * 36% 大约是场上常驻一个多障碍:一上来就得躲,但还留得出吃东西的空当。
- * 涨到 62% 封顶(斜率 0.09/分钟,约三分钟摸到顶)——
- * **后期真正在变难的是速度和间隔**,占比只是把「空当」压薄。
+ * **上限从 62% 压到 55%,斜率从 0.09 减到 0.05。** 这一档和速度上限、
+ * 簇宽上限一起,在两分半到三分钟之间**全部封顶** —— 那之后障碍这条线
+ * 不再变难,玩家会有一段「不过如此」。**那段松弛是故意的**,
+ * 它是后面那件事的铺垫:见 MODE_CD_FROM。
  */
 const HAZARD_0 = 0.42;
-const HAZARD_MAX = 0.62;
+const HAZARD_MAX = 0.55;
 /** 多久算一波。到点报一次,让玩家知道是游戏变难了不是自己变菜了 */
 const WAVE_MS = 20_000;
 /**
@@ -353,8 +387,37 @@ const FLIP_MS = 20_000;
 const FLIP_MS_MIN = 12_000;
 const FLIP_MS_DECAY = 300;      // 每过一波少这么多毫秒
 const FLIP_AFTER = 60_000;      // 开局这么久之内不出
-const FLIP_COOLDOWN = 50_000;   // 两次之间至少隔这么久
-const FLIP_CHANCE = 0.4;        // 道具位里有多大概率是它
+/* ---------- 后期的难度全在这条线上 ----------
+ *
+ * 原来后期是靠障碍**越来越多、越来越快**顶上去的,而那条路走到头是一堵墙:
+ * 五条道填四条、两簇之间只剩 127 像素、速度快到看不清 ——
+ * 玩家学不到东西,只知道自己死了。
+ *
+ * > **难度的上限不该是「东西多到过不去」,该是「你得换一种飞法」。**
+ *
+ * 所以障碍那三条线(速度、密度、簇宽)在两分半到三分钟之间全部封顶,
+ * 玩家会有一段**「不过如此」**;紧接着从三分钟起,换飞法的道具
+ * 冷却一路缩短、出现概率一路抬高 —— 到七分钟基本是一个飞法接一个飞法。
+ *
+ * 这样后期考的是**认不认得出这是哪一种、手上换不换得过来**,
+ * 而这两件事都是能练的;而「障碍多到过不去」不是。
+ */
+const FLIP_COOLDOWN = 75_000;   // 冷却的起点。前三分钟它是个稀客
+const MODE_CD_MIN = 15_000;     // 缩到这儿为止(七分钟)
+const MODE_CD_FROM = 180_000;   // 三分钟起开始缩(那会儿别的都封顶了)
+const MODE_CD_PER_MIN = 15_000; // 每多飞一分钟少这么多
+/**
+ * 飞法道具**自己掷一次骰子**,不跟三个纯加成抢那 4% 的位子。
+ *
+ * 挤在同一个位子里的时候,它一分钟才出一个 —— 而「后期越来越多地遇到飞法」
+ * 这件事,得让它自己有一条能往上抬的线。抬的是**出现的概率**,
+ * 真正管住节奏的是冷却(_modeCd):概率高只是让它「冷却一到就来」。
+ */
+const MODE_RATE_0 = 0.05;
+const MODE_RATE_MAX = 0.22;
+const MODE_RATE_PER_MIN = 0.05;
+/** 两个飞法道具之间至少隔这么久 —— 躲开了也不至于下一秒又来一个 */
+const MODE_SPAWN_GAP = 8000;
 const FLIP_HAUL = 2;            // 颠倒期间捡到的算几份
 /**
  * 过场:上下左右的黑边收拢 → 哇鸥归到画面正中 → 在最紧的那一刻翻 →
@@ -511,8 +574,12 @@ export class Flight {
             denser: SPAWN_GROW * (1 + (lv - 1) * LV_GROW) * w.speed,
             hazard: Math.max(0.08, HAZARD_0 - rw.flag),   // 风向旗:障碍少一些
             flag: rw.flag,
-            // 上一簇障碍留的那条空道。下一簇只能开在它够得着的范围里
+            // 上一簇障碍留的那条空道(起点)和它有多宽。
+            // 下一簇只能开在它够得着的范围里
             lastGap: null,
+            lastW: 1,
+            hazAt: 0,            // 下一簇障碍最早什么时候能放(见 HAZ_MIN_MS)
+            modeAt: 0,           // 下一个飞法道具最早什么时候能出
 
             /* ---- 换飞法的那四个(同一时间只可能有一个) ---- */
             mode: 'flat',        // flat / flip / mirror / climb / dive
@@ -722,7 +789,7 @@ export class Flight {
         if (f.flip > 0) {
             f.flip = Math.max(0, f.flip - dt);
             if (f.flip === 0) {
-                f.flipAt = f.elapsed + FLIP_COOLDOWN;
+                f.flipAt = f.elapsed + this._modeCd();
                 this._startCut('flat');      // 回到平常那个飞法
                 this._emit();
                 return;
@@ -972,6 +1039,7 @@ export class Flight {
         f.warn = null;
         f.spawnTimer = 0;
         f.lastGap = null;          // 翻完是新局面,上一簇的空道不再作数
+        f.hazAt = 0;
         sfx.play('event');
     }
 
@@ -1073,9 +1141,9 @@ export class Flight {
         // **开局那一档三样都不碰** —— 它们改的是「多久变难」,
         // 不是「起点多难」。这两个旋钮混着拧过一次,代价是玩家每局
         // 开头的手感都不一样,而他根本不知道为什么。
-        f.speed = f.baseSpeed * (1 + mins * f.grow);
+        f.speed = Math.min(SPEED_MAX, f.baseSpeed * (1 + mins * f.grow));
         f.spawnInterval = Math.max(SPAWN_MIN, f.baseInterval - mins * f.denser);
-        f.hazard = Math.min(HAZARD_MAX - f.flag, Math.max(0.08, HAZARD_0 - f.flag) + mins * 0.09);
+        f.hazard = Math.min(HAZARD_MAX - f.flag, Math.max(0.08, HAZARD_0 - f.flag) + mins * 0.05);
 
         // 每 20 秒报一波。**得让玩家听见、看见它变难了** ——
         // 悄悄变难只会让人觉得「我怎么突然打不过了」,而不是「又上了一档」
@@ -1180,8 +1248,30 @@ export class Flight {
     _modeReady() {
         const f = this.f;
         if (f.mode !== 'flat' || f.cut || f.flip > 0 || f.elapsed < f.flipAt) return null;
+        if (f.elapsed < f.modeAt) return null;
         const ok = MODES.filter(m => f.elapsed >= MODE_AFTER[m]);
         return ok.length ? ok[Math.floor(this.rng() * ok.length)] : null;
+    }
+
+    /** 三分钟之后飞了多久(分钟)。后期那两条线都按它算 */
+    _late() { return Math.max(0, this.f.elapsed - MODE_CD_FROM) / 60000; }
+
+    /** 换飞法的冷却。一路从 50 秒缩到 15 秒 */
+    _modeCd() {
+        return Math.max(MODE_CD_MIN, FLIP_COOLDOWN - this._late() * MODE_CD_PER_MIN);
+    }
+
+    /** 飞法道具每次生成的出现概率。一路从 5% 抬到 22% */
+    _modeRate() {
+        return Math.min(MODE_RATE_MAX, MODE_RATE_0 + this._late() * MODE_RATE_PER_MIN);
+    }
+
+    /** 当前那扇门的正中,在生成口上。飞法道具从这儿进来 */
+    _doorSpot() {
+        const f = this.f;
+        const g = this._gate();
+        const i = Math.min(LANES - 1, (f.lastGap ?? 2) + ((f.lastW ?? 1) - 1) / 2);
+        return f.vert ? { x: laneX(i), y: g.y, d: g.d } : { x: g.x, y: laneY(i), d: g.d };
     }
 
     /**
@@ -1259,17 +1349,36 @@ export class Flight {
         }
         const r = rnd();
 
+        // 飞法道具自己一条线:自己掷骰子、自己的间隔、放在门上。
+        // **它和三个纯加成不是一类东西** —— 那三个是白捡的,它是要还的
+        const mode = this._modeReady();
+        if (mode && rnd() < this._modeRate()) {
+            f.modeAt = f.elapsed + MODE_SPAWN_GAP;
+            f.powerups.push({ ...this._doorSpot(), type: MODE_TYPE[mode] });
+            return;
+        }
+
         if (r < POWER_RATE && f.elapsed >= f.powerAt) {
-            // 道具位里挑一个。颠倒够格的时候优先出它 —— 它是这里面唯一
-            // **有代价**的那个,不该和三个纯加成抢同一个概率
-            const mode = this._modeReady();
-            const type = mode && rnd() < FLIP_CHANCE ? MODE_TYPE[mode] : pick(POWERUPS);
+            const type = pick(POWERUPS);
+            /**
+             * **飞法道具放在当前那扇门的正中。**
+             *
+             * 「后期越来越多地遇到飞法」这件事,如果道具是随机撒在天上的,
+             * 那它就只是「越来越多地看见」—— 一个清醒的玩家会绕开:
+             * 它有代价,而后期正是最不想冒险的时候。于是难度那条线断了。
+             *
+             * 放在门上之后它**就是路本身**:想躲开得走一条更难的线。
+             * 这是个真选择(拿 = 换飞法 + 食材翻倍,躲 = 挤那条边),
+             * 而不是「顺手捡到」也不是「强塞给你」。
+             * 其它三个纯加成照旧撒在够得着的地方 —— 它们没有代价,不该抢路。
+             */
             f.powerups.push({ ...spot(), type });
             f.powerAt = f.elapsed + POWER_GAP;
-        } else if (r < POWER_RATE + f.hazard) {
+        } else if (r < POWER_RATE + f.hazard && f.elapsed >= f.hazAt) {
             // 障碍**不跟着哇鸥走** —— 跟着走就成了追着人扔石头,
             // 而它靠的是「一簇里必留一条空道」那套规矩
-            this._hazard(1 + Math.floor(f.wave / 3));
+            this._hazard(1 + Math.floor(f.wave / 4));
+            f.hazAt = f.elapsed + HAZ_MIN_MS;
         } else {
             f.foods.push({ ...spot(), type: pick(FOOD_TYPES) });
         }
@@ -1279,7 +1388,11 @@ export class Flight {
         // 一个障碍和一样食材叠在一起:两个圈重在一处,谁也认不出哪个能吃。
         // 生成节奏本来就靠 x 上的间距做疏密,加塞的那个不错开就是在破坏它
         const EXTRA_X = VW / 2;
-        if (this.state.weather === 'rainy' && rnd() < 0.3) this._hazard(1, EXTRA_X);
+        // 雨天加塞的那一个**不进链**:它排在半屏之后,而下一簇会在它之前
+        // 到达 —— 让它改写 lastGap 的话,下一簇就是照着一个还没轮到的局面
+        // 排的,「上一簇的空道走得到下一簇」这条保证当场作废。
+        // 它也绝不落在当前那条通道上(见 _hazard 的 chain=false)
+        if (this.state.weather === 'rainy' && rnd() < 0.3) this._hazard(1, EXTRA_X, false);
         if (this.state.weather === 'foggy' && rnd() < 0.25) {
             f.foods.push(shift({ ...spot(), type: pick(FOOD_TYPES) }, EXTRA_X));
         }
@@ -1305,26 +1418,51 @@ export class Flight {
      * 能跨三条,路线照样绕;间隔压到底线的时候只能跨一条,
      * 但**那一条一定走得到**。
      */
-    _hazard(n, dx = 0) {
+    /**
+     * @param {number} n     这一簇放几个
+     * @param {number} dx    再往生成口外推多远(天气加塞用)
+     * @param {boolean} chain 进不进「上一簇 → 这一簇」那条链
+     */
+    _hazard(n, dx = 0, chain = true) {
         const f = this.f, rnd = this.rng;
         const pick = a => a[Math.floor(rnd() * a.length)];
         // 纵向的道距是 48(一次跃起),横着飞是 47.5 —— 两边都按自己的算
         const step = f.vert ? V_HALF * 2 / (LANES - 1) : LANE_H;
         const reach = CLIMB_PX_PER_SEC * (f.spawnInterval / 1000);
         const jump = Math.max(1, Math.min(LANES - 1, Math.floor(reach / step)));
-        const from = f.lastGap ?? Math.floor(rnd() * LANES);
-        const lo = Math.max(0, from - jump), hi = Math.min(LANES - 1, from + jump);
-        const gap = lo + Math.floor(rnd() * (hi - lo + 1));
-        f.lastGap = gap;
+        /**
+         * 留出来的**不是一条道,是一扇门** —— 间隔压到 620 毫秒以下之后开两条。
+         *
+         * 一条道的时候,连着两簇的空道各挪一条,玩家就得每 0.5 秒精确换一次道,
+         * 一次不准就没了 —— 那不是路线,是节拍器。开两条相邻的道之后:
+         * 上一扇门 [g, g+1] 和下一扇 [g', g'+1] 之间 |g'-g| ≤ 1,
+         * **两扇门必然共用至少一条道** —— 也就是说总存在「不动也能过去」的走法,
+         * 想抄近路再自己挪。这条保证比「留一条空道」强一个量级。
+         */
+        const openW = chain && f.spawnInterval < 620 ? 2 : 1;
+        let gap;
+        if (chain) {
+            const top = LANES - openW;                 // 门的起点最多到这儿
+            const from = f.lastGap ?? Math.floor(rnd() * (top + 1));
+            const lo = Math.max(0, from - jump), hi = Math.min(top, from + jump);
+            gap = lo + Math.floor(rnd() * (hi - lo + 1));
+            f.lastGap = gap;
+            f.lastW = openW;
+        } else {
+            // 加塞的那一个不进链,也**绝不落在当前那扇门上** ——
+            // 它排在半屏之后,而玩家这会儿正照着那扇门走
+            gap = f.lastGap ?? Math.floor(rnd() * LANES);
+        }
+        const w = chain ? openW : (f.lastW ?? 1);
         const lanes = [];
-        for (let i = 0; i < LANES; i++) if (i !== gap) lanes.push(i);
+        for (let i = 0; i < LANES; i++) if (i < gap || i >= gap + w) lanes.push(i);
         // 洗牌后取前 n 条 —— 直接随机取会重复,重复了等于少放一个
         for (let i = lanes.length - 1; i > 0; i--) {
             const j = Math.floor(rnd() * (i + 1));
             [lanes[i], lanes[j]] = [lanes[j], lanes[i]];
         }
         const g = this._gate();
-        for (const i of lanes.slice(0, Math.min(n, LANES - 1))) {
+        for (const i of lanes.slice(0, Math.min(n, lanes.length))) {
             f.obstacles.push(f.vert
                 ? { x: laneX(i), y: g.y + (g.d === 1 ? -dx : dx), d: g.d, type: pick(OBSTACLES) }
                 : { x: g.x + (g.d === 2 ? -dx : dx), y: laneY(i), d: g.d, type: pick(OBSTACLES) });
