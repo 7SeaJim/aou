@@ -118,18 +118,43 @@ def calm(g, face):
         for x in range(w):
             if g[y][x] in RED:
                 g[y][x] = 'w'
+    # **先对折,再贴脸。** 顺序反过来的话眼睛也会被镜像成一模一样的两只
+    cx = axis(g)
+    symmetrize(g, cx)
     if not face:
         return g
-    # 贴脸:横向对球的中轴(拿头顶那几行量,那儿没有翅膀),纵向按眼睛的上沿
-    mid = [[x for x in range(w) if g[y][x] != '.'] for y in range(6, 14)]
-    mid = [xs for xs in mid if xs]
-    cx = round(sum((min(xs) + max(xs)) / 2 for xs in mid) / max(1, len(mid)))
+    # 贴脸:横向对中轴,纵向按眼睛的上沿
     fx0 = (min(x for x, _, _ in face) + max(x for x, _, _ in face)) // 2
     fy0 = min(y for _, y, _ in face)
     for x, y, ch in face:
         nx, ny = cx + (x - fx0), FACE_EYE_TOP + (y - fy0)
         if 0 <= ny < h and 0 <= nx < w and g[ny][nx] != '.':
             g[ny][nx] = ch
+    return g
+
+
+def axis(g):
+    """球的中轴。**拿头顶那几行量** —— 那儿没有翅膀,量出来才是身子的中线"""
+    w = len(g[0])
+    rows = [[x for x in range(w) if g[y][x] != '.'] for y in range(6, 14)]
+    rows = [xs for xs in rows if xs]
+    return round(sum((min(xs) + max(xs)) / 2 for xs in rows) / max(1, len(rows)))
+
+
+def symmetrize(g, cx):
+    """以中轴对折:左半边镜像到右半边。
+
+    **翅膀、脚、肚皮的阴影应该左右对称,眼睛不用。** 原稿是手画的,
+    两边的翅膀和脚各画各的,缩到这个尺度之后那点差别不再读作「手绘的活气」,
+    只读作「画歪了」—— 一只正面站着的鸟,左右不齐是最先被看出来的毛病。
+    所以身子整个对折,**脸最后才贴**(见 build):眼睛照旧留着人家画的不对称。
+    """
+    h, w = len(g), len(g[0])
+    for y in range(h):
+        for dx in range(1, min(cx, w - cx)):
+            g[y][cx + dx] = g[y][cx - dx]
+        for x in range(cx + min(cx, w - cx), w):   # 镜不到的那一条尾巴,清掉
+            g[y][x] = '.'
     return g
 
 
