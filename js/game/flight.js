@@ -525,23 +525,41 @@ const DIVE_OFF = 70;
  */
 const FRENZY_COMBO = 110;
 const FRENZY_MS = 10_000;
-const FRENZY_SPEED = 1.35;
 /**
- * 狂潮的量。第一版是「一次撒三样、照常的节奏」——
- * 他说「太少了,需要给玩家一种老虎机摇到大奖的快感」。
+ * 狂潮里世界跑多快。**拉满** —— 比金币冲刺(1.8)还快。
  *
- * 大奖的快感不在**撒得多**,在**计数器真的往上蹦**:
- * 老虎机响的那十秒里,硬币是一刻不停地掉出来的。所以三件事一起改:
- *
- *   一次撒七样,横着排开一整扇        —— 满屏都是
- *   生成节奏压到平常的一半           —— 一刻不停
- *   **整屏吸附强制打开**             —— 飞过去的不算,吃到的才算
- *
- * 第三条是关键。前一版最大的问题是食材从眼前飘过去而捡不着 ——
- * 那不是大奖,那是隔着玻璃看大奖。
+ * 反正无敌,快就只剩爽:一屏两秒过完,那条食材弧线像被抽走一样往后飞。
+ * 而且快本身就是「大奖」的一部分 —— 老虎机中奖的时候滚轮是转疯了的。
  */
-const FRENZY_FOOD = 7;          // 狂潮里一次撒几样
+const FRENZY_SPEED = 2.2;
+/**
+ * 狂潮的量和形状。绕了两版才对:
+ *
+ *   第一版  一次三样、照常节奏         → 「太少了」
+ *   第二版  一次七样 + **整屏吸附**    → 量够了,但吸附把它变成了「站着收钱」
+ *   现在    一次七样 + **连成一条弧线** + 只有小范围吸附 + 加速拉满
+ *
+ * 他要的是「极大量连成一条弧线的资源」+「小范围的吸附」。这两条合起来
+ * 变的不是量,是**这十秒要干什么**:
+ *
+ * > 整屏吸附的时候玩家什么都不用做,食材自己飞过来 —— 那是看动画。
+ * > 摆成一条弧线之后,他得**贴着那条线飞**:飞得准就一路全吃,
+ * > 飞歪了就漏一段。**大奖也得是自己接住的。**
+ *
+ * 弧线是连续的:每一颗的间距按「这一拍世界跑多远 ÷ 一拍撒几颗」现算,
+ * 相位跨拍累加 —— 所以它不是一拍一簇,是一条从右边一直淌过来的带子。
+ */
+const FRENZY_FOOD = 7;          // 一拍撒几颗
 const FRENZY_TICK = 0.5;        // 生成节奏压到平常的几成
+/**
+ * 弧线的弯度:每颗前进多少相位。
+ *
+ * 0.5 那一档相邻两颗能差四十像素 —— 那不是弧线,是锯齿。
+ * 0.22:相邻最多差十八像素(比一颗还窄),连起来是**光滑的一条**;
+ * 一个完整的波要走二十八颗、六百来像素,正好一屏一道大弧。
+ */
+const FRENZY_ARC = 0.22;
+const FRENZY_PULL = 58;         // 小范围吸附的半径(整屏那种取消了)
 const FRENZY_HAZARD = 0.12;     // 还留一点障碍 —— 全清的话「无敌」就没有意义
 const FRENZY_IN = 900;          // 开场那一下的金光多久
 const POP_MAX = 16;             // 吃到一口冒的那朵金花,同时最多几朵
@@ -700,6 +718,7 @@ export class Flight {
             maxCombo: 0,
             frenzy: 0,           // 觅食狂潮还剩多少毫秒
             frenzyGot: 0,        // 这一轮狂潮吃到多少份 —— 大奖得有个数字在跳
+            arcPhase: 0,         // 那条食材弧线走到哪个相位了(跨拍累加)
             pops: [],            // 刚吃到的那几口,冒一朵金花(环形缓冲,封顶)
             frenzyMark: FRENZY_COMBO,   // 连击到这个数开下一次
             frenzyN: 0,
@@ -902,9 +921,16 @@ export class Flight {
             }
         }
         if (f.frenzy > 0 && (f.frenzy = Math.max(0, f.frenzy - dt)) === 0) {
-            // 狂潮结束:下一次的门槛从**现在的连击**再往上一百一十 ——
-            // 狂潮里吃的那两百口不算进下一次的门槛
-            f.frenzyMark = f.combo + FRENZY_COMBO;
+            // **狂潮结束,连击直接归零。**
+            //
+            // 前一版是「门槛推到当时的连击之上」,想着这样还得再吃一百一十口。
+            // 不够 —— 狂潮里连击已经冲到两百多,而它一结束食材还在场上,
+            // 一百一十口很快就又攒够了,于是它照样会自己续命。
+            //
+            // 归零最干净:**下一次狂潮必须从零重新攒一百一十口不失手。**
+            // 狂潮里的连击本来也不该算 —— 那十秒是无敌的,不失手不算本事。
+            f.combo = 0;
+            f.frenzyMark = FRENZY_COMBO;
             sfx.play('tab');
         }
         if (f.magnetMs > 0) f.magnetMs = Math.max(0, f.magnetMs - dt);
@@ -930,9 +956,12 @@ export class Flight {
         if (f.spawnTimer >= f.spawnNext) {
             f.spawnTimer = 0;
             // **下一次隔多久,当场摇一次** —— 见 SPAWN_JITTER
-            f.spawnNext = f.spawnInterval * (SPAWN_JITTER_LO
-                          + this.rng() * (SPAWN_JITTER_HI - SPAWN_JITTER_LO))
-                          * (f.frenzy > 0 ? FRENZY_TICK : 1);
+            // **狂潮里不抖。** 抖动是为了让障碍不可数拍子;而狂潮撒的是一条
+            // 连续的弧线,拍与拍之间抖一下,那条线就断成一节一节的
+            f.spawnNext = f.frenzy > 0
+                ? f.spawnInterval * FRENZY_TICK
+                : f.spawnInterval * (SPAWN_JITTER_LO
+                    + this.rng() * (SPAWN_JITTER_HI - SPAWN_JITTER_LO));
             this._spawn();
         }
 
@@ -960,14 +989,21 @@ export class Flight {
             // 磁铁开着的时候**整屏**的食材都朝哇鸥来,不再只吸身边那一圈。
             // 拉力按距离给:远的快、近的稳 —— 一律按比例拉的话,
             // 刚出屏的那个会瞬移过来,而贴脸的那个会绕着头打转
-            // 狂潮里强制开吸附:**飞过去的不算,吃到的才算** ——
-            // 大奖的快感在计数器上,不在天上
-            if (f.magnetMs > 0 || f.frenzy > 0) {
+            if (f.magnetMs > 0) {
                 const dx = f.birdX - o.x, dy = f.birdY - o.y;
                 const d = Math.hypot(dx, dy) || 1;
                 const pull = Math.min(MAGNET_PULL_MAX, MAGNET_PULL_MIN + d * 0.02);
                 o.x += dx / d * pull * k;
                 o.y += dy / d * pull * k;
+            } else if (f.frenzy > 0) {
+                // 狂潮:**只有小范围吸附**(整屏那种取消了)。
+                // 它管的是「擦着边过去的也算吃到」,而不是「站着等它飞过来」——
+                // 那条弧线还是得自己贴着飞
+                const dx = f.birdX - o.x, dy = f.birdY - o.y;
+                if (Math.abs(dx) < FRENZY_PULL && Math.abs(dy) < FRENZY_PULL) {
+                    o.x += dx * 0.05 * k;
+                    o.y += dy * 0.05 * k;
+                }
             }
             if (hit(o, FOOD_R)) {
                 sfx.play('pickup');
@@ -1511,12 +1547,18 @@ export class Flight {
             if (rnd() < FRENZY_HAZARD) {
                 this._hazard(1);
             } else {
-                // 横着排开一整扇:每一条道都有,再各自错开一点前后
+                // **连成一条弧线。** 间距按「这一拍世界跑多远 ÷ 一拍撒几颗」现算,
+                // 相位跨拍累加 —— 于是它不是一拍一簇,是一条一直淌过来的带子
+                const per = f.speed * 60 / 1000 * FRENZY_SPEED
+                          * f.spawnInterval * FRENZY_TICK / FRENZY_FOOD;
+                const mid = f.vert ? V_MID : (LANE_TOP + LANE_BOTTOM) / 2;
+                const amp = (f.vert ? V_HALF : (LANE_BOTTOM - LANE_TOP) / 2) * 0.86;
                 for (let i = 0; i < FRENZY_FOOD; i++) {
                     const p = { ...spot(), type: pick(FOOD_TYPES) };
-                    if (f.vert) p.x = laneX(i % LANES) + (rnd() * 16 - 8);
-                    else p.y = laneY(i % LANES) + (rnd() * 16 - 8);
-                    f.foods.push(shift(p, (i % 3) * 30 + rnd() * 24));
+                    const c = mid + Math.sin(f.arcPhase) * amp;
+                    if (f.vert) p.x = Math.round(c); else p.y = Math.round(c);
+                    f.foods.push(shift(p, Math.round(i * per)));
+                    f.arcPhase += FRENZY_ARC;
                 }
             }
             return;
