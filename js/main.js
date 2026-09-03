@@ -175,6 +175,7 @@ async function boot() {
         service,
         fly: () => startFlight(sprites),
         getFlight: () => flight,
+        getHut: () => hut,
     });
 
     if (import.meta.env.DEV && dev?.devTab()) ui.go(dev.devTab());

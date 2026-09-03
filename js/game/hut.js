@@ -45,11 +45,14 @@ export class Hut {
      * @param {()=>string} getSlot 当前时段:'noon' | 'evening' | 'night' | null
      */
     constructor(canvas, getState, getSlot) {
+        this.canvas = canvas;
         this.screen = new PixelScreen(canvas, VW, VH);
         this.getState = getState;
         this.getSlot = getSlot;
         this.t = 0;
+        this.hopAt = -1;            // 点了一下之后从哪一刻起播那段跳
         this.rafId = null;
+        this._onPoke = this._onPoke.bind(this);
         this.baked = null;
         this.bakedFor = null;
         this._loop = this._loop.bind(this);
@@ -58,12 +61,31 @@ export class Hut {
     start() {
         if (this.rafId) return;
         this.last = 0;
+        this.canvas.addEventListener('pointerdown', this._onPoke);
         this.rafId = requestAnimationFrame(this._loop);
     }
 
     stop() {
         if (this.rafId) cancelAnimationFrame(this.rafId);
         this.rafId = null;
+        this.canvas.removeEventListener('pointerdown', this._onPoke);
+    }
+
+    /**
+     * 戳它一下。**点在它身上才算** —— 点棚顶点地面不该让它蹦,
+     * 那样这个反应就不是「在跟它互动」,是「屏幕会抖」。
+     *
+     * 判定框比它本身宽松一圈:手指没有鼠标准,而点空了什么都不发生
+     * 是这类小互动里最扫兴的一种失败。
+     */
+    _onPoke(e) {
+        if (this.hopAt >= 0 && this.t - this.hopAt < HOP.length * IDLE_MS) return;
+        const r = this.canvas.getBoundingClientRect();
+        const x = (e.clientX - r.left) / r.width * VW;
+        const y = (e.clientY - r.top) / r.height * VH;
+        if (Math.abs(x - GULL_X) < 96 && y > GROUND - 130 && y < GROUND + 40) {
+            this.hopAt = this.t;
+        }
     }
 
     /** 棚子本身不动,时段一变才重烤 */
@@ -90,7 +112,7 @@ export class Hut {
 
         const { ctx } = this.screen;
         ctx.drawImage(this.baked.cv, 0, 0);
-        drawWaou(ctx, slot, this.t, this.getState().wearing);
+        drawWaou(ctx, slot, this.t, this.getState().wearing, this.hopAt);
         const L = LIGHT[slot] ?? LIGHT.noon;
         if (L.air) { ctx.fillStyle = L.air; ctx.fillRect(0, 0, VW, VH); }
         this.screen.present();
@@ -231,6 +253,21 @@ const IDLE_POSE = [
 ];
 
 /**
+ * 点一下才跳的那一下:从静止起,蹲 → 蹬 → 腾空 → 落地 → 回静止。
+ *
+ * **这是把上面那 16 帧重排过的。** 原稿那一轮是「两次连跳」,一直循环 ——
+ * 他要的是「常态不动,点一下跳一下」,所以按物理的顺序挑出九帧:
+ *
+ *     2 蹲(1.14 宽 0.83 高) → 4 蹬(0.82 宽 1.12 高) → 5 离地 → 0 最高
+ *     → 8 下落 → 9 快落地 → 11 落地压扁 → 3 缓一下 → 15 站直
+ *
+ * 挑的是人家画的姿势,重排的只是顺序 —— 一帧新的都没画。
+ */
+const HOP = [2, 4, 5, 0, 8, 9, 11, 3, 15];
+/** 不跳的时候站着的那一帧(站直、不压不拉、脚落地) */
+const REST = 15;
+
+/**
  * 白天窝在棚里的那只:一张原作者的像素身子 + 形象稿量出来的那轮弹跳。
  *
  * 原来这儿是「一张静图 + 每隔九秒站起来走两步」—— 走那一段的腿是代码画的
@@ -244,7 +281,7 @@ const IDLE_POSE = [
  * 原稿这批像素图是哭的,而待机要的是形象稿那张脸。细账在 tools/idleart.py;
  * 动作见上面的 `IDLE_POSE`。
  */
-function drawWaou(ctx, slot, t, wearing = null) {
+function drawWaou(ctx, slot, t, wearing = null, hopAt = -1) {
     if (slot === 'night') {
         // 夜里那张还是原来的近景图(99 高,装扮锚点从顶行算)
         const cv = sprite('hut_sleep', SCENERY.hut_sleep);
@@ -256,7 +293,11 @@ function drawWaou(ctx, slot, t, wearing = null) {
     }
 
     const cv = sprite('hut_idle', SCENERY.hut_idle);
-    const [sx, sy, dy] = IDLE_POSE[Math.floor(t / IDLE_MS) % IDLE_POSE.length];
+    // **常态站着不动,点一下才跳一下。** 原来是一直循环那轮弹跳 ——
+    // 一只在自己屋里待着的鸟不停地蹦,看久了像卡住的动画;
+    // 而「点它有反应」把这段动画换成了一件玩家做得出来的事
+    const i = hopAt < 0 ? -1 : Math.floor((t - hopAt) / IDLE_MS);
+    const [sx, sy, dy] = IDLE_POSE[i >= 0 && i < HOP.length ? HOP[i] : REST];
     const w = Math.round(cv.width * sx);
     const h = Math.round(cv.height * sy);
     // **底边落地。** 蹲下去的时候脚不动、身子往下压;跳起来才整只离地 ——
@@ -274,8 +315,8 @@ function drawWaou(ctx, slot, t, wearing = null) {
     // 挤压的时候两条基准线跟着走(乘 sy),但装扮本身不压扁 ——
     // 一顶竹斗笠不该跟着鸟一起变形
     const row = r => base - h + Math.round(r * sy);
-    drawWear(ctx, wearing, 'big', GULL_X, row(HAT_ROW), 'day', 'hat');
-    drawWear(ctx, wearing, 'big', GULL_X, row(NECK_ROW), 'day', 'neck');
+    drawWear(ctx, wearing, 'big', GULL_X, row(HAT_ROW), 'day', 'hat', sx, sy);
+    drawWear(ctx, wearing, 'big', GULL_X, row(NECK_ROW), 'day', 'neck', sx, sy);
 }
 
 /** 睡着的时候飘出来的 Z */

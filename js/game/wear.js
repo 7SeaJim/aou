@@ -29,7 +29,8 @@ const ORDER = ['neck', 'hat'];
  *   `bigY` 是照某一张图标的(帽子离眼睛多远、围巾离下巴多远),
  *   换一张脸的比例不一样的图,一个锚点就同时对不上这两处了。
  */
-export function drawWear(ctx, wearing, which, cx, topY, phase = 'day', only = null) {
+export function drawWear(ctx, wearing, which, cx, topY, phase = 'day', only = null,
+                         sx = 1, sy = 1) {
     if (!wearing) return;
     for (const slot of ORDER) {
         if (only && slot !== only) continue;
@@ -39,7 +40,13 @@ export function drawWear(ctx, wearing, which, cx, topY, phase = 'day', only = nu
         const grid = w[which];
         const dy = which === 'big' ? w.bigY : w.smallY;
         const cv = shadedSprite(`wear:${id}:${which}`, grid, phase);
-        ctx.drawImage(cv, Math.round(cx - cv.width / 2), Math.round(topY + dy));
+        // **跟着身子一起变形。** 本来以为「一顶竹斗笠不该跟着鸟一起压扁」——
+        // 错了:身子蹲下去变矮变宽的时候帽子不动,帽檐就切进脑袋里;
+        // 弹起来变高变窄的时候帽子又浮在头顶上方。**挤压里附着物是跟着变的**,
+        // 这是任何一本动画书的第一章,而它在像素画里也一样成立
+        const w2 = Math.max(1, Math.round(cv.width * sx));
+        const h2 = Math.max(1, Math.round(cv.height * sy));
+        ctx.drawImage(cv, Math.round(cx - w2 / 2), Math.round(topY + dy * sy), w2, h2);
     }
 }
 

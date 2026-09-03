@@ -131,7 +131,7 @@ function backup() {
  * @param {object} deps.rules
  * @param {object} deps.ui
  */
-export function installDev({ getState, mutate, storage, fly, getFlight, rules, ui, service }) {
+export function installDev({ getState, mutate, storage, fly, getFlight, getHut, rules, ui, service }) {
     const reload = async (state) => {
         await storage.replace(state);
         location.reload();
@@ -142,6 +142,8 @@ export function installDev({ getState, mutate, storage, fly, getFlight, rules, u
         get s() { return getState(); },
         /** 当前那一局飞行(没在飞时是 null)。可以直接改 wa.flight.f.lives */
         get flight() { return getFlight(); },
+        /** 小屋那一场。wa.hut.hopAt = wa.hut.t 就是「戳它一下」 */
+        get hut() { return getHut?.(); },
 
         /** 把手改过的 s 落盘 + 重绘 */
         save() { mutate(() => {}); return '已保存'; },
@@ -643,6 +645,7 @@ export function installDev({ getState, mutate, storage, fly, getFlight, rules, u
                 'wa.hire(id)':     '直接招一只伙计,跳过条件(不收安家费)',
                 'wa.wage()':       '看每天要发多少工钱、谁在请假;wa.wage(true) 立刻补发',
                 'wa.flight':       '当前这一局(可改 .f.lives / .f.speed)',
+                'wa.hut':          '小屋那一场;wa.hut.hopAt = wa.hut.t 让它跳一下',
                 'wa.god()':        '飞行不死:不掉命也不掉肚子(照挨照闪);wa.god(false) 关',
                 'wa.buff(k, s)':   "飞行道具直接上身 — flip 颠倒 / mirror 镜像 / climb 上钻 / dive 下扎 / rush 无敌 / magnet / shield;不传参看现状",
                 'wa.code()':       '导出存档码',
