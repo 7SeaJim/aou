@@ -526,9 +526,37 @@ const DIVE_OFF = 70;
 const FRENZY_COMBO = 110;
 const FRENZY_MS = 10_000;
 const FRENZY_SPEED = 1.35;
-const FRENZY_FOOD = 3;          // 狂潮里一次生成撒几样
-const FRENZY_HAZARD = 0.15;     // 还留一点障碍 —— 全清的话「无敌」就没有意义
+/**
+ * 狂潮的量。第一版是「一次撒三样、照常的节奏」——
+ * 他说「太少了,需要给玩家一种老虎机摇到大奖的快感」。
+ *
+ * 大奖的快感不在**撒得多**,在**计数器真的往上蹦**:
+ * 老虎机响的那十秒里,硬币是一刻不停地掉出来的。所以三件事一起改:
+ *
+ *   一次撒七样,横着排开一整扇        —— 满屏都是
+ *   生成节奏压到平常的一半           —— 一刻不停
+ *   **整屏吸附强制打开**             —— 飞过去的不算,吃到的才算
+ *
+ * 第三条是关键。前一版最大的问题是食材从眼前飘过去而捡不着 ——
+ * 那不是大奖,那是隔着玻璃看大奖。
+ */
+const FRENZY_FOOD = 7;          // 狂潮里一次撒几样
+const FRENZY_TICK = 0.5;        // 生成节奏压到平常的几成
+const FRENZY_HAZARD = 0.12;     // 还留一点障碍 —— 全清的话「无敌」就没有意义
 const FRENZY_IN = 900;          // 开场那一下的金光多久
+const POP_MAX = 16;             // 吃到一口冒的那朵金花,同时最多几朵
+/**
+ * 狂潮里一口给多少分。**平常那一套连击加成和翻倍在这十秒里全不算。**
+ *
+ * 量过一遍:十秒能吃到两百来口。照平常算(基础 5 + 连击 12 再翻倍)
+ * 是四千多分,而分数按 1/5 折成经验 —— **一发狂潮九百多经验,
+ * 正好把一个一级号顶到十级**(升到十级累计要 965)。
+ * 那不是大奖,那是跳过前十级。
+ *
+ * 所以拆开:**狂潮给的是食材,分数只给个零头。**
+ * 分数是「飞得多稳多远」的记录,而狂潮是奖励 —— 奖励不该改写记录。
+ */
+const FRENZY_SCORE = 2;
 
 /* ---------- 五分钟之后:饿 ---------- */
 /** 从这一刻起开始饿。前五分钟只用管躲 */
@@ -671,6 +699,8 @@ export class Flight {
             combo: 0,
             maxCombo: 0,
             frenzy: 0,           // 觅食狂潮还剩多少毫秒
+            frenzyGot: 0,        // 这一轮狂潮吃到多少份 —— 大奖得有个数字在跳
+            pops: [],            // 刚吃到的那几口,冒一朵金花(环形缓冲,封顶)
             frenzyMark: FRENZY_COMBO,   // 连击到这个数开下一次
             frenzyN: 0,
             collected: {},
@@ -805,8 +835,11 @@ export class Flight {
             // 四种各不一样
             mode: this.f.mode,
             modeLeft: this.f.flip > 0 ? Math.ceil(this.f.flip / 1000) : 0,
-            // 觅食狂潮:还剩几秒。0 = 不在狂潮里
+            // 觅食狂潮:还剩几秒 + 这一轮吃到多少份。
+            // **那个数字就是老虎机的计数器** —— 大奖得有个数在跳,
+            // 而分数在狂潮里是故意压住的(见 FRENZY_SCORE),它跳不起来
             frenzy: this.f.frenzy > 0 ? Math.ceil(this.f.frenzy / 1000) : 0,
+            frenzyGot: this.f.frenzyGot,
             // 磁铁 / 护盾:还剩几秒。**得倒数给他看** —— 一个不知道什么时候没的加成,
             // 没了的那一下只会被当成手感变差
             magnet: Math.ceil(this.f.magnetMs / 1000),
@@ -868,7 +901,12 @@ export class Flight {
                 return;
             }
         }
-        if (f.frenzy > 0) f.frenzy = Math.max(0, f.frenzy - dt);
+        if (f.frenzy > 0 && (f.frenzy = Math.max(0, f.frenzy - dt)) === 0) {
+            // 狂潮结束:下一次的门槛从**现在的连击**再往上一百一十 ——
+            // 狂潮里吃的那两百口不算进下一次的门槛
+            f.frenzyMark = f.combo + FRENZY_COMBO;
+            sfx.play('tab');
+        }
         if (f.magnetMs > 0) f.magnetMs = Math.max(0, f.magnetMs - dt);
         if (f.rushMs > 0) f.rushMs = Math.max(0, f.rushMs - dt);
         // 护盾的期限一到,剩下的次数一起作废 —— 两个数得同生共死,
@@ -893,7 +931,8 @@ export class Flight {
             f.spawnTimer = 0;
             // **下一次隔多久,当场摇一次** —— 见 SPAWN_JITTER
             f.spawnNext = f.spawnInterval * (SPAWN_JITTER_LO
-                          + this.rng() * (SPAWN_JITTER_HI - SPAWN_JITTER_LO));
+                          + this.rng() * (SPAWN_JITTER_HI - SPAWN_JITTER_LO))
+                          * (f.frenzy > 0 ? FRENZY_TICK : 1);
             this._spawn();
         }
 
@@ -921,7 +960,9 @@ export class Flight {
             // 磁铁开着的时候**整屏**的食材都朝哇鸥来,不再只吸身边那一圈。
             // 拉力按距离给:远的快、近的稳 —— 一律按比例拉的话,
             // 刚出屏的那个会瞬移过来,而贴脸的那个会绕着头打转
-            if (f.magnetMs > 0) {
+            // 狂潮里强制开吸附:**飞过去的不算,吃到的才算** ——
+            // 大奖的快感在计数器上,不在天上
+            if (f.magnetMs > 0 || f.frenzy > 0) {
                 const dx = f.birdX - o.x, dy = f.birdY - o.y;
                 const d = Math.hypot(dx, dy) || 1;
                 const pull = Math.min(MAGNET_PULL_MAX, MAGNET_PULL_MIN + d * 0.02);
@@ -930,6 +971,8 @@ export class Flight {
             }
             if (hit(o, FOOD_R)) {
                 sfx.play('pickup');
+                f.pops.push({ x: o.x, y: o.y, t: f.elapsed });
+                if (f.pops.length > POP_MAX) f.pops.shift();
                 f.foods.splice(i, 1);
                 // 颠倒的那二十秒里捡到的**算两份**:分数两份,带回摊上的食材也是两份。
                 // 只翻一个看不见的分数不算赌注 —— 拿命换的东西得能端上桌
@@ -942,20 +985,29 @@ export class Flight {
                 f.itemCount += n;
                 f.combo++;
                 if (f.combo > f.maxCombo) f.maxCombo = f.combo;
-                // **一百一十连击:开狂潮。** 门槛每开一次往上加一档,
-                // 所以吃得住的人可以连开第二次
-                if (f.combo >= f.frenzyMark) {
-                    f.frenzyMark += FRENZY_COMBO;
+                // **一百一十连击:开狂潮。**
+                //
+                // 两道闸都是必须的,少一道就是永动机:
+                //   `f.frenzy <= 0`  —— 狂潮里不再触发,不然十秒会一直被刷新
+                //   门槛在**结束时**按当时的连击重设(见下面 _update)——
+                //   狂潮十秒能吃到两百来口,连击直接冲过后面每一档门槛,
+                //   照「每 110 一档」算的话它一开就永远不停(实测过,真会)
+                if (f.frenzy <= 0 && f.combo >= f.frenzyMark) {
                     f.frenzyN++;
                     f.frenzy = FRENZY_MS;
+                    f.frenzyGot = 0;
                     sfx.play('event');
                 }
 
-                let gain = 5;
-                if (f.combo >= 5) gain += 2;
-                if (f.combo >= 10) gain += 5;
-                gain *= n;                    // 只在这里翻倍,结算时不再翻
+                let gain = FRENZY_SCORE;
+                if (f.frenzy <= 0) {
+                    gain = 5;
+                    if (f.combo >= 5) gain += 2;
+                    if (f.combo >= 10) gain += 5;
+                    gain *= n;                // 只在这里翻倍,结算时不再翻
+                }
                 f.score += gain;
+                if (f.frenzy > 0) f.frenzyGot += n;
                 f.hunger = Math.min(1, f.hunger + HUNGRY_FEED);
             }
         }
@@ -1459,9 +1511,12 @@ export class Flight {
             if (rnd() < FRENZY_HAZARD) {
                 this._hazard(1);
             } else {
+                // 横着排开一整扇:每一条道都有,再各自错开一点前后
                 for (let i = 0; i < FRENZY_FOOD; i++) {
-                    f.foods.push(shift({ ...spot(), type: pick(FOOD_TYPES) },
-                                       i * 46 + rnd() * 20));
+                    const p = { ...spot(), type: pick(FOOD_TYPES) };
+                    if (f.vert) p.x = laneX(i % LANES) + (rnd() * 16 - 8);
+                    else p.y = laneY(i % LANES) + (rnd() * 16 - 8);
+                    f.foods.push(shift(p, (i % 3) * 30 + rnd() * 24));
                 }
             }
             return;
@@ -1655,6 +1710,7 @@ export class Flight {
 
         if (weather === 'rainy') drawRain(ctx, t, HORIZON);
         if (weather === 'foggy') drawFog(ctx, t, HORIZON);
+        this._drawPops(ctx, f);
         this._drawFrenzy(ctx, f);
         this._drawWave(ctx, f);
         this._drawHunger(ctx, f);
@@ -1819,11 +1875,47 @@ export class Flight {
                              Math.round(cy + Math.sin(th) * rad), 2, 2);
             }
         }
-        // 快结束的时候上下压两条金边闪一闪 —— 「要没了」也得看得见
-        if (f.frenzy < 2200 && Math.floor(t / 140) % 2 === 0) {
-            ctx.fillStyle = 'rgba(245, 184, 61, 0.55)';
-            ctx.fillRect(0, 0, VW, 3);
-            ctx.fillRect(0, VH - 3, VW, 3);
+        // 四边一直在跳的金框。**老虎机响的时候灯是一刻不停的** ——
+        // 只在开头闪一下、结尾闪一下,中间那八秒就退回成「食材变多了」
+        const beat = Math.floor(t / 110) % 2 === 0;
+        ctx.fillStyle = beat ? 'rgba(245, 184, 61, 0.5)' : 'rgba(255, 253, 244, 0.32)';
+        const th = beat ? 4 : 2;
+        ctx.fillRect(0, 0, VW, th);
+        ctx.fillRect(0, VH - th, VW, th);
+        ctx.fillRect(0, 0, th, VH);
+        ctx.fillRect(VW - th, 0, th, VH);
+        // 快结束的时候整屏压一层暗金 —— 「要没了」也得看得见
+        if (f.frenzy < 2200 && beat) {
+            ctx.fillStyle = 'rgba(201, 138, 30, 0.16)';
+            ctx.fillRect(0, 0, VW, VH);
+        }
+    }
+
+    /**
+     * 吃到一口冒的那朵金花。**每一口都得有回音。**
+     *
+     * 老虎机的快感有一半在「叮」那一声上 —— 屏幕上必须有一件事和「又吃到一个」
+     * 一对一地对上,不然满屏的食材就只是背景在动。
+     *
+     * 只在狂潮里画:平常一秒吃一两个,冒花是噪音;狂潮里一秒十来个,
+     * 连成一片才是那个味道。缓冲封顶 16 个(见 POP_MAX)——
+     * **特效的内存一定要有上限**,不然一局飞十分钟能攒出几千个。
+     */
+    _drawPops(ctx, f) {
+        if (f.frenzy <= 0) return;
+        for (const p of f.pops) {
+            const age = f.elapsed - p.t;
+            if (age > 320) continue;
+            const q = age / 320;
+            const r = 4 + q * 13;
+            const a = 1 - q;
+            ctx.fillStyle = q < 0.4 ? `rgba(255, 253, 244, ${a.toFixed(3)})`
+                                    : `rgba(245, 184, 61, ${a.toFixed(3)})`;
+            for (let n = 0; n < 6; n++) {
+                const th2 = n / 6 * Math.PI * 2 + p.t * 0.01;
+                ctx.fillRect(Math.round(p.x + Math.cos(th2) * r),
+                             Math.round(p.y + Math.sin(th2) * r), 2, 2);
+            }
         }
     }
 
