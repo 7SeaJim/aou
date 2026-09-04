@@ -6,10 +6,17 @@
 
     1. 睁着的那对梯子眼抹平,换成两道**微微向右下斜的短横** —— 参考里就是这样,
        几乎是平的。画成明显的下弯弧会变成哭脸,上弯弧又变成在笑,都不是睡着
-    2. 右边支一只**举起来的翅膀**:白面、描边,从脑袋右上支出去,底边压在头上。
-       参考里它是翅膀内侧那一面,所以是白的不是灰的
-    3. 别的什么都不改。身子、嘴、肚皮、脚、垂着的那对翅膀全照搬 ——
+    2. 别的什么都不改。身子、嘴、肚皮、脚、垂着的那对翅膀全照搬 ——
        同一只鸟睡着了,不是另一只鸟
+
+**参考图右上那个白椭圆不在这张图里。** 我一开始把它读成「举起来的一只翅膀」,
+照着描进了精灵图 —— 他一眼看穿:「那个椭圆是鼻涕泡」。16 帧里它一直在涨缩
+(顶边在 y=153 和 y=101 之间来回,根不动),那本来就是个动效,不是姿势。
+既然是动效就该画在代码里(`hut.js` 的 `drawBubble`),不该烙进一张静图。
+
+> **一张「静态」的参考图给了 16 帧,说明动的是画里的某样东西,不是整只鸟。**
+> 我当时看出「16 帧几乎一样」,却推成了「所以这张是静的」——
+> 差的那一步是去问:那到底哪儿在动。
 
 姿势不做动画:他说「睡觉动作不需要动态,只需要右上角几个 zzzz 的符号偶尔飘出」,
 所以这张是**一张静图**,飘的 Z 由 `drawZzz()` 画,和这张图无关。
@@ -25,12 +32,6 @@ BG = '.'
 INK = 'K'
 FILL = 'w'
 
-# 举起来那只翅膀。参考图里按身子的球归一化之后的值:
-#   中心 (+0.78, −0.51) 个半径,长轴 0.50 球宽、短轴 0.24 球宽,轴线抬 34°
-UP = dict(cx=0.80, cy=-0.46, major=0.44, minor=0.22, tilt=50.0, cut=0.02)
-WING_LINE = 2               # 描边几格粗。身子的边就是 2 格,这只翅膀不该细一档
-
-BALL = dict(cx=76.5, cy=61.0, hw=57.0, hh=58.0)
 
 # 闭上的眼:在原来那只眼的下三分之一处画一道短横,右端低两格
 EYE_DROP = 0.62             # 横线落在原眼框高度的百分之几处
@@ -88,51 +89,6 @@ def close_eyes(grid):
                 grid[y][x] = INK
 
 
-def up_wing(w, h, up=None):
-    """举起的那只翅膀:一个斜着的椭圆,底下切平。返回 (描边, 白面) 两组格子
-
-    描边不是「椭圆方程落在 0.8~1.0 之间的那一圈」—— 那样算出来的边**上下厚两头薄**
-    (方程的梯度沿着长轴小、沿着短轴大),而且底下切平的那一刀根本没有边,
-    画出来是个飘在头上的空心气球。**先做掩膜,再腐蚀两格取差**,
-    边才是处处一样粗的、闭合的一圈。
-    """
-    up = up or UP
-    b = BALL
-    cx = b['cx'] + up['cx'] * b['hw']
-    cy = b['cy'] + up['cy'] * b['hh']
-    a = up['major'] * b['hw']
-    c = up['minor'] * b['hw']
-    th = math.radians(up['tilt'])
-    cut = b['cy'] + up['cut'] * b['hh']
-    cos, sin = math.cos(th), math.sin(th)
-
-    mask = [[False] * w for _ in range(h)]
-    for y in range(h):
-        if y > cut:
-            continue
-        for x in range(w):
-            dx, dy = x - cx, y - cy
-            u = dx * cos - dy * sin
-            v = dx * sin + dy * cos
-            if (u / a) ** 2 + (v / c) ** 2 <= 1.0:
-                mask[y][x] = True
-
-    def eroded(m, n):
-        for _ in range(n):
-            out = [[False] * w for _ in range(h)]
-            for y in range(1, h - 1):
-                for x in range(1, w - 1):
-                    out[y][x] = all(m[y + dy][x + dx]
-                                    for dy in (-1, 0, 1) for dx in (-1, 0, 1))
-            m = out
-        return m
-
-    inner = eroded(mask, WING_LINE)
-    ink = [(x, y) for y in range(h) for x in range(w) if mask[y][x] and not inner[y][x]]
-    fill = [(x, y) for y in range(h) for x in range(w) if inner[y][x]]
-    return ink, fill
-
-
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--src', default='', help='待机网格的 .py(不传就读 scenery)')
@@ -152,12 +108,6 @@ def main():
     h, w = len(g), len(g[0])
 
     close_eyes(g)
-    ink, fill = up_wing(w, h)
-    for x, y in fill:
-        g[y][x] = FILL
-    for x, y in ink:
-        g[y][x] = INK
-
     rows = [''.join(r) for r in g]
     src = '%s = [\n%s,\n]\n' % (a.name, ',\n'.join('"%s"' % r for r in rows))
     if a.out:

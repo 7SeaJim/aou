@@ -295,8 +295,9 @@ function drawWaou(ctx, slot, t, wearing = null, hopAt = -1) {
         drawStanding(ctx, cv, GULL_X, base);
         drawWear(ctx, wearing, 'big', GULL_X, base - cv.height + HAT_ROW, 'day', 'hat');
         drawWear(ctx, wearing, 'big', GULL_X, base - cv.height + NECK_ROW, 'day', 'neck');
-        // Z 从**头顶右上**冒出来,不是从举起的那只翅膀上冒出来 ——
-        // 起点压在翅尖上的话,飘出去的第一下像是翅膀甩出来的
+        drawBubble(ctx, GULL_X + BUB_X, base - cv.height + BUB_Y, t);
+        // Z 从**头顶右上**冒出来。起点在鼻涕泡那一侧的更上方 ——
+        // 两样东西都在右上,但泡贴着脸、Z 飘在头顶外,不会挤成一团
         drawZzz(ctx, GULL_X + 30, base - cv.height - 2, t);
         return;
     }
@@ -326,6 +327,54 @@ function drawWaou(ctx, slot, t, wearing = null, hopAt = -1) {
     const row = r => base - h + Math.round(r * sy);
     drawWear(ctx, wearing, 'big', GULL_X, row(HAT_ROW), 'day', 'hat', sx, sy);
     drawWear(ctx, wearing, 'big', GULL_X, row(NECK_ROW), 'day', 'neck', sx, sy);
+}
+
+/**
+ * 鼻涕泡。**它是个动效,不是精灵图的一部分。**
+ *
+ * 他给的睡觉参考是 16 帧,我一开始把右上那个白椭圆读成「举起来的一只翅膀」,
+ * 照着描进了 `HUT_SLEEP`。他一眼看穿:「那个椭圆是鼻涕泡」。
+ * 回头量那 16 帧才发现它一直在涨缩 —— 顶边在 y=153 和 y=101 之间来回,根不动:
+ *
+ * > **一张「静态」的参考图给了 16 帧,说明动的是画里的某样东西,不是整只鸟。**
+ * > 我当时看出「16 帧几乎一样」,却推成了「所以这张是静的」。
+ *
+ * 画法:一个从鼻孔那儿斜着往右上长的椭圆,**根不动、只顺着长轴伸缩**
+ * (吹泡就是这么回事,不是整个泡按比例放大)。白面、描边,
+ * 左上角的描边故意断一小截当高光 —— 白底上没法用更亮的色点高光,
+ * 只能在轮廓上开个口子,这是像素画里画泡的老办法。
+ *
+ * 呼吸的节拍和 Z 是分开的两条:泡跟着呼吸一直在动,Z 是隔一阵飘一串。
+ * 合成一条的话整块画面会一起一伏地脉动,反而像卡了。
+ */
+const BUB_X = 28;           // 泡根在哇鸥身上的位置(相对 GULL_X 和精灵图顶边)
+const BUB_Y = 66;
+const BUB_TILT = 62;        // 长轴从水平往上抬多少度
+const BUB_MIN = 10;         // 最小/最大的长半轴
+const BUB_MAX = 40;
+const BUB_W = 13;           // 短半轴。**不跟着呼吸变**
+const BUB_CYCLE = 3400;     // 一次呼吸
+
+function drawBubble(ctx, bx, by, t) {
+    const p = 0.5 - Math.cos((t % BUB_CYCLE) / BUB_CYCLE * Math.PI * 2) / 2;
+    const a = BUB_MIN + (BUB_MAX - BUB_MIN) * p;
+    const th = BUB_TILT * Math.PI / 180;
+    const cos = Math.cos(th), sin = Math.sin(th);
+    // 根钉在 (bx,by),所以圆心要顺着长轴推出去一个半轴
+    const cx = bx + cos * a, cy = by - sin * a;
+    const r = Math.ceil(Math.max(a, BUB_W)) + 2;
+    for (let y = -r; y <= r; y++) {
+        for (let x = -r; x <= r; x++) {
+            const u = (x * cos - y * sin) / a;      // 长轴方向
+            const v = (x * sin + y * cos) / BUB_W;  // 短轴方向
+            const q = u * u + v * v;
+            if (q > 1) continue;
+            // 左上那一段描边留个口子当高光
+            const shine = x < -a * 0.25 && y < -a * 0.25;
+            ctx.fillStyle = (q > 0.74 && !shine) ? '#4a3628' : '#fffdf4';
+            ctx.fillRect(Math.round(cx + x), Math.round(cy + y), 1, 1);
+        }
+    }
 }
 
 /**
