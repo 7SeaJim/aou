@@ -101,11 +101,27 @@ const CORNER_ARM = 4;
  * 最远可以离多远」,调高了门就能跨两条道,而「连着两扇门必有共用空道」
  * 那条保证会当场作废。手更利索了,那就让它变成玩家的余量,不是新的难度。)
  */
-const GRAVITY = 0.58;
-/** 拍一下翅膀给的初速度。升到最高还是约 48 像素 —— 正好一条道 */
-const FLAP_VY = -7.5;
+const GRAVITY = 0.746;
+/** 拍一下翅膀给的初速度。升到最高约 63 像素 —— 正好一条道 */
+const FLAP_VY = -9.7;
 /** 下坠的终速。不封的话最后一段快到看不清自己是怎么掉下去的 */
-const MAX_VY = 9.0;
+const MAX_VY = 11.6;
+/**
+ * **往下掉的时候重力小一点(0.72 倍),终速也低一档。**
+ *
+ * 他说「下降速度稍慢一些」。上升那一半不能动 —— 一跳的高度和到顶的时间
+ * 是整套关卡的地基(一跳正好一条道、横向只走 38 像素)。所以拆开:
+ * **顶上去用原来的重力,掉下来用小一点的。**
+ *
+ *     掉一条道   0.22 秒 → 0.26 秒
+ *     终速       696 px/s → 510 px/s
+ *
+ * 不对称的重力是老办法,只是常见的方向反过来(通常是「掉得更快」让手感更脆)。
+ * 这里要的是相反的东西:**掉得慢一点,就有时间在半空改主意** ——
+ * 而这一版的密度和四条道,考的正是改主意。
+ */
+const FALL_G = 0.537;
+const MAX_VY_DOWN = 8.5;
 /** 平飞时把纵向速度按住的力度。不是直接归零 —— 那样切换起来像瞬移 */
 const GLIDE_K = 0.6;
 /**
@@ -255,8 +271,24 @@ const WAVE_MS = 20_000;
 /**
  * 可飞的高度切成几条道。**一簇障碍必留一条空的** ——
  * 密度上去之后如果不留道,就成了随机送死,那不叫难,叫不讲理。
+ *
+ * **五条改成四条(道距 47.5 → 63.3)。** 他说「障碍物间的纵向间距太窄了,
+ * 看上去不能走实际能走」—— 这是一笔算得出来的账:
+ *
+ *     道距           47.5
+ *     障碍那几张图     15~22 高
+ *     两个障碍之间的净空 ≈ 27 像素
+ *     **而哇鸥那张图是 32 高**
+ *
+ * 判定上过得去(两边各留 15 的半径,中间还剩 17.5 的余量),
+ * 可**画面上它明明塞不进去** —— 玩家照着眼睛走,就永远不敢走那条缝。
+ *
+ * > **判定可以比图小,但不能小到「看着过不去」。**
+ * > 玩家信的是眼睛,不是我的碰撞盒。
+ *
+ * 四条道之后净空 43 像素,哇鸥 32 —— 看着能过,实际也能过。
  */
-const LANES = 5;
+const LANES = 4;
 /**
  * 五条道的中心高度。**必须铺满能飞的那一整段,两头不能留边。**
  *
@@ -1235,7 +1267,11 @@ export class Flight {
         // 最外那条道离墙只有 10 像素,比判定半径小,**贴着墙也躲不掉**
         if (f.vert) {
             if (f.glide) f.vy += (0 - f.vy) * Math.min(1, GLIDE_K * k);
-            else f.vy = Math.min(MAX_VY, f.vy + GRAVITY * k);
+            else {
+                // 顺着重力那一头飘得慢一些(同 FALL_G)
+                const g0 = f.vy > 0 ? FALL_G : GRAVITY;
+                f.vy = Math.min(f.vy > 0 ? MAX_VY_DOWN : MAX_VY, f.vy + g0 * k);
+            }
             f.birdX += f.vy * k;
             if (f.birdX > V_RIGHT) { f.birdX = V_RIGHT; f.vy = 0; }
             else if (f.birdX < V_LEFT) { f.birdX = V_LEFT; f.vy = 0; }
@@ -1243,8 +1279,12 @@ export class Flight {
         }
         if (f.glide) f.vy += (0 - f.vy) * Math.min(1, GLIDE_K * k);
         else {
-            f.vy += GRAVITY * g * k;
-            f.vy = g > 0 ? Math.min(MAX_VY, f.vy) : Math.max(-MAX_VY, f.vy);
+            // **顶上去用原来的重力,掉下来用小一点的**(见 FALL_G)。
+            // `f.vy * g > 0` 就是「已经在顺着重力走」
+            const falling = f.vy * g > 0;
+            f.vy += (falling ? FALL_G : GRAVITY) * g * k;
+            const cap = falling ? MAX_VY_DOWN : MAX_VY;
+            f.vy = g > 0 ? Math.min(cap, f.vy) : Math.max(-cap, f.vy);
         }
         f.birdY += f.vy * k;
 
@@ -1717,8 +1757,8 @@ export class Flight {
             // 而它靠的是「一簇里必留一条空道」那套规矩
             // **一簇几个也要摇。** 清一色的单个本身就是一种规律 ——
             // 开局那几波在 1~3 之间摇,偏小但会有意外
-            const n = 1 + Math.floor(f.wave / 4)
-                    + (rnd() < 0.45 ? 1 : 0) + (rnd() < 0.18 ? 1 : 0);
+            // 四条道,最多堵三条 —— 摇 1~2,后期靠波数往上加
+            const n = 1 + Math.floor(f.wave / 4) + (rnd() < 0.45 ? 1 : 0);
             this._hazard(n);
             f.hazAt = f.elapsed + HAZ_MIN_MS;
         } else {
