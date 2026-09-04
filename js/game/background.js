@@ -120,8 +120,24 @@ export class Background {
         if (this.lastUpTotal !== null && total > this.lastUpTotal) this.popAt = t;
         this.lastUpTotal = total;
         drawUpgradePop(ctx, DECK_Y, t - this.popAt);
+        // 路过的人。他们走的那条道(-4)比围观的(-13)更靠前,
+        // 谁靠前谁后画 —— 画在围观之前的话,后排的人会盖住前排走过的人,
+        // 一排人前后关系整个反过来。
+        drawStrollers(ctx, DECK_Y, t, phase,
+                      { count: strollerCount(when, weather), rainy });
+
         // 哇鸥只在「不在小屋」的时段出现在大坝上 —— 它睡着的时候
         // 大坝上还站着一只在表演,那就是两个哇鸥了。
+        //
+        // **它画在路人之后。** 论纵深它站在围观那一排里(−13),比路人(−4)靠后,
+        // 照理该被路过的人挡住 —— 而那正是他报的「图层错误」:
+        // 一个背着手走过的路人,把整场戏的主角遮了半张脸。
+        //
+        // > **纵深是为了让画面有前后,不是为了让主角被挡住。**
+        // > 这一场里所有东西都是布景,只有它是内容 —— 那就让它永远在最前面。
+        //
+        // (代价是路人从它身后过的时候会被它挡一点。一只 16 像素的鸟挡住
+        //  一个人的一条腿,没人会觉得不对;反过来才有人会。)
         if (onDam(when)) {
             const showMs = this.getState().showMs ?? 0;
             const fedNow = showMs < this.lastShowMs;
@@ -130,12 +146,6 @@ export class Background {
                 unlockedShows(this.getState()).length, fedNow,
                 this.getState().wearing, phase, rainy);
         }
-
-        // 路过的人**画在最后**。他们走的那条道(-4)比围观的(-13)更靠前,
-        // 谁靠前谁后画 —— 画在围观之前的话,后排的人会盖住前排走过的人,
-        // 一排人前后关系整个反过来。
-        drawStrollers(ctx, DECK_Y, t, phase,
-                      { count: strollerCount(when, weather), rainy });
 
         // 近景压在所有东西之上,包括哇鸥 —— 被前景挡住一点才有纵深
         drawReeds(ctx, weather, t, phase);
