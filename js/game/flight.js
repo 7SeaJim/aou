@@ -436,16 +436,24 @@ const CORRIDOR_S = 1.3;         // 穿过去要多久(秒)。宽度按当时的�
  * 且尖刺整体宽度变宽,即需要通过的路程变长」。
  *
  * 原来的窄道是一条**直的**缝:飞到那个高度、按住平飞、等它过去 ——
- * 考的只是「按不按得稳」,而那一下学会了就永远会。缝斜起来之后,
+ * 考的只是「按不按得稳」,而那一下学会了就永远会。缝起伏之后,
  * 里面那一秒多得**一边按住一边挪**,平飞和跃起要同时用;
  * 走得越长,挪的次数越多。
  *
- * 「远处尖刺逐渐下降或上升」在实现上就是给缝一个斜率:进口在预告的高度,
- * 出口偏出一两条道。**斜率在预告里就定下来**,所以预告能把它画出来 ——
+ * 「远处尖刺逐渐下降或上升」在实现上就是给缝一道**坡**(`humpAt`):
+ * 平、上坡、平、下坡、平,末了回到进口那个高度。
+ *
+ * 第一版做成了**一路斜到底**,他发了张参考图纠正 —— 图上是两条平行线夹出的通道,
+ * 一起爬上一个包再落回来。斜到底不行的原因写在 `gapAt` 上面了,一句话:
+ * 一条匀速斜缝只要一次输入,而且出口一定比进口偏两条道,连着来几次就把人
+ * 顶到天花板上。**一个包要爬、稳、落三次对准,还把人放回原处。**
+ *
+ * `CORRIDOR_BEND_LANES` 现在是**包有多高**(不是出口偏多少)。
+ * 坡在预告里就定下来,所以预告能把整条路径先摆出来 ——
  * 不预告的话它不是考验,是埋伏(这条规矩是窄道刚做出来时定的)。
  */
 const CORRIDOR_BEND_AT = 180_000;
-const CORRIDOR_BEND_LANES = 2;  // 出口最多偏出几条道
+const CORRIDOR_BEND_LANES = 2;  // 中间那个包最高拱几条道
 const CORRIDOR_S_MAX = 2.4;     // 穿过去最长要多久
 const CORRIDOR_S_PER_MIN = 0.3; // 三分钟之后每分钟长这么多秒
 const CORRIDOR_GAP = 32;        // 缝的半高。哇鸥 32 高,判定半径 15
@@ -701,10 +709,33 @@ const M_PER_SEC = 40;
 
 /**
  * 窄道那条缝在某个横位上的高度。
- * 三分钟前 slope 是 0(直缝),之后缝会一路往上或往下走 ——
+ *
+ * **缝走的是一道坡 —— 平、上坡、平、下坡、平,末了回到进口那个高度。**
+ * 不是从头斜到尾。
+ *
+ * 他发了张参考图纠正这处:图上两条平行的线夹出一条通道,一起爬上一个包再落回来,
+ * 斜段是干净的 45°,前后各留一段平的。原来那版是**一路斜到底**,毛病有两个:
+ *
+ *   1. 一条匀速的斜缝只要一次输入 —— 找准一个上升速度按住,一秒多就过去了。
+ *      而一个包要三段:爬上去、稳住、再落下来,**三次都得重新对准**。
+ *   2. 斜到底意味着出口一定比进口偏两条道。后期缝有 2.4 秒长,
+ *      连着来几次就把人一路顶到天花板或者湖面上 —— 那不是难度,是把人推进角落。
+ *
+ * 前后留平段是给「对准」和「走完」分开留的余地:进口先让人对上,
+ * 出口让人落稳,中间那两道坡才是考的东西。
+ *
  * **判定和画面都从这一个函数取**,不然会出现「看着在缝里,算作撞上了」。
  */
-const gapAt = (o, x) => o.gapY + (o.slope ?? 0) * (x - o.x);
+const CORRIDOR_RAMP = [0.20, 0.40, 0.66, 0.84];   // 平→坡→平→坡→平 的四个折点
+const humpAt = (t) => {
+    const [a, b, c, d] = CORRIDOR_RAMP;
+    if (t <= a) return 0;
+    if (t < b) return (t - a) / (b - a);
+    if (t <= c) return 1;
+    if (t < d) return 1 - (t - c) / (d - c);
+    return 0;
+};
+const gapAt = (o, x) => o.gapY + (o.rise ?? 0) * humpAt((x - o.x) / o.w);
 
 /** 切角方块。像素画里的「圆」,比正方形软,又不用画 arc() */
 function plate(ctx, x, y, r, color) {
@@ -1515,7 +1546,7 @@ export class Flight {
             const w = Math.round(Math.max(CORRIDOR_MIN_W,
                       Math.min(CORRIDOR_MAX_W, f.speed * 60 * secs)));
             f.walls.push({ x: VW + 8, w, gapY: f.warn.y,
-                           slope: (f.warn.bend ?? 0) / w });
+                           rise: f.warn.bend ?? 0 });
             f.warn = null;
         }
         for (let i = f.walls.length - 1; i >= 0; i--) {
@@ -2295,26 +2326,39 @@ export class Flight {
             const y = Math.round(f.warn.y);
             const blink = Math.floor(f.elapsed / 110) % 2 === 0;
             ctx.fillStyle = blink ? '#f5b83d' : '#c98a1e';
-            for (let x = 0; x < VW; x += 12) ctx.fillRect(x, y, 6, 1);
+            // 有包的时候,进口那条横线**只画在平段上** —— 画满一屏的话
+            // 画面上就有两条线,而其中一条是走不通的,读起来像「随便挑一条」
+            const flat = f.warn.bend ? CORRIDOR_RAMP[0] : 1;
+            for (let x = 0; x < VW; x += 12) {
+                if (x < VW * flat || x > VW * CORRIDOR_RAMP[3]) ctx.fillRect(x, y, 6, 1);
+            }
             ctx.fillRect(VW - 10, y - CORRIDOR_GAP, 4, CORRIDOR_GAP * 2);
             ctx.fillRect(VW - 22, y - CORRIDOR_GAP, 16, 2);
             ctx.fillRect(VW - 22, y + CORRIDOR_GAP - 2, 16, 2);
-            // **缝会往哪边走,也得预告。** 三分钟之后它是斜的,
-            // 而「进得去」和「走得完」是两件事 —— 只标进口等于只说了一半:
-            // 出口那条线画暗一档,中间几个箭头指出往哪挪
+            // **那个包也得预告。** 三分钟之后缝中间会拱起来(或者塌下去),
+            // 而「进得去」和「走得完」是两件事 —— 只标进口等于只说了一半。
+            //
+            // 预告画的是**缝的中线本身**:照 humpAt 把整条路径点出来,
+            // 顶上那一段画亮、画长,进出口那两段画短。这样它不是一句
+            // 「等下要往上」,而是**把路先摆在那儿**;箭头只提示往哪边起。
             const bend = f.warn.bend ?? 0;
             if (bend) {
-                const y2 = Math.round(y + bend);
-                ctx.fillStyle = '#c98a1e';
-                for (let x = 0; x < VW; x += 24) ctx.fillRect(x, y2, 4, 1);
                 const dir = Math.sign(bend);
+                ctx.fillStyle = '#c98a1e';
+                for (let x = 0; x < VW; x += 8) {
+                    const h = humpAt(x / VW);
+                    if (h <= 0) continue;
+                    ctx.fillRect(x, Math.round(y + bend * h), h >= 1 ? 5 : 3, 1);
+                }
                 ctx.fillStyle = blink ? '#f5b83d' : '#c98a1e';
-                for (let i = 1; i <= 3; i++) {
-                    const ax = Math.round(VW * i / 4);
-                    const ay = Math.round(y + bend * i / 4);
+                for (const t of [(CORRIDOR_RAMP[0] + CORRIDOR_RAMP[1]) / 2,
+                                 (CORRIDOR_RAMP[2] + CORRIDOR_RAMP[3]) / 2]) {
+                    const ax = Math.round(VW * t);
+                    const ay = Math.round(y + bend * humpAt(t));
+                    const up = t < 0.5 ? dir : -dir;      // 后半段是往回落
                     for (let k = 0; k < 4; k++) {          // 一个小人字箭头
-                        ctx.fillRect(ax - 4 + k, ay + dir * k, 2, 2);
-                        ctx.fillRect(ax + 4 - k, ay + dir * k, 2, 2);
+                        ctx.fillRect(ax - 4 + k, ay + up * k, 2, 2);
+                        ctx.fillRect(ax + 4 - k, ay + up * k, 2, 2);
                     }
                 }
             }
