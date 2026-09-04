@@ -439,10 +439,16 @@ export function paintPier(ctx, deckY, bottom, weather = 'sunny', phase = 'day',
     drawStanding(ctx, farSprite('crate', SCENERY.crate, weather, 0.34, {}, phase), 306, back);
     drawStanding(ctx, farSprite('bollard', SCENERY.bollard, weather, 0.34, {}, phase), 74, back);
     drawStanding(ctx, farSprite('barrel', SCENERY.barrel, weather, 0.34, {}, phase), 470, back);
-    drawStanding(ctx, farSprite('crate', SCENERY.crate, weather, 0.34, {}, phase), 546, back);
+    // 这只箱子原来在 546,而丫丫招进来之后就站在 556(栖木左边)——
+    // 箱子 12 宽,两样东西在 548~552 糊在一起,看着像她背了个壳。挪到 524
+    drawStanding(ctx, farSprite('crate', SCENERY.crate, weather, 0.34, {}, phase), 524, back);
 
     paintStall(ctx, deckY, phase, upgrades);
-    for (const bx of [388, 502]) {
+    // 502 那个挪到 250:它原来正好长在 500 那盏路灯的脚底下,
+    // 一根杆子底下伸出半个缆桩 —— 和阿胖那处是同一类毛病,只是没人站在上面。
+    // 250 是甲板上剩下的唯一一段干净横区:小屋画到 240、后排的桶从 262 起,
+    // 而围观的人是从 452 往两边排的,最远到 380 —— 缆桩落在这儿谁也不挨
+    for (const bx of [388, 250]) {
         shadow(ctx, bx, deckY - 13, 8);
         drawStanding(ctx, shadedSprite('bollard', SCENERY.bollard, phase), bx, deckY - 13);
     }
@@ -454,7 +460,12 @@ export function paintPier(ctx, deckY, bottom, weather = 'sunny', phase = 'day',
     // 灯杆本身也加长过了(见 tools/scenery.py):**灯头必须高过栏杆**,
     // 第一版灯头正好落在栏杆横杆上,两样东西糊成一团 —— 那不是位置问题,
     // 是高度不够,挪到哪儿都救不回来。
-    for (const x of [17, 150, 340, 500, 605]) {
+    // **150 那盏挪到 186。** 阿胖站在 146(收钱的,挨着摊子),而灯杆 9 宽、
+    // 摆在 150 —— 两样东西正好糊成一根:他截图报的「伙伴鸥和路灯图层重叠」
+    // 就是这一处。挪灯不挪鸟:**陈设让角色,不是角色让陈设。**
+    // 186 是摊子(到 118)和草棚(216 起)之间那段空地的正中,
+    // 也躲开了栏杆立柱(每 22 格一根,最近的在 176 和 198)。
+    for (const x of [17, 186, 340, 500, 605]) {
         shadow(ctx, x, deckY - 13, 10, 0.26);
         drawStanding(ctx, lampCv, x, deckY - 13);
     }
