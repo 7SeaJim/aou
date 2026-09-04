@@ -111,7 +111,21 @@ export function renderCard(o) {
     const P = pal(o.weather ?? 'sunny', v.phase);
     const st = CARD_STYLES[v.style] ?? CARD_STYLES.paper;
 
-    // 先在 360×480 的小画布上画完,再整块放大
+    // **像素画在小画布上画,文字在大画布上画。**
+    //
+    // 原来是两样都画在 360×480 上再整块放大 —— 像素画这么做是对的,文字不是。
+    // canvas 的 fillText 一定会做灰度反锯齿(imageSmoothingEnabled 只管 drawImage,
+    // 管不到文字),所以 12px 的字先被浏览器描出一圈半调子的灰边,
+    // 这圈灰边再被最近邻放大 3 倍,一个灰点变成一块 3×3 的灰方 ——
+    // 存下来放大看就是他说的「又糊又毛」:笔画本身是硬的,边上挂着一圈大灰块。
+    //
+    // 改法是让文字**在输出分辨率上光栅化**:大画布上 scale(3),字号照旧写 12px。
+    // 这样浏览器实际按 36px 排字,而 Fusion Pixel 是 12px 设计的点阵字体,
+    // 36 = 12×3 正好整数倍,每根竖笔落在整像素上,一点灰边都不会有。
+    // 坐标和字号一行都不用改,measureText 返回的还是用户空间的值,断行结果不变。
+    //
+    // paintText 里手画的贝壳和宜/忌小块也跟着走 scale(3):1px 的 fillRect
+    // 变成 3px 的实心方,和最近邻放大的结果逐像素相同,不会一软一硬。
     const s = document.createElement('canvas');
     s.width = CW; s.height = CH;
     const c = s.getContext('2d');
@@ -124,14 +138,17 @@ export function renderCard(o) {
     const g = sprite('hut_waou', SCENERY.hut_waou);
     c.drawImage(g, Math.round((CW - g.width) / 2), st.top - g.height + 6);
 
-    paintText(c, st, f, o.mark, o.weather ?? 'sunny', date, o.level ?? 1);
-
     const cv = document.createElement('canvas');
     cv.width = CW * SCALE;
     cv.height = CH * SCALE;
     const ctx = cv.getContext('2d');
     ctx.imageSmoothingEnabled = false;
     ctx.drawImage(s, 0, 0, CW * SCALE, CH * SCALE);
+
+    ctx.save();
+    ctx.scale(SCALE, SCALE);
+    paintText(ctx, st, f, o.mark, o.weather ?? 'sunny', date, o.level ?? 1);
+    ctx.restore();
     return cv.toDataURL('image/png');
 }
 
