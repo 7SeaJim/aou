@@ -220,16 +220,16 @@ const HAZ_MIN_MS = 700;
  * 原来开局是 22%,配上 860 毫秒的生成间隔,等于**平均 3.9 秒才来一个障碍**,
  * 而一个障碍横穿画面要 3.2 秒 —— 头一分钟没有游戏。
  *
- * 52%:他说「初期障碍物过少」。42% 那一档场上常驻一个多,头一分钟仍然偏闲。
- * 52% 大概是场上两个多,而**留给吃的空当靠的是「两簇之间至少 700 毫秒」
- * 那条硬保证**,不是靠占比留白。
+ * 60%:他说了两轮「初期障碍物过少」。42% → 52% → 60%。
+ * **留给吃的空当靠的是「两簇之间至少 700 毫秒」那条硬保证**,不是靠占比留白 ——
+ * 占比低只会让「什么都没有」的那几秒变长,而那几秒正是「空旷」的来源。
  *
  * **上限从 62% 压到 55%,斜率从 0.09 减到 0.05。** 这一档和速度上限、
  * 簇宽上限一起,在两分半到三分钟之间**全部封顶** —— 那之后障碍这条线
  * 不再变难,玩家会有一段「不过如此」。**那段松弛是故意的**,
  * 它是后面那件事的铺垫:见 MODE_CD_FROM。
  */
-const HAZARD_0 = 0.52;
+const HAZARD_0 = 0.60;
 const HAZARD_MAX = 0.55;
 /** 多久算一波。到点报一次,让玩家知道是游戏变难了不是自己变菜了 */
 const WAVE_MS = 20_000;
@@ -266,8 +266,30 @@ const SPAWN_BOTTOM = HORIZON - 26;
  * **这个数宁可小,不能大** —— 大了就等于允许一次够不着的换道。
  */
 const CLIMB_PX_PER_SEC = 150;
+/**
+ * 障碍在道上左右前后晃多少。**钉在道的正中,满屏就是一张网格** ——
+ * 而网格是「看一眼就知道后面长什么样」,他两次说的「太规律」有一半在这儿。
+ * ±7 是算过的:门那条道的中心离最近的障碍还有 40 像素,判定半径 15 ——
+ * **晃归晃,门必须还是门。**
+ */
+const LANE_JITTER = 7;
 /** 食材出现在哇鸥当下高度的上下这么多像素之内。约等于两下翅膀 */
 const REACH = 72;
+/**
+ * 食材**横着成组**出现,一组一到五个,同一个高度、同一种。
+ *
+ * 他点破的那件事:**两个键各管一半 —— 跃起是用来躲的,平飞是用来吃的。**
+ * 而食材原来是一颗一颗零散撒的,吃它靠的是「跳到那个高度」——
+ * 于是平飞在觅食这一半里没有位置,两个键的分工只落地了一半。
+ *
+ * 排成一横排之后:对准高度、按住平飞、一路收过去。
+ * **一组的长度就是这个键要按多久。**
+ *
+ * 组的大小偏小(权重表里 1 和 2 最多):一上来就五连排,
+ * 那条「对准了就赚一笔」的甜头会变得太廉价。
+ */
+const FOOD_ROW = [1, 1, 2, 2, 2, 3, 3, 4, 5];
+const FOOD_ROW_GAP = 30;        // 一排里两颗之间隔多远
 
 /* ---------- 三个道具:出得少,但每一个都是一段能记住的十几秒 ----------
  *
@@ -549,16 +571,26 @@ const FRENZY_SPEED = 2.2;
  * 弧线是连续的:每一颗的间距按「这一拍世界跑多远 ÷ 一拍撒几颗」现算,
  * 相位跨拍累加 —— 所以它不是一拍一簇,是一条从右边一直淌过来的带子。
  */
-const FRENZY_FOOD = 7;          // 一拍撒几颗
+/**
+ * 狂潮的弧线是**一列一列**排成的,一列三颗竖着摞。
+ *
+ * 他要的:「物资不仅按弧线排列,并且高度总是为 3,即三个一纵列,
+ * 一列一列排成弧线」。一颗一颗排的时候那条线太细 ——
+ * 贴准了才吃得到,而且吃到的那一下几乎没有分量。
+ * 三颗一列之后线变粗了:**对准了是一口三个,偏一点也还能蹭到一个。**
+ */
+const FRENZY_FOOD = 3;          // 一拍撒几列
+const FRENZY_COL = 3;           // 一列摞几颗
+const FRENZY_COL_GAP = 26;      // 一列里两颗之间隔多高
 const FRENZY_TICK = 0.5;        // 生成节奏压到平常的几成
 /**
  * 弧线的弯度:每颗前进多少相位。
  *
- * 0.5 那一档相邻两颗能差四十像素 —— 那不是弧线,是锯齿。
- * 0.22:相邻最多差十八像素(比一颗还窄),连起来是**光滑的一条**;
- * 一个完整的波要走二十八颗、六百来像素,正好一屏一道大弧。
+ * 改成一列三颗之后,一拍从七颗变成三列 —— 相位得按**列**走,不是按颗。
+ * 0.5:相邻两列差四十来像素,而列本身有五十二像素高,所以还是连得上;
+ * 一个完整的波走十三列、六百来像素,正好一屏一道大弧。
  */
-const FRENZY_ARC = 0.22;
+const FRENZY_ARC = 0.5;
 const FRENZY_PULL = 58;         // 小范围吸附的半径(整屏那种取消了)
 const FRENZY_HAZARD = 0.12;     // 还留一点障碍 —— 全清的话「无敌」就没有意义
 const FRENZY_IN = 900;          // 开场那一下的金光多久
@@ -1551,13 +1583,20 @@ export class Flight {
                 // 相位跨拍累加 —— 于是它不是一拍一簇,是一条一直淌过来的带子
                 const per = f.speed * 60 / 1000 * FRENZY_SPEED
                           * f.spawnInterval * FRENZY_TICK / FRENZY_FOOD;
-                const mid = f.vert ? V_MID : (LANE_TOP + LANE_BOTTOM) / 2;
-                const amp = (f.vert ? V_HALF : (LANE_BOTTOM - LANE_TOP) / 2) * 0.86;
+                const lo = (f.vert ? laneX(0) : LANE_TOP) + FRENZY_COL_GAP;
+                const hi = (f.vert ? laneX(LANES - 1) : LANE_BOTTOM) - FRENZY_COL_GAP;
+                const mid = (lo + hi) / 2;
+                const amp = (hi - lo) / 2 * 0.95;
                 for (let i = 0; i < FRENZY_FOOD; i++) {
-                    const p = { ...spot(), type: pick(FOOD_TYPES) };
+                    // 一列三颗,摞在弧线上的那一点上下
                     const c = mid + Math.sin(f.arcPhase) * amp;
-                    if (f.vert) p.x = Math.round(c); else p.y = Math.round(c);
-                    f.foods.push(shift(p, Math.round(i * per)));
+                    const type = pick(FOOD_TYPES);
+                    for (let j = 0; j < FRENZY_COL; j++) {
+                        const p = { ...spot(), type };
+                        const cy = c + (j - (FRENZY_COL - 1) / 2) * FRENZY_COL_GAP;
+                        if (f.vert) p.x = Math.round(cy); else p.y = Math.round(cy);
+                        f.foods.push(shift(p, Math.round(i * per)));
+                    }
                     f.arcPhase += FRENZY_ARC;
                 }
             }
@@ -1594,13 +1633,21 @@ export class Flight {
         } else if (r < POWER_RATE + f.hazard && f.elapsed >= f.hazAt) {
             // 障碍**不跟着哇鸥走** —— 跟着走就成了追着人扔石头,
             // 而它靠的是「一簇里必留一条空道」那套规矩
-            // 开局那几波偶尔来两个,不再是清一色的单个 ——
-            // **「每次都恰好一个」本身就是一种均匀**
-            const n = 1 + Math.floor(f.wave / 4) + (f.wave < 4 && rnd() < 0.3 ? 1 : 0);
+            // **一簇几个也要摇。** 清一色的单个本身就是一种规律 ——
+            // 开局那几波在 1~3 之间摇,偏小但会有意外
+            const n = 1 + Math.floor(f.wave / 4)
+                    + (rnd() < 0.45 ? 1 : 0) + (rnd() < 0.18 ? 1 : 0);
             this._hazard(n);
             f.hazAt = f.elapsed + HAZ_MIN_MS;
         } else {
-            f.foods.push({ ...spot(), type: pick(FOOD_TYPES) });
+            // 横着一排。**同一个高度、同一种** —— 一排饵块读起来是「一排饵块」,
+            // 一排杂七杂八读起来是「一堆东西」
+            const row = pick(FOOD_ROW);
+            const type = pick(FOOD_TYPES);
+            const at = spot();
+            for (let i = 0; i < row; i++) {
+                f.foods.push(shift({ ...at, type }, i * FOOD_ROW_GAP));
+            }
         }
 
         // 天气影响额外生成。**x 要错开半屏** ——
@@ -1614,7 +1661,10 @@ export class Flight {
         // 它也绝不落在当前那条通道上(见 _hazard 的 chain=false)
         if (this.state.weather === 'rainy' && rnd() < 0.3) this._hazard(1, EXTRA_X, false);
         if (this.state.weather === 'foggy' && rnd() < 0.25) {
-            f.foods.push(shift({ ...spot(), type: pick(FOOD_TYPES) }, EXTRA_X));
+            const row = pick(FOOD_ROW), type = pick(FOOD_TYPES), at = spot();
+            for (let i = 0; i < row; i++) {
+                f.foods.push(shift({ ...at, type }, EXTRA_X + i * FOOD_ROW_GAP));
+            }
         }
     }
 
@@ -1683,9 +1733,17 @@ export class Flight {
         }
         const g = this._gate();
         for (const i of lanes.slice(0, Math.min(n, lanes.length))) {
+            // **不钉在道的正中,前后左右各晃一点。** 钉死的话满屏是一张网格,
+            // 而网格是「看一眼就知道后面长什么样」。
+            // 晃动量卡在 ±7:门那条道的中心离它最近的障碍还有 40 像素,
+            // 判定半径 15 —— **晃归晃,门必须还是门**
+            const j = (rnd() * 2 - 1) * LANE_JITTER;
+            const back = (rnd() * 2 - 1) * LANE_JITTER * 2;
             f.obstacles.push(f.vert
-                ? { x: laneX(i), y: g.y + (g.d === 1 ? -dx : dx), d: g.d, type: pick(OBSTACLES) }
-                : { x: g.x + (g.d === 2 ? -dx : dx), y: laneY(i), d: g.d, type: pick(OBSTACLES) });
+                ? { x: laneX(i) + j, y: g.y + (g.d === 1 ? -dx - back : dx + back),
+                    d: g.d, type: pick(OBSTACLES) }
+                : { x: g.x + (g.d === 2 ? -dx - back : dx + back), y: laneY(i) + j,
+                    d: g.d, type: pick(OBSTACLES) });
         }
     }
 
@@ -1882,6 +1940,34 @@ export class Flight {
         if (f.frenzy <= 0) return;
         const t = f.elapsed;
         const since = FRENZY_MS - f.frenzy;
+        // **整屏压一层跳动的金。** 前一版只有边框和烟花,中间那一大片还是
+        // 平常的天 —— 而「中奖」这件事应该是整个屏幕的事,不是四条边的事
+        const wash = 0.07 + 0.04 * Math.sin(t * 0.02);
+        ctx.fillStyle = `rgba(245, 184, 61, ${wash.toFixed(3)})`;
+        ctx.fillRect(0, 0, VW, VH);
+        // **速度线横穿整屏。** 世界这会儿是平常的 2.2 倍,而「快」这件事
+        // 光靠东西跑得快是看不出来的(眼睛没有参照物)—— 得有线
+        for (let i = 0; i < 22; i++) {
+            const h = (i * 2654435761) >>> 0;
+            const y = (h % (VH - 20)) + 10;
+            const len = 30 + (h >>> 7) % 90;
+            const x = VW - ((i * 53 + t * 0.9) % (VW + 160));
+            ctx.fillStyle = i % 3 ? 'rgba(255, 253, 244, 0.30)' : 'rgba(245, 184, 61, 0.42)';
+            ctx.fillRect(Math.round(x), y, len, 1);
+        }
+        // **金色纸屑往下飘。** 烟花是一下一下的,纸屑是一直在的 ——
+        // 两个加起来才是「一直在响」
+        for (let i = 0; i < 26; i++) {
+            const h = (i * 40503 + 7) >>> 0;
+            const x = (h % VW);
+            const y = ((h >>> 5) % VH + t * 0.055 + i * 7) % VH;
+            const c = i % 4;
+            ctx.fillStyle = c === 0 ? 'rgba(255, 253, 244, 0.8)'
+                          : c === 1 ? 'rgba(245, 184, 61, 0.85)'
+                          : c === 2 ? 'rgba(239, 119, 87, 0.75)'
+                                    : 'rgba(255, 224, 138, 0.8)';
+            ctx.fillRect(Math.round(x), Math.round(y), 2, 3);
+        }
         // 开场那一下:整屏压一层金,中间一圈扩开的环
         if (since < FRENZY_IN) {
             const p = 1 - since / FRENZY_IN;
