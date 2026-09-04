@@ -289,7 +289,17 @@ const REACH = 72;
  * 那条「对准了就赚一笔」的甜头会变得太廉价。
  */
 const FOOD_ROW = [1, 1, 2, 2, 2, 3, 3, 4, 5];
-const FOOD_ROW_GAP = 30;        // 一排里两颗之间隔多远
+/**
+ * 一排里两颗之间隔多久(秒),**不是隔多少像素**。
+ *
+ * 第一版写死 30 像素 —— 他说「太近了就完全不用横飞」:五颗排下来才 120 像素,
+ * 开局那个速度 0.7 秒就过完了,擦过去就全捡到了,平飞按不按都一样。
+ *
+ * 和窄道的宽度是同一条道理:**要固定的是「按住多久」,不是「多少像素」。**
+ * 0.3 秒一颗 —— 五颗一排要按住一秒半,那才叫「用平飞去吃」。
+ * 速度涨上去之后像素间距自己跟着涨(0.3 秒还是 0.3 秒)。
+ */
+const FOOD_ROW_SEC = 0.3;
 
 /* ---------- 三个道具:出得少,但每一个都是一段能记住的十几秒 ----------
  *
@@ -1645,8 +1655,9 @@ export class Flight {
             const row = pick(FOOD_ROW);
             const type = pick(FOOD_TYPES);
             const at = spot();
+            const gap = Math.round(f.speed * 60 * FOOD_ROW_SEC);
             for (let i = 0; i < row; i++) {
-                f.foods.push(shift({ ...at, type }, i * FOOD_ROW_GAP));
+                f.foods.push(shift({ ...at, type }, i * gap));
             }
         }
 
@@ -1662,8 +1673,9 @@ export class Flight {
         if (this.state.weather === 'rainy' && rnd() < 0.3) this._hazard(1, EXTRA_X, false);
         if (this.state.weather === 'foggy' && rnd() < 0.25) {
             const row = pick(FOOD_ROW), type = pick(FOOD_TYPES), at = spot();
+            const gap = Math.round(f.speed * 60 * FOOD_ROW_SEC);
             for (let i = 0; i < row; i++) {
-                f.foods.push(shift({ ...at, type }, EXTRA_X + i * FOOD_ROW_GAP));
+                f.foods.push(shift({ ...at, type }, EXTRA_X + i * gap));
             }
         }
     }
