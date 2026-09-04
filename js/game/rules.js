@@ -12,7 +12,7 @@ import {
     SHOWS, SHOW_MS, SHOW_WEATHER, POSTCARDS,
     DRINKS, DRINK_KEYS, SHELL_MARKS, divine, hourSlot, onDam,
     CREW, crewBonus, crewWage, SEASONS, seasonOf, hireCost,
-    COSMETICS, EVENTS, ITEMS, MARKET, MARKET_LEVEL, FOODS,
+    COSMETICS, EVENTS, ITEMS, MARKET, MARKET_AFFINITY, FOODS,
     RECIPE_STEPS, SERVICE,
     KITCHEN, kitchenCost, toolSlots, toolPower, PLATES,
     RUNWAY, RUNWAY_KEYS, RUNWAY_STEP, runwayCost,
@@ -719,7 +719,28 @@ export function buyRunway(state, key) {
 
 /* ---------- 篆新市场 ---------- */
 
-export const marketOpen = state => state.level >= MARKET_LEVEL;
+/**
+ * 阿姨认不认得你。**看好感度,不看等级。**
+ *
+ * 这条线的说法本来就是「篆新收摊的阿姨顺路来坝上摆摊」——
+ * 那是熟不熟的事,跟哇鸥几级没关系。没到之前界面上**完全没有她**
+ * (见 ui.js 的 marketView),到了那一下弹窗说一声(meetaunt 事件)。
+ */
+export const marketOpen = state => state.affinity >= MARKET_AFFINITY;
+
+/**
+ * 该不该弹「认识阿姨了」那一下。
+ *
+ * **这里只回答「该不该」,不改存档** —— 改存档(`state.met.market = true`)
+ * 的那一下和「真的弹出来了」必须是同一件事,所以放在 ui.js 弹窗那儿。
+ *
+ * 为什么不在涨好感的那几个函数里各发一个事件:好感度有四个来源
+ * (给喝的、下棋、冬天那条随机事件、以后还会有),**每加一处来源就要记得补一处**,
+ * 而漏掉的代价是玩家永远收不到这条通知、还查不出为什么。
+ * 改成在界面刷新时问一句「够了吗、说过了吗」,来源加多少条都漏不掉 ——
+ * 离线结算跨过这条线也照样弹。
+ */
+export const auntNew = state => marketOpen(state) && !state.met?.market;
 
 /** 今天这一样还能买几个。跨天自动清零 —— 存的是日期,不是定时器。 */
 export function marketLeft(state, key, when = clockNow()) {
@@ -738,7 +759,7 @@ export function buyFood(state, key, n = 1, when = clockNow()) {
     const m = MARKET[key];
     if (!m) return { ok: false, reason: '市场没有这个' };
     if (!marketOpen(state)) {
-        return { ok: false, reason: `${MARKET_LEVEL} 级以后阿姨才会来坝上摆摊` };
+        return { ok: false, reason: '还没跟阿姨熟到那份上' };
     }
     const today = when.toDateString();
     if (state.market.date !== today) state.market = { date: today, bought: {} };
@@ -778,6 +799,7 @@ function eventOpen(state, ev, when) {
     if (c.weather && state.weather !== c.weather) return false;
     if (c.season && seasonOf(when) !== c.season) return false;
     if (c.minLevel && state.level < c.minLevel) return false;
+    if (c.minAffinity && state.affinity < c.minAffinity) return false;
     return true;
 }
 

@@ -5,7 +5,7 @@
  * 好处:改目录不用写迁移,存档也更小(存档码是要玩家复制的)。
  */
 
-export const SAVE_VERSION = 14;
+export const SAVE_VERSION = 15;
 
 // 食材的键。改这里要同步 data.js 的 FOODS,并且 SAVE_VERSION +1 补一条迁移 ——
 // 这些键是 backpack 的字段名,直接进存档。
@@ -94,6 +94,12 @@ export function createInitialState() {
          * 不限量的话稀有材料变成纯粹用钱买,觅食和表演就都不用玩了。
          */
         market: { date: '', bought: {} },
+        /**
+         * 「这件事跟玩家说过了没」。目前只有一条:认识篆新的阿姨。
+         * **和「条件够不够」是两回事** —— 条件够了要弹一次,弹过就不再弹,
+         * 而读档、离线结算都会重新走一遍条件判断。
+         */
+        met: { market: false },
         /**
          * 出摊时预先做好、还没卖出去的成品。**必须存盘** ——
          * 「游客不在的时候可以提前做」这件事,只有跨会话留得住才成立。
@@ -369,6 +375,19 @@ const migrations = {
     13(old) {
         return { ...old, version: 14, crewIdle: [] };
     },
+
+    // v14 -> v15:阿姨的门槛从等级改成好感度,加一个「说过了没」的记号。
+    //
+    // **老档按当前好感度直接判定,不补弹窗。** 好感度已经过 6 的人,
+    // 阿姨在他那儿本来就一直在(旧门槛是 Lv.4,他多半早就用上了)——
+    // 这时候弹一句「哇鸥认识了阿姨」是在通知一件三十天前发生的事。
+    // 而还没到 6 的人,记号留 false,等他自己攒到那一下再弹,和新档一样。
+    14(old) {
+        return {
+            ...old, version: 15,
+            met: { market: (old.affinity ?? 0) >= 6 },
+        };
+    },
 };
 
 /** 把任意版本的存档升到当前版本。无法识别时返回 null,由调用方决定是否开新档。 */
@@ -464,6 +483,7 @@ function normalize(s) {
 
     // ---- 长线字段 ----
     out.caps = clampInt(out.caps, 0, 9_999_999);
+    out.met = { market: !!(s.met?.market) };
     out.market = (() => {
         const m = { date: '', bought: {} };
         if (typeof out.market?.date === 'string') m.date = out.market.date;

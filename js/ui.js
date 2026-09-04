@@ -12,7 +12,7 @@ import {
     UPGRADES, upgradeCost, upgradeCaps, SHOWS, hireCost,
     DRINKS, FORTUNES, HOURS, hourSlot,
     CREW, FOOD_SOURCE, COSMETICS, SLOTS, dayPhase,
-    TUTORIAL, TUTORIAL_GIFT, MARKET, MARKET_LEVEL,
+    TUTORIAL, TUTORIAL_GIFT, MARKET, MARKET_AFFINITY,
     RECIPE_STEPS, SERVICE, TOOLS, QUALITY, KITCHEN, kitchenCost, PLATES,
     RUNWAY, RUNWAY_KEYS, runwayCost,
 } from './data.js';
@@ -328,6 +328,11 @@ export class UI {
                 break;
             }
 
+            case 'gomarket':
+                this.openModal(null);
+                this.go('cook');
+                break;
+
             case 'skiptut':
                 this.mutate(st => { st.tutorial = TUTORIAL_DONE; });
                 this.toast('引导关了。想再看一遍就清档重开', 'star');
@@ -499,13 +504,11 @@ export class UI {
      */
     marketView() {
         const s = this.getState();
-        if (!rules.marketOpen(s)) {
-            return `<div class="px-panel px-panel--sea" style="margin-bottom:28px">
-                <p>${icon('shop')} 篆新市场</p>
-                <p class="px-muted">收摊的阿姨每天顺路来坝上摆一小摊,缺什么可以拿鸥币换。
-                   <strong>Lv.${MARKET_LEVEL}</strong> 之后她才认得你。</p>
-            </div>`;
-        }
+        // **还没认识就整块不画。** 原来这儿摆一块「Lv.4 之后她才认得你」的牌子,
+        // 他说「好感度 6 之前直接把其从界面移除」——
+        // 一个还不能用的入口摆在那儿不是预告,是一块占地方的锁,
+        // 而摊位这一页在手机上本来就要翻两屏。到了那一下有弹窗说,不靠这块牌子。
+        if (!rules.marketOpen(s)) return '';
         const rows = Object.entries(MARKET).map(([k, m]) => {
             const left = rules.marketLeft(s, k);
             const can = left > 0 && s.coins >= m.price;
@@ -631,6 +634,20 @@ export class UI {
 
     render() {
         this.advanceTutorial();
+        // **「认识阿姨了」这一下在这儿弹,不在涨好感的那几个函数里发事件。**
+        //
+        // 好感度有四个来源(给喝的、下棋、冬天那条随机事件、以后还会有),
+        // 每加一处来源就要记得补一处 —— 而漏掉的代价是玩家永远收不到通知、
+        // 还查不出为什么。放在刷新时问一句「够了吗、说过了吗」,
+        // 来源加多少条都漏不掉,离线结算跨过这条线也照样弹。
+        //
+        // 记号和「真的弹出来了」在同一句里改:两者必须是同一件事,
+        // 分开写就会出现「记成说过了但没弹」。
+        if (rules.auntNew(this.getState())) {
+            this.mutate(st => { st.met = { ...st.met, market: true }; });
+            sfx.play('get');
+            this.modal = 'meetaunt';
+        }
         this.renderHud();
         this.renderRails();
         // **引导条要在分页之前量。** 它决定抽屉能有多高,
@@ -650,7 +667,11 @@ export class UI {
             this.paintCanvases();
             return;
         }
-        this.$modal.hidden = true;
+        // 场景弹窗(占卜、下棋)只在整页场景里有意义,换到抽屉页就收掉;
+        // 但**通告类的弹窗到哪儿都得弹得出来** —— 它说的是刚刚发生的事,
+        // 而玩家可能正好停在背包页
+        if (this.modal === 'meetaunt') this.renderModal();
+        else this.$modal.hidden = true;
         this.$kitchen.hidden = true;
 
         const view = {
@@ -1458,6 +1479,7 @@ export class UI {
         if (!kind) return;
         const s = this.getState();
         const map = {
+            meetaunt: ['认识了篆新的阿姨', () => this.modalAunt()],
             fortune: ['今日签', () => this.modalFortune()],
             c4: [`海鸥四子棋 · ${s.c4.win} 胜 ${s.c4.lose} 负 ${s.c4.draw} 平`, () => this.c4View()],
             drink: ['请它喝一杯', () => this.modalDrink()],
@@ -1467,6 +1489,22 @@ export class UI {
         this.$modalTitle.textContent = map[0];
         this.$modalBody.innerHTML = map[1]();
         this.paintCanvases();
+    }
+
+    /**
+     * 好感度到 `MARKET_AFFINITY` 那一下弹一次。**一辈子一次**,记号存在档里。
+     *
+     * 为什么值得弹窗而不是发个 toast:这一下**多出来一个入口**,
+     * 而摊位那一页在这之前是根本没有市场那一块的。toast 三秒就没了,
+     * 玩家下次翻到摊位页看见凭空多出一整块,只会以为是个 bug。
+     */
+    modalAunt() {
+        return `
+        <p style="margin-bottom:10px">哇鸥认识了篆新菜市场的阿姨,可以从阿姨那买菜了!</p>
+        <p class="px-muted" style="margin-bottom:14px">
+            她每天收摊之后顺路来坝上摆一小摊。缺什么材料可以拿鸥币换 ——
+            <strong>每样每天就那么点</strong>,零点补货。摊位那一页往下翻就是。</p>
+        <button class="px-btn" data-act="gomarket">${icon('shop', 'lg')} 去看看</button>`;
     }
 
     modalFortune() {
