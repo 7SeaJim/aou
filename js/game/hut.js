@@ -283,12 +283,21 @@ const REST = 15;
  */
 function drawWaou(ctx, slot, t, wearing = null, hopAt = -1) {
     if (slot === 'night') {
-        // 夜里那张还是原来的近景图(99 高,装扮锚点从顶行算)
+        // **睡着的那张现在和待机同一张图改的**,尺寸、站位、装扮锚点全一样 ——
+        // 所以这儿不再另算一套坐标(原来那张是 124×108 的老近景图,
+        // 装扮得按 99 高单独标一遍,两套锚点迟早会对不上)。
+        //
+        // 也**不做起伏**。他说得很清楚:「睡觉动作不需要动态,
+        // 只需要右上角几个 zzzz 的符号偶尔飘出就行」——
+        // 一只睡着的鸟该是静的,会动的是那几个 Z。
         const cv = sprite('hut_sleep', SCENERY.hut_sleep);
-        const breathe = Math.sin(t * 0.0012) > 0 ? 0 : 1;
-        drawStanding(ctx, cv, GULL_X, GROUND + 22 + breathe);
-        drawWear(ctx, wearing, 'big', GULL_X, GROUND + 22 + breathe - 99);
-        drawZzz(ctx, GULL_X + 72, GROUND - 62, t);
+        const base = GROUND + 22;
+        drawStanding(ctx, cv, GULL_X, base);
+        drawWear(ctx, wearing, 'big', GULL_X, base - cv.height + HAT_ROW, 'day', 'hat');
+        drawWear(ctx, wearing, 'big', GULL_X, base - cv.height + NECK_ROW, 'day', 'neck');
+        // Z 从**头顶右上**冒出来,不是从举起的那只翅膀上冒出来 ——
+        // 起点压在翅尖上的话,飘出去的第一下像是翅膀甩出来的
+        drawZzz(ctx, GULL_X + 30, base - cv.height - 2, t);
         return;
     }
 
@@ -319,7 +328,18 @@ function drawWaou(ctx, slot, t, wearing = null, hopAt = -1) {
     drawWear(ctx, wearing, 'big', GULL_X, row(NECK_ROW), 'day', 'neck', sx, sy);
 }
 
-/** 睡着的时候飘出来的 Z */
+/**
+ * 睡着的时候飘出来的 Z。
+ *
+ * **一串飘完要停一会儿再来。** 原来三个 Z 首尾相接一直转,画面右上角永远挂着
+ * 三个符号 —— 那是个装饰,不是「它在睡觉」。他要的是「偶尔飘出」:
+ * 三个 Z 依次升上去(ZZZ_RISE),然后整整齐齐地空一段(到 ZZZ_CYCLE)再来一串。
+ * 空的那几秒才是这张静图能撑住的原因 —— 屋里安静下来了,过一会儿才想起它在睡。
+ */
+const ZZZ_CYCLE = 9000;     // 一串到下一串
+const ZZZ_RISE = 2600;      // 一个 Z 从冒出到飘散
+const ZZZ_GAP = 0.42;       // 三个之间错开多少(按 ZZZ_RISE 算)
+
 function drawZzz(ctx, x, y, t) {
     const Z = [
         '.KKK.',
@@ -328,8 +348,10 @@ function drawZzz(ctx, x, y, t) {
         '.K...',
         '.KKK.',
     ];
+    const u = (t % ZZZ_CYCLE) / ZZZ_RISE;
     for (let i = 0; i < 3; i++) {
-        const p = (t * 0.00035 + i * 0.33) % 1;
+        const p = u - i * ZZZ_GAP;
+        if (p < 0 || p > 1) continue;      // 还没轮到,或者已经飘散了
         const s = 1 + i;
         const zx = Math.round(x + p * 26 + i * 4);
         const zy = Math.round(y - p * 40 - i * 6);
