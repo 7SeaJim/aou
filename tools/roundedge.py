@@ -253,6 +253,76 @@ def smooth(g, keep=(), out_ch='K'):
     return out
 
 
+def dist_out(mask, w, h):
+    """每个实心格离画外有多远。(3,4)/3 倒角距离,够近似欧氏了 ——
+    用四邻(曼哈顿)会把斜边算厚,用八邻(棋盘)会把斜边算薄,描边就跟着一起歪"""
+    INF = 1 << 20
+    d = [[0 if not mask[y][x] else INF for x in range(w)] for y in range(h)]
+    for y in range(h):
+        for x in range(w):
+            if not mask[y][x]:
+                continue
+            v = d[y][x]
+            for dy, dx, c in ((-1, 0, 3), (0, -1, 3), (-1, -1, 4), (-1, 1, 4)):
+                ny, nx = y + dy, x + dx
+                v = min(v, (d[ny][nx] if 0 <= ny < h and 0 <= nx < w else 0) + c)
+            d[y][x] = v
+    for y in range(h - 1, -1, -1):
+        for x in range(w - 1, -1, -1):
+            if not mask[y][x]:
+                continue
+            v = d[y][x]
+            for dy, dx, c in ((1, 0, 3), (0, 1, 3), (1, 1, 4), (1, -1, 4)):
+                ny, nx = y + dy, x + dx
+                v = min(v, (d[ny][nx] if 0 <= ny < h and 0 <= nx < w else 0) + c)
+            d[y][x] = v
+    return d
+
+
+def even_outline(g, thick=2, deep=6, out_ch='K', center=None):
+    """把外轮廓重画成**处处一样粗**的一条线。
+
+    他发了一张像素画去锯齿的参考图,两个形状并排:左边那条线的横向段长是
+    3,1,3,1,1,3,1,3 —— 走两步停一下再走两步,眼睛读出来就是一排锯齿;
+    右边是 2,1,1,1,1,1,1,2,匀的。配的话是「哇鷗的頭部邊緣明顯線條過厚」。
+
+    量了一下,毛病正是这个:上一版的描边是**按行**铺的(从新端点铺到原内容起点),
+    边往外挪一格的行就厚一格、没挪的行就不厚 —— 法向厚度在 2.2 和 3.1 之间来回跳,
+    十几行里跳了六次。**忽厚忽薄比一律偏厚更显眼**,因为它在轮廓上打出一串亮暗节拍。
+
+    这里不按行铺了,改成按距离铺:算出每个实心格离画外多远,
+    **离得不超过 thick 的就是描边**。这样厚度是造型的函数,不是画法的函数,
+    斜的地方和平的地方一样粗,不可能再跳。
+
+    原来压在描边位置上的那些墨(深度 ≤ deep 的 K)要退回内色,不然线只会更厚;
+    深处的 K(眼睛、嘴)离边界十几格,碰不到。翅膀那种整块的墨得先摘出去再进来 ——
+    它自己就是一大团 K,按深度算会被从中间掏空。
+    """
+    h, w = len(g), len(g[0])
+    mask = [[g[y][x] != BG for x in range(w)] for y in range(h)]
+    d = dist_out(mask, w, h)
+    lim = thick * 3                      # 倒角距离里一格算 3
+    cx = center if center is not None else w / 2
+    out = [list(r) for r in g]
+    for y in range(h):
+        for x in range(w):
+            if not mask[y][x]:
+                continue
+            if d[y][x] <= lim:
+                out[y][x] = out_ch
+            elif g[y][x] == out_ch and d[y][x] <= deep * 3:
+                # 往球心方向走,找第一个不是描边的色顶上
+                step = 1 if x < cx else -1
+                nx = x + step
+                while 0 <= nx < w and g[y][nx] == out_ch:
+                    nx += step
+                out[y][x] = g[y][nx] if 0 <= nx < w and g[y][nx] != BG else FILL_DEF
+    return [''.join(r) for r in out]
+
+
+FILL_DEF = 'w'
+
+
 def curve_wings(g, rows, edge, amp, out_ch='K', fill='w'):
     """把两边平伸出去的翅膀掰出一点弧度。
 

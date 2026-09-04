@@ -37,6 +37,9 @@ WING_R = 11.5               # 根部半厚(原稿在根上量出来是 10.5,对�
 WING_TIP_R = 1.4            # 翅尖半厚
 WING_TAPER = 3.0            # 收尖的快慢。小了整片是个椭圆,像只耳朵
 WING_DROP = 7.0             # 翅尖比根低多少。0/5/7/10 都摆出来比过,7 最像收着的翅膀
+LINE = 2                    # 描边几格粗(法向)。他说「頭部邊緣明顯線條過厚」——
+                            # 上一版按行铺,法向厚度在 2.2 和 3.1 之间来回跳,十几行跳六次;
+                            # 摆过 1 和 2 两版比,1 太细(脚上的边几乎没了),取 2
 
 
 def ball_edge(y):
@@ -98,12 +101,19 @@ def main():
     sys.path.insert(0, 'tools')
     import scenery
     import roundedge
-    # 先把轮廓重画到显示分辨率(台阶 2 像素 → 1 像素),再动翅膀 ——
-    # 反过来的话新翅膀会被当成身子的一部分一起去糊
+    # 三步,顺序不能换:
+    #   1. 轮廓重画到显示分辨率(台阶 2 像素 → 1 像素)
+    #   2. 摘掉翅膀,把身子的描边**按到画外的距离**重铺成处处一样粗
+    #   3. 长回带弧度的翅膀
+    #
+    # 第二步必须夹在中间。放在最前面,轮廓还是 2 像素一级的台阶,匀了也白匀;
+    # 放在最后,翅膀是一整团墨,按深度算会被从中间掏空 —— 剩一圈轮廓。
     base = roundedge.refine(getattr(scenery, a.name), 2, keep=[(54, 57)])
     g = [list(r) for r in base]
     h, w = len(g), len(g[0])
     strip_wings(g, w)
+    g = [list(r) for r in roundedge.even_outline([''.join(r) for r in g],
+                                                 thick=LINE, center=BALL['cx'])]
     for x, y in wing_cells(w, a.drop):
         if 0 <= y < h:
             g[y][x] = INK

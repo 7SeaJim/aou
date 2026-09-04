@@ -1,20 +1,8 @@
-// Cloudflare Workers 的部署配置。
-//
-// 面板上那个 `aou` worker 之前是「Bindings 0 · No workers bound」——
-// **它压根没被告诉要伺服什么东西**,所以打开是空的。
-// 这个游戏是纯静态的(一个 index.html + 一堆 js/css/图),没有服务端逻辑,
-// 所以不需要 worker 脚本(不写 main),只需要一条 assets 绑定指向构建产物。
 {
   "name": "aou",
   "compatibility_date": "2025-09-01",
-
   "assets": {
-    // vite build 的输出目录。构建命令是 package.json 里的 npm run build。
     "directory": "./dist",
-    // 找不到的路径回 404,**不要用 single-page-application**:
-    // 这个游戏没有前端路由,所有东西都在 / 这一页里。
-    // 设成 SPA 的话,`/随便什么错路径` 也会返回 index.html 并且是 200 ——
-    // 打错一个字看到的是完整的游戏,而不是「没这个页面」。
     "not_found_handling": "404-page"
   }
 }

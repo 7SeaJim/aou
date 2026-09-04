@@ -35,14 +35,14 @@ export const RECIPES = [
 /** 明信片:昆明地标。从近到远,顺序就是收集顺序。 */
 export const POSTCARDS = [
     { id: 0, name: '海埂大坝',     icon: 'waou',     note: '喂海鸥的地方。我就是在这儿被喂胖的。' },
-    { id: 1, name: '西山龙门',     icon: 'map',      note: '睡美人躺在那儿,几千年没翻过身。' },
+    { id: 1, name: '西山龙门',     icon: 'map',      note: '睡美人就在这里！' },
     { id: 2, name: '翠湖',         icon: 'flower',   note: '城里那帮亲戚冬天都挤在这儿。' },
-    { id: 3, name: '金马碧鸡坊',   icon: 'coin',     note: '据说六十年才金碧交辉一次,我没赶上。' },
-    { id: 4, name: '昆明老街',     icon: 'shop',     note: '巷子窄,但香味传得远。' },
+    { id: 3, name: '金马碧鸡坊',   icon: 'coin',     note: '据说六十年才金碧交辉一次,这次没赶上...' },
+    { id: 4, name: '昆明老街',     icon: 'shop',     note: '好多人和好多吃的。' },
     { id: 5, name: '云大会泽院',   icon: 'postcard', note: '秋天满地银杏,踩上去脆脆的。' },
-    { id: 6, name: '斗南花市',     icon: 'flower',   note: '鲜花饼的鲜花从这儿来,凌晨最热闹。' },
-    { id: 7, name: '篆新农贸市场', icon: 'erkuai',   note: '食材图鉴的老家。什么都有。' },
-    { id: 8, name: '南屏街',       icon: 'star',     note: '人多,掉在地上的东西也多。' },
+    { id: 6, name: '斗南花市',     icon: 'flower',   note: '鲜花饼里的玫瑰就是从这来的啦！' },
+    { id: 7, name: '篆新农贸市场', icon: 'erkuai',   note: '好多没见过的蔬菜水果！' },
+    { id: 8, name: '南屏街',       icon: 'star',     note: '好多好多好多人！' },
     { id: 9, name: '石林',         icon: 'mushroom', note: '飞了很久才到。石头长得像菌子。' },
 ];
 
@@ -75,7 +75,7 @@ export const ACHIEVEMENTS = [
     // ---- 觅食 ----
     { id: 'first_fly',   group: 'forage', tier: 1, name: '初次觅食',   desc: '完成第一次觅食',
       check: s => s.totalScore >= 5 },
-    { id: 'collect_50',  group: 'forage', tier: 1, name: '会捡了',     desc: '累计得分 50',
+    { id: 'collect_50',  group: 'forage', tier: 1, name: '我不是憨斑鸠',     desc: '累计得分 50',
       check: s => s.totalScore >= 50 },
     { id: 'combo_20',    group: 'forage', tier: 2, name: '手不抖',     desc: '达成 20 连击',
       check: s => s.maxCombo >= 20 },
@@ -171,15 +171,15 @@ export const SLOTS = { hat: '头上', neck: '脖子' };
 
 export const COSMETICS = [
     { id: 'douli',    slot: 'hat',  name: '竹斗笠',   cost: 5,  need: {},
-      note: '滇池边渔家戴的那种。下雨天真的挡雨,虽然它本来也不怕淋。' },
+      note: '钓鱼佬跑路的时候留下来的。下雨天真的挡雨,虽然它本来也不怕淋。' },
     { id: 'weijin',   slot: 'neck', name: '红围巾',   cost: 8,  need: {},
-      note: '冬天鸥群回来的时候戴最应景。它自己说这叫「入乡随俗」。' },
+      note: '冬天鸥群回来的时候戴最应景。哇鸥说这叫「入乡随俗」。' },
     { id: 'huahuan',  slot: 'hat',  name: '鲜花环',   cost: 12, need: { postcard: 6 },
-      note: '斗南花市凌晨扔下的碎花,它捡回来自己编的。戴一天就蔫。' },
+      note: '斗南花市凌晨扔下的碎花,哇鸥捡回来自己编的。戴一天就蔫。' },
     { id: 'lanhua',   slot: 'hat',  name: '蓝花头巾', cost: 18, need: { achievement: 'crew_3' },
       note: '扎染的靛蓝布,白点是扎起来没上到色的地方。伙计鸥送的。' },
     { id: 'tongling', slot: 'neck', name: '小铜铃',   cost: 25, need: { affinity: 30 },
-      note: '它在屋里走动的时候会响。哇鸥说这样你就知道它没跑远。' },
+      note: '哇鸥在屋里走动的时候会响。哇鸥说这样你就知道它没跑远。' },
 ];
 
 /**
@@ -349,10 +349,10 @@ export const FORTUNES = [
     { id: 0, name: '大吉 · 顺风',   text: '风会推着你走。今天飞多远都不累。',
       long: '西北风顺着湖面推过来,翅膀不用怎么使劲就往前送。这种天不多,一年到头也就那么几回。',
       yi: '出去觅食,飞远一点', ji: '窝着不动' },
-    { id: 1, name: '吉 · 满仓',     text: '摊子上的东西卖得动,别舍不得摆。',
+    { id: 1, name: '吉 · 满仓',     text: '摊子上的东西会卖得很好。',
       long: '坝上人多,锅一开就有人凑过来。这种日子该把好菜摆出去,压在货架上不会自己变成钱。',
       yi: '把贵的菜摆上摊', ji: '囤着舍不得卖' },
-    { id: 2, name: '小吉 · 有客',   text: '会有生人递东西给你吃。接着就是了。',
+    { id: 2, name: '小吉 · 有客',   text: '会有陌生人递东西给你吃。接着就是了。',
       long: '会有不认识的人蹲下来,把手里的东西掰一半给你。哇鸥说这种时候别躲,躲了人家下次就不给了。',
       yi: '在坝上多待会儿表演', ji: '一整天都在外面飞' },
     { id: 3, name: '平 · 无浪',     text: '什么都不会发生。这也挺好的。',
@@ -361,7 +361,7 @@ export const FORTUNES = [
     { id: 4, name: '平 · 起雾',     text: '看不清。但看不清不一定是坏事。',
       long: '水汽从湖心漫上来,对岸的西山只剩一道影子。看不清的时候,菌子反而长得旺。',
       yi: '进山找菌子', ji: '飞太远,认不得路' },
-    { id: 5, name: '小凶 · 空爪',   text: '抓什么掉什么。少飞两趟,歇着。',
+    { id: 5, name: '小凶 · 空爪',   text: '抓什么掉什么。今天就多休息吧。',
       long: '爪子不听使唤,眼看到嘴的东西一次次滑出去。哇鸥说这种日子它一般就不出门了,在棚里躺着。',
       yi: '回小屋喝杯茶', ji: '硬要连着飞' },
     { id: 6, name: '凶 · 逆风',     text: '别去太远。今天的湖面不认人。',
@@ -391,7 +391,7 @@ export function divine(weather, mark) {
  */
 export const DRINKS = {
     puer:   { name: '普洱茶', icon: 'sugar',  give: '哇鸥抿了一口,眯起眼睛。「这个……有点像雨后的土。好喝。」', affinity: 3 },
-    coffee: { name: '咖啡',   icon: 'erkuai', give: '哇鸥小口啜着。「保山来的?我尝得出来。」它精神了不少。', affinity: 3 },
+    coffee: { name: '咖啡',   icon: 'erkuai', give: '哇鸥小口啜着。「保山来的?我尝得出来。」哇鸥精神了不少。', affinity: 3 },
 };
 export const DRINK_KEYS = Object.keys(DRINKS);
 
@@ -449,7 +449,7 @@ export const CREW = [
       line: '「我翅膀有力,颠锅归我。」' },
     { id: 'apang',  name: '阿胖', cost: 3500, wage: 140, icon: 'crew_apang',  affinity: 12,
       effect: { price: 0.15 }, desc: '每份贵 15%',
-      line: '「我认得出谁兜里有钱。」' },
+      line: '「我知道谁兜里有钱。」' },
     { id: 'xiaobai',name: '小白', cost: 6000, wage: 240, icon: 'crew_xiaobai', affinity: 20,
       effect: { show: 0.25 }, desc: '表演招人,投喂快 25%',
       line: '「我会翻跟头。真的。」' },
@@ -458,10 +458,10 @@ export const CREW = [
       line: '「飞了十二年,哪片水下面有什么我都记得。」' },
     { id: 'dundun', name: '墩墩', cost: 15000, wage: 600, icon: 'crew_dundun', affinity: 42,
       effect: { offline: 0.10 }, desc: '离线少亏 10%',
-      line: '「你不在的时候,我看着摊子。」' },
+      line: '「我会帮你看着摊子哦！」' },
     { id: 'yaya',   name: '丫丫', cost: 22000, wage: 880, icon: 'crew_yaya', affinity: 56,
       effect: { rare: 0.5 },   desc: '稀有食材多出 50% · 飞行时隔一阵替你挡一下',
-      line: '「菌子在哪儿,我闻得到。」' },
+      line: '「我闻得出来哪里有菌子！」' },
 ];
 
 /**
@@ -600,13 +600,13 @@ export const TUTORIAL = [
     {
         tab: 'cook',
         title: '等它出第一份',
-        text: '摊子在自己算时间,关掉页面也照算(会打个折)。同时哇鸥没出去的时候会在坝上表演,路人投喂就是材料的被动来源 —— 这三件事是一个圈。',
+        text: '摊子在自己算时间,关掉页面也照算(会打个折)。哇鸥没出去的时候会在大坝上表演,有概率获得食材。',
         done: s => s.stats.served >= 1,
     },
     {
         tab: 'hut',
         title: '去小屋看看它',
-        text: '中午和晚上哇鸥回堤岸边的草棚待着。那儿能占卜、下棋、请它喝一杯 —— 好感度高了才招得到伙计。',
+        text: '中午和晚上哇鸥回堤岸边的草棚待着。那儿能占卜、下棋、请它喝一杯 —— 好感度高了哇鸥会给你介绍好朋友。',
         done: (s, ui) => ui.screen === 'hut',
     },
 ];
@@ -685,7 +685,7 @@ export const TOOLS = {
  * 三档是「生了 / 好了 / 焦了」,一眼知道下次该早点还是晚点。
  */
 export const QUALITY = {
-    raw:   { name: '还生着', mul: 0.45, color: '#8a99a3' },
+    raw:   { name: '没熟', mul: 0.45, color: '#8a99a3' },
     good:  { name: '刚好',   mul: 1.00, color: '#77b255' },
     burnt: { name: '焦了',   mul: 0.45, color: '#c14e33' },
 };
@@ -890,7 +890,7 @@ export const EVENTS = [
       text: '篆新市场收摊的阿姨路过,顺手把一把干辣椒撂在栏杆上。',
       effect: { food: { chili: 2 } } },
     { id: 'sugar',  w: 6, name: '甩掉的糖水',
-      text: '有人喝剩半杯木瓜水倒在地上,红糖沉在底下,被它舔走了。',
+      text: '有人喝剩半杯木瓜水倒在地上,红糖沉在底下,被哇鸥舔走了。',
       effect: { food: { sugar: 2 } } },
 
     // ---- 天气 / 季节限定 ----
@@ -912,10 +912,10 @@ export const EVENTS = [
       text: '有人举着长镜头蹲了一下午,临走往罐子里塞了几块钱。',
       when: { weather: 'sunny' }, effect: { coins: 12 } },
     { id: 'student', w: 6, name: '来写生的学生',
-      text: '云大的学生支着画板画它,画完把画举给它看。它假装看懂了。',
+      text: '云艺的学生过来写生,画完把画举给哇鸥看。哇鸥假装看懂了。',
       effect: { coins: 8, affinity: 1 } },
     { id: 'moult', w: 3, name: '换羽',
-      text: '它抖了抖翅膀,掉下来一根还算完整的瓶盖。',
+      text: '哇鸥抖了抖翅膀,掉下来一根还算完整的瓶盖。',
       effect: { caps: 1 } },
     { id: 'shell', w: 4, name: '奇怪的贝壳',
       text: '浪打上来一枚花纹没见过的贝壳。「这个……可以再算一卦。」',
@@ -932,13 +932,13 @@ export const EVENTS = [
       text: '一个小孩举着面包追着鸥群跑,围观的人一哄而散,节目演不下去了。',
       effect: { stopShow: true } },
     { id: 'patrol', w: 5, name: '来巡的人',
-      text: '有人来查摊子,它把锅一盖装作没营业。等人走了,汤都凉了。',
+      text: '有人来查摊子,哇鸥把锅一盖装作没营业。等人走了,汤都凉了。',
       effect: { stopStall: true } },
     { id: 'storm', w: 5, name: '说下就下',
-      text: '雷阵雨说来就来,坝上一下子空了。它躲在栏杆底下等雨停。',
+      text: '雷阵雨说来就来,坝上一下子空了。哇鸥躲在栏杆底下等雨停。',
       when: { weather: 'rainy' }, effect: { stopShow: true } },
     { id: 'quiet', w: 6, name: '没什么人',
-      text: '大坝上空荡荡的,它对着水面站了很久。',
+      text: '大坝上空荡荡的,哇鸥对着水面站了很久。',
       when: { season: 'summer' }, effect: {} },
 ];
 
@@ -968,11 +968,11 @@ export const WEATHER = {
 
 
 export const CHAT_NODES = [
-    { id: 0, bot: '哇——!我是哇鸥。去年冬天跟着大部队从西伯利亚飞过来的,春天它们都回去了,我没走。',
+    { id: 0, bot: '哇——!我是哇鸥。去年冬天跟着大部队从西伯利亚飞过来的,春天它们都回去了。',
       options: [{ text: '为什么不回去?', next: 1 }, { text: '你在这儿干嘛?', next: 2 }, { text: '这边有什么好吃的?', next: 3 }] },
     { id: 1, bot: '路太远啦,而且……这边有烧饵块。你吃过没有?外面烤得脆脆的,里面软的,刷上酱,还能卷根油条。',
       options: [{ text: '就为了这个?', next: 4 }, { text: '听起来是挺香', next: 5 }] },
-    { id: 2, bot: '在海埂大坝支了个小摊。你们人类喂了我们这么多年,总得回请一次吧。',
+    { id: 2, bot: '在海埂大坝支了个小摊。卖好多好多好吃的！',
       options: [{ text: '生意怎么样?', next: 6 }, { text: '海鸥开店?', next: 7 },
                 { text: '就你一个人?', next: 10 }] },
     { id: 3, bot: '多了去了。豆花米线、洋芋粑粑、鲜花饼……夏天还有米凉虾,红糖水里浮着一条条的,冰冰凉。',
@@ -981,13 +981,13 @@ export const CHAT_NODES = [
       options: [{ text: '也是', next: 0 }, { text: '你挺会挑地方', next: 0 }] },
     { id: 5, bot: '那下次一起去篆新买饵块!早上七点去最好,刚做出来的还烫手。',
       options: [{ text: '一言为定', next: 0 }, { text: '七点太早了', next: 0 }] },
-    { id: 6, bot: '还行吧。冬天亲戚们都来了,大坝上全是人,生意最好。夏天它们一走,就我一个守着摊子。',
+    { id: 6, bot: '还行吧。冬天亲戚们都来了,大坝上全是人,生意最好。夏天人就不多了，但老有憨斑鸠问为什么看不见海鸥。',
       options: [{ text: '那不是很孤单', next: 10 }, { text: '夏天卖点凉的', next: 0 }] },
     { id: 7, bot: '怎么不行?我翅膀短是短了点,颠锅是颠不动,但收钱很在行。',
       options: [{ text: '厉害', next: 0 }, { text: '让我看看你颠锅', next: 0 }] },
-    { id: 8, bot: '菌子!雨季才有。不过见手青得炒熟透了才行,不然……会看见小人。我见过一次,它们排队买我的饵块。',
+    { id: 8, bot: '菌子!雨季才有。不过见手青得炒熟透了才行,不然……会看见小人。我见过一次,小人人排队买我的饵块。',
       options: [{ text: '那不是挺好', next: 0 }, { text: '你还是炒熟吧', next: 0 }] },
-    { id: 9, bot: '能啊,斗南拉来的玫瑰,揉进馅里。整个昆明的花都从那儿走,凌晨三点最热闹,比白天还挤。',
+    { id: 9, bot: '能啊,斗南拉来的玫瑰,揉进馅里，又香又甜，好吃捏。',
       options: [{ text: '想去看看', next: 0 }, { text: '花市凌晨开?', next: 0 }] },
 
     // 折耳根从这儿露名字。**玩家能看见她睡在坝上、站在柜台后面,
@@ -996,7 +996,7 @@ export const CHAT_NODES = [
     { id: 10, bot: '不是。还有折耳根 —— 一只橘猫,常年在坝上晃。上班的时候她站柜台,'
                  + '不上班就摊在棚子里睡,叫都叫不醒。',
       options: [{ text: '折耳根?这名字……', next: 11 }, { text: '猫怎么会来打工', next: 12 }] },
-    { id: 11, bot: '云南人一听就懂的那个梗。爱的爱死,恨的恨死,中间没有人。'
+    { id: 11, bot: '她说她喜欢吃鱼，折耳根有鱼味，她也喜欢吃。'
                  + '她说这样别人一次就记得住她。',
       options: [{ text: '确实记住了', next: 0 }, { text: '那你喜欢吃吗', next: 13 }] },
     { id: 12, bot: '她也想去冰岛。她说那边海鸥多、鱼也多;我说那边冷,她说她有毛。'
