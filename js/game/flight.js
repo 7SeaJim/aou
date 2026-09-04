@@ -601,7 +601,18 @@ const FRENZY_TICK = 0.5;        // 生成节奏压到平常的几成
  * 一个完整的波走十三列、六百来像素,正好一屏一道大弧。
  */
 const FRENZY_ARC = 0.5;
-const FRENZY_PULL = 58;         // 小范围吸附的半径(整屏那种取消了)
+/**
+ * 狂潮里的吸附半径。58 → 92。
+ *
+ * 他说「不应该让玩家的小失误造成损失」。对:那十秒是**奖励**,
+ * 而奖励里最不该有的就是「差一点点」—— 弧线在动、速度还是平常的 2.2 倍,
+ * 差半个身位是必然会发生的事,不该因此少拿一列。
+ *
+ * 92 差不多是一列(三颗、52 像素高)再往外各让二十像素:
+ * **对准了整列进兜,偏半个身位也还是整列进兜,偏一整列才漏。**
+ * 但它仍然不是整屏 —— 那条弧线还是得自己贴着飞。
+ */
+const FRENZY_PULL = 92;
 const FRENZY_HAZARD = 0.12;     // 还留一点障碍 —— 全清的话「无敌」就没有意义
 const FRENZY_IN = 900;          // 开场那一下的金光多久
 const POP_MAX = 16;             // 吃到一口冒的那朵金花,同时最多几朵
@@ -1399,8 +1410,7 @@ export class Flight {
         const from = f.lastGap ?? Math.floor(this.rng() * LANES);
         const jump = Math.max(1, Math.min(LANES - 1,
             Math.floor(CLIMB_PX_PER_SEC * (CORRIDOR_WARN / 1000) / LANE_H)));
-        const lo = Math.max(0, from - jump), hi = Math.min(LANES - 1, from + jump);
-        const lane = lo + Math.floor(this.rng() * (hi - lo + 1));
+        const lane = this._nextGap(from, jump, 0, LANES - 1);
         f.lastGap = lane;
         // 出口偏出去几条道(三分钟前是 0,也就是一条直缝)。
         // **在预告里就定下来** —— 这样预告画得出「它会往哪边走」
@@ -1501,11 +1511,39 @@ export class Flight {
         return Math.min(MODE_RATE_MAX, MODE_RATE_0 + this._late() * MODE_RATE_PER_MIN);
     }
 
+    /**
+     * 下一扇门开在第几条道。**按格边反射,不能夹在边界上取样。**
+     *
+     * 他报的:「上下的障碍物生成频率明显高于中间」。查出来在这儿 ——
+     * 门的落点是一条**有界随机游走**,原来是「在 [x−jump, x+jump] 夹到
+     * [0, top] 之后均匀取」。夹这一下把边上那几个格子的出路变少了,
+     * 于是链在中间待得久:算出来门落在中间 26%、落在两边 16%,
+     * **而门在哪儿,障碍就不在哪儿** —— 反过来就是上下两条道被砸得最多。
+     *
+     * 改成把出界的那一步按**格子的外边**折回来(−1 折成 0 那一格的镜像),
+     * 这样每一步的转移是对称的,均匀分布就是它的稳态 —— 算过,五条道各 20%。
+     * (「出界就原地不动」也均匀,但那样门会在边上黏住六成的时间,不好玩。)
+     *
+     * **门有两条道宽的时候还得再让一步。** 一扇两条宽的门摆在五条道上,
+     * 起点若只能落在 0~3,那最上和最下两条道各只被门盖到一次,中间三条各两次 ——
+     * 于是边上又被砸得多。所以起点范围放宽到 −1~4:**门可以有一半探出画面**,
+     * 那一次就只开一条道。这样每条道被盖到的次数一样(算过,各 2/6),
+     * 而且顺带来了「越到后期路越少」的一档:探出去的时候只剩一条路。
+     */
+    _nextGap(from, jump, lo, hi) {
+        let y = from + Math.floor(this.rng() * (jump * 2 + 1)) - jump;
+        if (y < lo) y = 2 * lo - 1 - y;
+        if (y > hi) y = 2 * hi + 1 - y;
+        return Math.max(lo, Math.min(hi, y));
+    }
+
     /** 当前那扇门的正中,在生成口上。飞法道具从这儿进来 */
     _doorSpot() {
         const f = this.f;
         const g = this._gate();
-        const i = Math.min(LANES - 1, (f.lastGap ?? 2) + ((f.lastW ?? 1) - 1) / 2);
+        const g0 = Math.max(0, f.lastGap ?? 2);
+        const g1 = Math.min(LANES - 1, (f.lastGap ?? 2) + (f.lastW ?? 1) - 1);
+        const i = (g0 + g1) / 2;
         return f.vert ? { x: laneX(i), y: g.y, d: g.d } : { x: g.x, y: laneY(i), d: g.d };
     }
 
@@ -1724,10 +1762,11 @@ export class Flight {
         const openW = chain && f.spawnInterval < 620 ? 2 : 1;
         let gap;
         if (chain) {
-            const top = LANES - openW;                 // 门的起点最多到这儿
-            const from = f.lastGap ?? Math.floor(rnd() * (top + 1));
-            const lo = Math.max(0, from - jump), hi = Math.min(top, from + jump);
-            gap = lo + Math.floor(rnd() * (hi - lo + 1));
+            // 起点范围:两条宽的门可以有一半探出画面(见 _nextGap)
+            const glo = -(openW - 1), ghi = LANES - 1;
+            const from = Math.max(glo, Math.min(ghi,
+                f.lastGap ?? (glo + Math.floor(rnd() * (ghi - glo + 1)))));
+            gap = this._nextGap(from, jump, glo, ghi);
             f.lastGap = gap;
             f.lastW = openW;
         } else {
