@@ -467,6 +467,25 @@ const CORRIDOR_BEND_LANES = 2;  // 中间那个包最高拱几条道
 const CORRIDOR_S_MAX = 2.4;     // 穿过去最长要多久
 const CORRIDOR_S_PER_MIN = 0.3; // 三分钟之后每分钟长这么多秒
 const CORRIDOR_GAP = 32;        // 缝的半高。哇鸥 32 高,判定半径 15
+/**
+ * **缝心能落在哪一段。** 上下各让出一个 CORRIDOR_GAP —— 整条缝必须整个待在
+ * 天花板和水面之间。
+ *
+ * 他截图指出来的就是这处:那一片的谷底压到水面底下 21 像素,
+ * 「中间的通道都已经被下限压倒没有空间了」。
+ *
+ * 根子是**缝心一直是照道走的,而道的边界和缝的边界不是一回事**:
+ * 四条道铺在 54~244(各让开上下边 10 像素,够一只 32 高的鸟),
+ * 可缝要的是 ±32 —— 道 0 的缝顶在 22(天花板在 44),道 3 的缝底在 276(水面在 254),
+ * 两头各越界 22 像素。再叠上两条道的起伏,谷底就整个沉进湖里,
+ * 而下半片云画到海平线就停了,画面上根本看不出「下面还有一堵墙」。
+ *
+ * > **一个东西能站在哪儿,得按它自己的高度算,不能借用别人的格子。**
+ * > 道是按「鸟有多高」铺的,缝是按「缝有多高」铺的,两者只是碰巧都用 y。
+ */
+const WALL_LO = SKY_TOP + CORRIDOR_GAP;
+const WALL_HI = SEA_TOP - CORRIDOR_GAP;
+const wallY = y => Math.max(WALL_LO, Math.min(WALL_HI, y));
 /* 场地宽了之后跟着放 —— 这两个夹的是「云有多长」,单位是像素 */
 const CORRIDOR_MIN_W = 310;
 const CORRIDOR_MAX_W = 730;
@@ -701,10 +720,35 @@ const FRENZY_SCORE = 2;
 /* ---------- 五分钟之后:饿 ---------- */
 /** 从这一刻起开始饿。前五分钟只用管躲 */
 const HUNGRY_AT = 300_000;
-/** 一条满的肚子撑多久(毫秒)。什么都不吃的话 */
-const HUNGRY_MS = 13_000;
-/** 吃到一样补多少。0.17 → 大约每两秒得吃到一个 */
-const HUNGRY_FEED = 0.17;
+/**
+ * 一条满的肚子撑多久(毫秒),和吃到一样补多少。
+ *
+ * 他说「饥饿条基本上不会掉,给不到玩家压力」。量了才知道差得有多远:
+ *
+ *     五分钟之后,一只**完全不动**的哇鸥(不躲不追,就杵在那儿)
+ *     每秒撞进 1.21 份吃的;而按老的数(13 秒空、一份补 0.17),
+ *     维持只要 0.45 份/秒 —— **多出 2.7 倍**。
+ *     跑了 288 秒,肚子条一次都没掉下 1.000。
+ *
+ * 也就是说这条杠不是「难维持」,是**根本不用管**。它挂在屏幕上五分钟,
+ * 从头到尾满着,那不是压力,是装饰。
+ *
+ * 重定的靶子:**杵着不动会慢慢饿死,主动去接才维持得住。**
+ * 一份补 0.09、8 秒空一条,维持需要 1.39 份/秒 ——
+ * 不动的 1.21 份/秒够不着(净掉 0.016/秒,从满到空约一分钟),
+ * 而横着贴上一排物资一次进四五份,补回来绰绰有余。
+ *
+ * > 一条资源杠该定在**「什么都不做」和「有意去做」之间**。
+ * > 定在两者之下它就是装饰,定在两者之上它就是罚站。
+ *
+ * 再往后还越来越饿(`HUNGRY_RAMP`):五分钟那会儿是提个醒,
+ * 十分钟那会儿才是真的在跟时间抢。
+ */
+const HUNGRY_MS = 8_000;
+const HUNGRY_FEED = 0.09;
+/** 五分钟之后每多一分钟,掉得快 6%,最多快四成 */
+const HUNGRY_RAMP = 0.06;
+const HUNGRY_RAMP_MAX = 1.4;
 /**
  * 飞一秒算多少米。**距离就是活着的时间换算过来的,不累加实际位移。**
  *
@@ -1477,7 +1521,12 @@ export class Flight {
             sfx.play('hit');
         }
         if (f.god) return;                   // 无敌连肚子一起停 —— 见 wa.god()
-        f.hunger -= dt / f.hungryMs;
+        // 越往后越饿。**这一档不动生成、不动速度** —— 后期的难度已经全压在
+        // 「换飞法」那条线上了(见八千米那一节),肚子这条只负责让「一直躲、
+        // 一口不吃」这种打法慢慢失效
+        const ramp = Math.min(HUNGRY_RAMP_MAX,
+            1 + (f.elapsed - HUNGRY_AT) / 60000 * HUNGRY_RAMP);
+        f.hunger -= dt / f.hungryMs * ramp;
         if (f.hunger <= 0) { f.hunger = 0; this._finish('hungry'); }
     }
 
@@ -1527,16 +1576,28 @@ export class Flight {
             Math.floor(CLIMB_PX_PER_SEC * (CORRIDOR_WARN / 1000) / LANE_H)));
         const lane = this._nextGap(from, jump, 0, LANES - 1);
         f.lastGap = lane;
-        // 出口偏出去几条道(三分钟前是 0,也就是一条直缝)。
-        // **在预告里就定下来** —— 这样预告画得出「它会往哪边走」
+        // **缝心按缝自己的高度夹一道**,不是按道夹 —— 见 WALL_LO / WALL_HI。
+        // 道 0 和道 3 的中心离天花板/水面都只有 10 像素,而缝要 32。
+        // 取整:bend 是整数,y0 要是带小数,y0+bend 就会比上下限探出零点几像素。
+        // 零点几不至于出事,但**边界值算不准的东西,以后没人敢在它上面加东西**
+        const y0 = Math.round(wallY(laneY(lane)));
+        // 中间那个包拱几条道(三分钟前是 0,也就是一条直缝)。
+        // **在预告里就定下来** —— 这样预告画得出整条路径
         let bend = 0;
         if (f.elapsed >= CORRIDOR_BEND_AT) {
             const k = 1 + Math.floor(this.rng() * CORRIDOR_BEND_LANES);
             const dir = this.rng() < 0.5 ? -1 : 1;
-            const end = Math.max(0, Math.min(LANES - 1, lane + dir * k));
-            bend = laneY(end) - laneY(lane);
+            const rise = k * LANE_H;
+            // 夹到贴边的话就往反方向拱。**不换方向的话,进口一挨着边,
+            // 包就被削成一小截** —— 而「后期的包更大」正是这条难度线本身
+            let peak = wallY(y0 + dir * rise);
+            if (Math.abs(peak - y0) < rise * 0.6) {
+                const alt = wallY(y0 - dir * rise);
+                if (Math.abs(alt - y0) > Math.abs(peak - y0)) peak = alt;
+            }
+            bend = Math.round(peak - y0);
         }
-        f.warn = { y: laneY(lane), at: f.elapsed + CORRIDOR_WARN, bend };
+        f.warn = { y: y0, at: f.elapsed + CORRIDOR_WARN, bend };
         sfx.play('event');
     }
 
