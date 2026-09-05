@@ -93,9 +93,29 @@
            这是个横着玩的游戏(画面 2:1,大坝本来就是长的)。
            竖屏硬塞的话画面只能缩到手指盖大小,不如直接请玩家转一下。
            `screen.orientation.lock()` 只在全屏里有效、而且 iOS 不支持,
-           所以**不锁,只提示** —— 提示是所有浏览器都吃的那条路。 */
+           所以**不锁,只提示** —— 提示是所有浏览器都吃的那条路。
+
+           ============================================================
+           **判据不能用 `orientation`,要用宽高比。**
+
+           他在小红书小工具里报:手机横过来了还卡在这一屏。
+           原因是这块原来纯 CSS、判据是 `@media (orientation: portrait)` ——
+           而 `orientation` 按规范虽然是看视口宽高比,**嵌入式 WebView 常常
+           改成看设备/屏幕方向**;容器又多半把 `screen.orientation` 锁着,
+           于是视口明明已经横过来了,媒体查询还说是竖的。
+           这是「浏览器里好好的、容器里卡死」的典型成因。
+
+           `aspect-ratio` 没有这个歧义:**它只问视口自己有多宽多高**,
+           没有哪个 WebView 会对自己的宽高有异议。
+
+           而且这块遮罩原来**没有出口** —— 它盖住整页并把 .wrap 和
+           .title-screen 一起 display:none。判据一旦出错,游戏就是进不去。
+           所以现在三层:宽高比(CSS 兜底) + JS 实测(权威) + 一个「还是继续」
+           的按钮(逃生)。**一个挡住整页又关不掉的东西,判错一次就等于崩了。**
+           ============================================================ */
         .rotate { display: none; }
-        @media (orientation: portrait) and (max-width: 900px) {
+        /* JS 起来之前先按视口宽高比判,避免闪一下 */
+        @media (max-aspect-ratio: 1/1) and (max-width: 900px) {
             .rotate {
                 position: fixed; inset: 0; z-index: 300;
                 display: flex; flex-direction: column;
@@ -107,6 +127,24 @@
             }
             /* 竖屏时把底下的东西整个停掉,免得 canvas 在背后空转 */
             body > .wrap, body > .title-screen { display: none; }
+        }
+        /* **JS 一起来就以它为准**(见 main.js 的 watchOrientation)——
+           它直接量 innerWidth/innerHeight,不经过媒体查询那一层。
+           `.rotate-off` 是玩家自己按「还是继续」关掉的,优先级最高 */
+        html.is-portrait .rotate { display: flex; }
+        html.is-portrait body > .wrap,
+        html.is-portrait body > .title-screen { display: none; }
+        html.is-landscape .rotate { display: none; }
+        html.is-landscape body > .wrap,
+        html.is-landscape body > .title-screen { display: revert; }
+        html.rotate-off .rotate { display: none !important; }
+        html.rotate-off body > .wrap,
+        html.rotate-off body > .title-screen { display: revert !important; }
+        .rotate__skip {
+            margin-top: 4px; font-size: 13px; opacity: .6;
+            background: none; border: none; color: inherit;
+            font-family: inherit; text-decoration: underline;
+            cursor: pointer; padding: 8px 12px;
         }
         .rotate__phone {
             width: 58px; height: 96px;
@@ -323,11 +361,13 @@
 </head>
 <body>
 
-<!-- 竖屏时盖住整页。纯 CSS 判定,没有 JS —— 转回横屏它自己就没了 -->
+<!-- 竖屏时盖住整页。判据见上面那段注释:CSS 按宽高比兜底,JS 实测为准,
+     外加一个「还是继续」—— **挡住整页的东西必须留个出口**。 -->
 <div class="rotate">
     <div class="rotate__phone"></div>
     <h2>把手机横过来</h2>
     <p>海埂大坝是长的,这个游戏也是。</p>
+    <button class="rotate__skip" id="rotateSkip">转不过来?还是继续 →</button>
 </div>
 
 <!-- 待机界面。盖住整页,点「开始游戏」才进去 -->

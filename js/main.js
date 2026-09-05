@@ -52,6 +52,9 @@ function mutate(fn) {
 }
 
 async function boot() {
+    // **第一件事就接管方向判定。** 它挡着整个页面,晚一步玩家就多看一秒
+    // 「把手机横过来」——而他要是已经横着,那一秒就是纯粹的困惑
+    watchOrientation();
     storage.init();
 
     // 开发时的 ?scene=mid 之类要在读档处就接管,否则会被真实存档盖掉。
@@ -190,6 +193,53 @@ async function boot() {
  * 这样点下去是立刻开始,而不是等一轮加载。离线结算的吐司也先记着,
  * 等玩家真的进来了再弹,不然它会寂寞地在标题画面后面自己弹完。
  */
+/**
+ * 盯着「现在是不是竖屏」,以**视口实测**为准。
+ *
+ * 他在小红书小工具里报:手机横过来了,还卡在「把手机横过来」那一屏。
+ *
+ * 原来这块是纯 CSS,判据是 `@media (orientation: portrait)`。
+ * 而 `orientation` 这个媒体特性按规范虽然是看视口宽高比,
+ * **嵌入式 WebView 常常改成看设备/屏幕方向** —— 容器又多半把
+ * `screen.orientation` 锁着,于是视口明明已经横过来了,媒体查询还说是竖的。
+ *
+ * > **量视口自己有多宽多高,没有哪个 WebView 会有异议。**
+ * > 而「设备朝哪边」要经过容器、系统、WebView 三层转译,每一层都可能骗你。
+ *
+ * 所以这儿绕开媒体查询,直接比 `innerWidth / innerHeight`,把结论写成
+ * `<html>` 上的类名;CSS 那边 `.is-landscape` 的优先级压过媒体查询兜底那条。
+ *
+ * 三个事件都听:`resize` 是最可靠的那个(视口一变必然触发),
+ * `orientationchange` 在部分 WebView 上比 resize 早,
+ * `visualViewport` 则管软键盘弹起那种"视口变了但窗口没变"的情况。
+ * 再补一次 250ms 的延时复查 —— 有些 WebView 转屏时会先报一个**旧的**尺寸。
+ */
+function watchOrientation() {
+    const root = document.documentElement;
+    // 玩家自己按过「还是继续」的,这一整局都不再挡他
+    try {
+        if (sessionStorage.getItem('rotate-off') === '1') root.classList.add('rotate-off');
+    } catch { /* 隐私模式下读不到就算了,大不了再按一次 */ }
+
+    const apply = () => {
+        // 视口比 1:1 还高就算竖屏。**不看 screen、不看 orientation、不看 UA**
+        const portrait = window.innerHeight > window.innerWidth;
+        root.classList.toggle('is-portrait', portrait);
+        root.classList.toggle('is-landscape', !portrait);
+    };
+    const later = () => { apply(); setTimeout(apply, 250); };
+
+    apply();
+    addEventListener('resize', later);
+    addEventListener('orientationchange', later);
+    window.visualViewport?.addEventListener('resize', later);
+
+    document.getElementById('rotateSkip')?.addEventListener('click', () => {
+        root.classList.add('rotate-off');
+        try { sessionStorage.setItem('rotate-off', '1'); } catch { /* 同上 */ }
+    });
+}
+
 /**
  * 请求全屏,顺带把方向锁成横的。
  *

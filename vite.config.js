@@ -46,11 +46,26 @@ function minitoolHtml() {
                 .replace(/\s*<link rel="manifest"[^>]*>/g, '')
                 // 容器不需要它,留着只是多一个属性
                 .replace(/ crossorigin(?==|>|\s)/g, '')
-                // **最要紧的一条:去掉 type="module"。**
+                // **最要紧的一条:去掉 type="module",同时补上 defer。**
+                //
                 // 容器只认经典脚本 —— 产物已经是 IIFE 了,可 vite 写 script 标签
                 // 时不看 format,照旧挂 module。挂着的话典型症状是
-                // 「页面渲染出来但 JS 完全不执行」,而这在模拟器里未必复现
-                .replace(/<script type="module"/g, '<script');
+                // 「页面渲染出来但 JS 完全不执行」,而这在模拟器里未必复现。
+                //
+                // **但只摘掉 module 会换来一个更隐蔽的毛病。** vite 把入口脚本
+                // 提到 `<head>`;`type="module"` 本身是**隐式 defer** 的,
+                // 所以原来它是 DOM 解析完才跑。摘掉之后它成了 head 里的
+                // 经典脚本 —— **同步执行,早于 `<body>` 存在**,于是启动时
+                // 所有 getElementById 都拿到 null。
+                //
+                // 这个坑是查「横屏了还卡在提示页」时顺出来的:那个「还是继续」
+                // 按钮的监听根本没挂上,因为绑它的时候 body 还不存在。
+                // 而游戏其余部分之所以没崩,是因为启动流程里某个 await 恰好
+                // 让出了一个宏任务 —— **靠运气,不靠约定**。
+                //
+                // 补 defer 就干净了:仍然是经典脚本(规范只禁 module 和内联),
+                // 但保证解析完再执行、且保持顺序。Chrome 61 早就支持。
+                .replace(/<script type="module"/g, '<script defer');
         },
         // public/ 里的东西是照搬过来的,里面有普通网页要的 site.webmanifest ——
         // 而 .webmanifest 不在允许的文件类型里,外壳行为也归容器管
