@@ -1583,17 +1583,86 @@ export class Flight {
     }
 
     /**
-     * 生成口那一带还空不空。两个东西的圈都是 30 宽,离得比这近就会压在一起。
-     * 横着飞看右边缘,纵向看上边缘 —— 同一件事,换一条轴。
+     * (x, y) 这儿还空不空。两个东西的圈都是 30 宽,离得比这近就会压在一起。
+     *
+     * **上一版只看生成口那一条边**(「y 在 24 像素以内、x 差不超过 34」),
+     * 而这个玩法里**东西是成排放下去的**:一排物资一次放五个,后面四个的 x
+     * 排到画面右边一两百像素之外,雨天加塞的障碍又正好排在半屏之后 ——
+     * 它们全都不在「生成口那一条边」上,所以那个检查一个也拦不住。
+     *
+     * 量了一下:两百秒里障碍压住物资 **3514 处**,最近的两个圈心只差 2.3 像素。
+     * 玩家看见的是一个障碍,伸头去撞的是一份饵块。
+     *
+     * > **成排放下去的东西,不能只检查排头那一个。**
+     * > 而既然要检查整排,按「离生成口多近」筛就没意义了 —— 直接算真距离。
+     *
+     * 东西总共几十个,一次全扫也就是几十次乘法,不值得为它建格子。
      */
-    _roomAt(c, minD = 34) {
+    _free(x, y, minD = 34) {
         const f = this.f;
-        const d = this._gate().d;
-        const near = d === 1 ? o => o.y < 24 && Math.abs(o.x - c) < minD
-                   : d === 3 ? o => o.y > VH - 24 && Math.abs(o.x - c) < minD
-                   : d === 2 ? o => o.x < 24 && Math.abs(o.y - c) < minD
-                   :           o => o.x > VW - 24 && Math.abs(o.y - c) < minD;
-        return !f.obstacles.some(near) && !f.foods.some(near) && !f.powerups.some(near);
+        const d2 = minD * minD;
+        const hit = o => (o.x - x) ** 2 + (o.y - y) ** 2 < d2;
+        return !f.obstacles.some(hit) && !f.foods.some(hit) && !f.powerups.some(hit);
+    }
+
+    /** 生成口那一头的坐标轴上,这个位置还空不空(横飞看 y,纵向看 x) */
+    _roomAt(c, minD = 34) {
+        const g = this._gate();
+        return this.f.vert ? this._free(c, g.y, minD) : this._free(g.x, c, minD);
+    }
+
+    /**
+     * 一整排放下去,会不会有哪一个压到别的东西上。
+     * `at` 是排头,`gap` 是相邻两个隔多远(沿着来的方向往外排)。
+     */
+    _rowFits(at, row, gap) {
+        for (let i = 0; i < row; i++) {
+            const p = { ...at };
+            if (p.d === 1) p.y -= i * gap;
+            else if (p.d === 3) p.y += i * gap;
+            else if (p.d === 2) p.x -= i * gap;
+            else p.x += i * gap;
+            if (!this._free(p.x, p.y)) return false;
+        }
+        return true;
+    }
+
+    /**
+     * 给一整排挑个放得下的位置。挑不着就少放几个。
+     *
+     * 先摇 8 个候选位置,整排都空的就用它;八次都不成,说明这一带本来就挤,
+     * **这时候缩排,不硬塞** —— 一排四个变三个没人看得出来,
+     * 一个障碍里埋着一份饵块看得出来。
+     */
+    _rowSpot(spot, row, gap, tries = 8) {
+        for (let i = 0; i < tries; i++) {
+            const p = spot();
+            if (this._rowFits(p, row, gap)) return { p, row };
+        }
+        const p = spot();
+        let n = row;
+        while (n > 1 && !this._rowFits(p, n, gap)) n--;
+        return { p, row: this._rowFits(p, 1, gap) ? n : 0 };
+    }
+
+    /**
+     * 刚放下的障碍周围,把压在一起的物资/道具清掉。
+     *
+     * **这是兜底的那一道,不是主要手段** —— 主要手段是放物资的时候就挑空位
+     * (`_rowFits`)。但先后顺序是反的那一半拦不住:物资先排到了半屏之外,
+     * 障碍后落到那儿。这时候**让障碍赢**:关卡是障碍定的,物资是填充。
+     *
+     * 只清还没进画面的(x ≥ VW / y 在画外那一侧)—— 已经看得见的东西凭空消失,
+     * 比压在一起更糟。
+     */
+    _clearAround(x, y, d, minD = 34) {
+        const f = this.f;
+        const unseen = o => d === 1 ? o.y < 0 : d === 3 ? o.y > VH
+                          : d === 2 ? o.x < 0 : o.x > VW;
+        const d2 = minD * minD;
+        const keep = o => !(unseen(o) && (o.x - x) ** 2 + (o.y - y) ** 2 < d2);
+        f.foods = f.foods.filter(keep);
+        f.powerups = f.powerups.filter(keep);
     }
 
     /**
@@ -1773,7 +1842,11 @@ export class Flight {
         const mode = this._modeReady();
         if (mode && rnd() < this._modeRate()) {
             f.modeAt = f.elapsed + MODE_SPAWN_GAP;
-            f.powerups.push({ ...this._doorSpot(), type: MODE_TYPE[mode] });
+            const p = this._doorSpot();
+            // 门正中要是正好压着一份吃的,把那份让开 —— 道具就是要摆在路上的,
+            // 而两个圈叠在一起玩家分不出哪个是哪个
+            this._clearAround(p.x, p.y, p.d);
+            f.powerups.push({ ...p, type: MODE_TYPE[mode] });
             return;
         }
 
@@ -1807,10 +1880,13 @@ export class Flight {
             // 一排杂七杂八读起来是「一堆东西」
             const row = pick(FOOD_ROW);
             const type = pick(FOOD_TYPES);
-            const at = spot();
             const gap = Math.round(f.speed * 60 * FOOD_ROW_SEC);
-            for (let i = 0; i < row; i++) {
-                f.foods.push(shift({ ...at, type }, i * gap));
+            // **整排一起挑位置**,不是只看排头那一个 —— 后面几个排到画面外
+            // 一两百像素,而障碍也往那儿落。挑不着就少放几个:
+            // 一排四个变三个没人看得出来,一个障碍里埋着一份饵块看得出来
+            const at = this._rowSpot(spot, row, gap);
+            for (let i = 0; i < at.row; i++) {
+                f.foods.push(shift({ ...at.p, type }, i * gap));
             }
         }
 
@@ -1825,10 +1901,13 @@ export class Flight {
         // 它也绝不落在当前那条通道上(见 _hazard 的 chain=false)
         if (this.state.weather === 'rainy' && rnd() < 0.3) this._hazard(1, EXTRA_X, false);
         if (this.state.weather === 'foggy' && rnd() < 0.25) {
-            const row = pick(FOOD_ROW), type = pick(FOOD_TYPES), at = spot();
+            const row = pick(FOOD_ROW), type = pick(FOOD_TYPES);
             const gap = Math.round(f.speed * 60 * FOOD_ROW_SEC);
-            for (let i = 0; i < row; i++) {
-                f.foods.push(shift({ ...at, type }, EXTRA_X + i * gap));
+            // 加塞这一排整体推到半屏之后再挑 —— 挑的时候就得按推过去的位置算,
+            // 不然挑的是这儿、放的是那儿
+            const at = this._rowSpot(() => shift(spot(), EXTRA_X), row, gap);
+            for (let i = 0; i < at.row; i++) {
+                f.foods.push(shift({ ...at.p, type }, i * gap));
             }
         }
     }
@@ -1905,11 +1984,25 @@ export class Flight {
             // 判定半径 15 —— **晃归晃,门必须还是门**
             const j = (rnd() * 2 - 1) * LANE_JITTER;
             const back = (rnd() * 2 - 1) * LANE_JITTER * 2;
-            f.obstacles.push(f.vert
+            const o = f.vert
                 ? { x: laneX(i) + j, y: g.y + (g.d === 1 ? -dx - back : dx + back),
                     d: g.d, type: pick(OBSTACLES) }
                 : { x: g.x + (g.d === 2 ? -dx - back : dx + back), y: laneY(i) + j,
-                    d: g.d, type: pick(OBSTACLES) });
+                    d: g.d, type: pick(OBSTACLES) };
+            // 挤到东西了先**往画外挪一点**,别一上来就删。
+            //
+            // 挪的是「往外」这一头,也就是让它晚一点到 —— 道还是那条道,
+            // 一簇里留哪扇门一格没变,而玩家只会多得到几十毫秒。
+            // (反过来往画里挪就不行:那是凭空少给时间。)
+            for (let k = 0; k < 6 && !this._free(o.x, o.y); k++) {
+                if (g.d === 1) o.y -= 12; else if (g.d === 3) o.y += 12;
+                else if (g.d === 2) o.x -= 12; else o.x += 12;
+            }
+            // 挪满了还挤,就清:这一带**还没进画面**的物资/道具让路。
+            // **关卡是障碍定的,物资是填充** —— 反过来让障碍避开物资的话,
+            // 「一簇里必留一条空道」那套规矩就得跟着物资走,那是本末倒置
+            this._clearAround(o.x, o.y, g.d);
+            f.obstacles.push(o);
         }
     }
 
