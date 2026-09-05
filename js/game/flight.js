@@ -862,7 +862,12 @@ export class Flight {
         this._loop = this._loop.bind(this);
     }
 
-    start() {
+    /**
+     * 开一局。`kit` 是玩家出发前勾的那几样背包道具换算出来的系数
+     * (`{ guard, foodR, haul }`,见 data.js 的 `ITEM_EFFECT`)。
+     * 不传就是空手飞。
+     */
+    start(kit = {}) {
         const w = weatherOf(this.state);
         const lv = this.state.level;
         // **只算今天真来上工的。** 没发出工钱的那几只在别处也不生效,
@@ -963,11 +968,18 @@ export class Flight {
             // 丫丫:下一次能替你挡的时刻。-1 = 没招她。开局就是满的
             yayaAt: yaya ? 0 : -1,
             yayaFlash: 0,
-            // 道具在开局消耗,一局有效
-            shieldMs: (this.state.items.shield ?? 0) > 0 ? SHIELD_MS : 0,
-            shieldN: (this.state.items.shield ?? 0) > 0 ? SHIELD_N : 0,
-            magnetMs: (this.state.items.magnet ?? 0) > 0 ? MAGNET_MS : 0,
-            rushMs: (this.state.items.double ?? 0) > 0 ? RUSH_MS : 0,
+            /**
+             * 背包带上来的那几样。**由玩家在出发前勾选**(见 ui.js 的 flyKitView),
+             * 不再是"有就自动用掉"。三样都是**长效小加成**,和场上捡到的爆发型
+             * 道具是两回事 —— 分工见 data.js 的 ITEMS 注释。
+             */
+            guard: kit.guard ?? 0,        // 铁盾牌:白挡几次,不限时,用掉才没
+            foodR: FOOD_R * (kit.foodR ?? 1),   // 吸铁石:吸取半径
+            haul: kit.haul ?? 1,          // 钱钱:带回去的资源乘多少(只在结算时用)
+            shieldMs: 0,
+            shieldN: 0,
+            magnetMs: 0,
+            rushMs: 0,
             powerAt: 10_000,      // 头十秒不出道具,先让人把手放稳
             birdX: BIRD_X,        // 冲刺的时候会往前顶一段;镜像时它挪到右边
             god: false,           // wa.god():不掉命、不掉肚子。只有 dev 版能开
@@ -1235,7 +1247,9 @@ export class Flight {
                     o.y += dy * 0.05 * k;
                 }
             }
-            if (hit(o, FOOD_R)) {
+            // **吸铁石在这儿生效** —— 判定半径本身变大,不是把东西吸过来。
+            // 「范围 +10%」按字面做:一个能擦到的边,现在擦得到
+            if (hit(o, f.foodR)) {
                 sfx.play('pickup');
                 f.pops.push({ x: o.x, y: o.y, t: f.elapsed });
                 if (f.pops.length > POP_MAX) f.pops.shift();
@@ -1501,6 +1515,13 @@ export class Flight {
         if (f.shieldN > 0) {
             sfx.play('event');
             if (--f.shieldN <= 0) f.shieldMs = 0;     // 次数用完,期限也就没意义了
+            return true;
+        }
+        // 铁盾牌垫底。**它排在场上捡的护盾后面** —— 捡来的有期限,会过期作废;
+        // 铁盾牌不限时,这一局用不掉也不亏。先花会过期的那个,是对玩家好
+        if (f.guard > 0) {
+            f.guard--;
+            sfx.play('event');
             return true;
         }
         return false;
@@ -2104,7 +2125,12 @@ export class Flight {
             dist: Math.round(f.elapsed / 1000 * M_PER_SEC),
             wave: f.wave + 1,
             score: f.score,
-            collected: f.collected,
+            // **钱钱在这儿生效** —— 只放大「带回摊上的」,不动分数、不动肚子。
+            // 按每一样各自取整,不是把总数乘完再摊回去:后者会出现
+            // 「明明只捡到 3 个饵块,结算却写着 4 个米」那种对不上账的事
+            collected: f.haul === 1 ? f.collected
+                : Object.fromEntries(Object.entries(f.collected)
+                    .map(([k, v]) => [k, Math.round(v * f.haul)])),
             itemCount: f.itemCount,
             maxCombo: f.maxCombo,
             flips: f.flipCount,

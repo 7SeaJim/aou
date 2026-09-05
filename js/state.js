@@ -5,14 +5,16 @@
  * 好处:改目录不用写迁移,存档也更小(存档码是要玩家复制的)。
  */
 
-export const SAVE_VERSION = 15;
+export const SAVE_VERSION = 16;
 
 // 食材的键。改这里要同步 data.js 的 FOODS,并且 SAVE_VERSION +1 补一条迁移 ——
 // 这些键是 backpack 的字段名,直接进存档。
 export const FOOD_KEYS = [
     'erkuai', 'potato', 'rice', 'douhua', 'flower', 'mushroom', 'rusan', 'chili', 'sugar',
 ];
-export const ITEM_KEYS = ['shield', 'magnet', 'double'];
+// 道具的键。**和 data.js 的 ITEMS 必须一致** —— v16 换过一次名
+// (爆发型 → 出发前自选的长效小加成),旧的 shield/magnet/double 只活在迁移里
+export const ITEM_KEYS = ['ironshield', 'magnetstone', 'moneybag'];
 export const UPGRADE_KEYS = ['stove', 'sign', 'shelf', 'warmer'];
 /** 厨具的四条线。和上面那四条是两回事:那四条管「你不在时赚多少」,
     这四条管「你在的时候能多快」。 */
@@ -45,7 +47,7 @@ export function createInitialState() {
         totalScore: 0,
         maxCombo: 0,
         backpack: { erkuai: 2, potato: 2, rice: 1, douhua: 1, flower: 0, mushroom: 0, rusan: 0, chili: 1, sugar: 0 },
-        items: { shield: 0, magnet: 0, double: 0 },
+        items: { ironshield: 0, magnetstone: 0, moneybag: 0 },
         postcards: [],            // 已获得的明信片 id
         achievements: [],         // 已达成的成就 id
         unlockedRecipes: ['shao_erkuai'],
@@ -374,6 +376,24 @@ const migrations = {
     // 而他昨天关游戏的时候一切正常。
     13(old) {
         return { ...old, version: 14, crewIdle: [] };
+    },
+
+    // v15 -> v16:三样道具整个换了性质(爆发型 → 出发前自选的长效小加成),
+    // 键名跟着换,免得和场上捡的 shield/magnet/double 撞名。
+    //
+    // **按 1:1 换过来,不打折也不补偿。** 新的三样弱得多(挡一次 / 范围 +10% /
+    // 资源 ×1.2),严格说老玩家是亏了 —— 但换算成"几个新的抵一个旧的"要么算不清、
+    // 要么给出一堆零头。**一件换一件是唯一一种两边都不用解释的换法。**
+    15(old) {
+        const it = old.items ?? {};
+        return {
+            ...old, version: 16,
+            items: {
+                ironshield:  it.shield ?? 0,
+                magnetstone: it.magnet ?? 0,
+                moneybag:    it.double ?? 0,
+            },
+        };
     },
 
     // v14 -> v15:阿姨的门槛从等级改成好感度,加一个「说过了没」的记号。

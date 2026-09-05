@@ -21,7 +21,7 @@ import { renderCard } from './game/card.js';
 import { ICON_GRIDS } from './game/pixels.js';
 import * as c4 from './game/connect4.js';
 import { now } from './clock.js';
-import { FOOD_KEYS, DAILY_TRIES, TUTORIAL_DONE } from './state.js';
+import { FOOD_KEYS, DAILY_TRIES, TUTORIAL_DONE, ITEM_KEYS } from './state.js';
 import * as rules from './game/rules.js';
 import { STATIONS } from './game/service.js';
 import { VW, VH } from './game/scene.js';
@@ -213,11 +213,32 @@ export class UI {
     handle(act, data) {
         const s = this.getState();
         switch (act) {
-            case 'fly':
+            case 'fly': {
                 this.go(null);            // 抽屉压在飞行画面上面,先收起来
                 if (s.dailyTries <= 0) return this.toast('今天的觅食次数用完了,明天再来', 'coin');
-                this.onFly();
+                // 背包里一样道具都没有就直接飞 —— **没得选的时候不要弹一个空框问他**
+                const has = ITEM_KEYS.filter(k => (s.items[k] ?? 0) > 0);
+                if (!has.length) { this.onFly([]); break; }
+                this.flyPick = new Set();
+                this.openModal('flykit');
                 break;
+            }
+
+            // 出发前那一屏:勾 / 不勾
+            case 'kittoggle': {
+                const k = data.key;
+                if (this.flyPick?.has(k)) this.flyPick.delete(k); else this.flyPick?.add(k);
+                this.renderModal();
+                break;
+            }
+
+            case 'kitgo': {
+                const picked = [...(this.flyPick ?? [])];
+                this.flyPick = null;
+                this.openModal(null);
+                this.onFly(picked);
+                break;
+            }
 
             case 'cook': {
                 const r = this.mutate(st => rules.cook(st, data.id));
@@ -693,7 +714,7 @@ export class UI {
         // 场景弹窗(占卜、下棋)只在整页场景里有意义,换到抽屉页就收掉;
         // 但**通告类的弹窗到哪儿都得弹得出来** —— 它说的是刚刚发生的事,
         // 而玩家可能正好停在背包页
-        if (this.modal === 'meetaunt') this.renderModal();
+        if (this.modal === 'meetaunt' || this.modal === 'flykit') this.renderModal();
         else this.$modal.hidden = true;
         this.$kitchen.hidden = true;
 
@@ -1502,6 +1523,7 @@ export class UI {
         if (!kind) return;
         const s = this.getState();
         const map = {
+            flykit: ['带点什么走?', () => this.flyKitView()],
             meetaunt: ['认识了篆新的阿姨', () => this.modalAunt()],
             fortune: ['今日签', () => this.modalFortune()],
             c4: [`海鸥四子棋 · ${s.c4.win} 胜 ${s.c4.lose} 负 ${s.c4.draw} 平`, () => this.c4View()],
@@ -1528,6 +1550,43 @@ export class UI {
             她每天收摊之后顺路来坝上摆一小摊。缺什么材料可以拿鸥币换 ——
             <strong>每样每天就那么点</strong>,零点补货。摊位那一页往下翻就是。</p>
         <button class="px-btn" data-act="gomarket">${icon('shop', 'lg')} 去看看</button>`;
+    }
+
+    /**
+     * 出发前挑道具。
+     *
+     * **不勾也能走。** 这一屏的默认答案是「空手去」——
+     * 三样都是长效小加成,攒着等一局硬仗是正当打法,而「有就自动用掉」
+     * 恰恰把这个选择拿走了。所以「直接出发」放在右边、样式和平常的主按钮一样,
+     * 勾选是额外动作,不是必答题。
+     *
+     * 每样只显示「还有几个」和勾没勾,不写效果说明 —— 效果在背包里写着,
+     * 而这一屏是出发前最后一下,**要的是快,不是再读一遍三行字**。
+     */
+    flyKitView() {
+        const s = this.getState();
+        const picked = this.flyPick ?? new Set();
+        const rows = ITEM_KEYS.filter(k => (s.items[k] ?? 0) > 0).map(k => {
+            const it = ITEMS[k];
+            const on = picked.has(k);
+            return `
+            <button class="px-ach" style="width:100%;text-align:left;cursor:pointer;
+                        ${on ? 'outline:3px solid var(--gold);' : ''}"
+                    data-act="kittoggle" data-key="${k}">
+                ${icon(it.icon, 'lg')}
+                <div style="flex:1;min-width:0">
+                    <strong>${it.name}</strong> <span class="px-tag">${s.items[k]}</span>
+                    <p class="px-muted">${it.desc}</p>
+                </div>
+                <span style="font-size:18px">${on ? '✓' : '　'}</span>
+            </button>`;
+        }).join('');
+        return `
+        <p class="px-muted" style="margin-bottom:10px">
+            勾上的这一趟用掉一个,不勾就留着。<strong>不带也能飞。</strong></p>
+        <div class="px-grid" style="--min:240px;margin-bottom:14px">${rows}</div>
+        <button class="px-btn" data-act="kitgo">
+            ${icon('waou', 'lg')} ${picked.size ? `带上 ${picked.size} 样,出发` : '直接出发'}</button>`;
     }
 
     modalFortune() {

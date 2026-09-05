@@ -15,7 +15,7 @@ import { hourSlot } from './data.js';
 import { now } from './clock.js';
 import { UI } from './ui.js';
 import * as sfx from './audio.js';
-import { FOODS } from './data.js';
+import { FOODS, ITEM_EFFECT } from './data.js';
 
 /** PNG 图集清单(可选)。图不存在时 SpriteBook 静默失败,
     退回 tools/ 生成的内置像素图 —— 那才是默认素材,不是占位。 */
@@ -114,7 +114,7 @@ async function boot() {
         getState: () => state,
         mutate,
         service,
-        onFly: () => startFlight(sprites),
+        onFly: picked => startFlight(sprites, picked),
         // go() 紧接着就会 render,这里只管换画布上跑的那一场
         onScreen: () => syncScene(),
     });
@@ -338,7 +338,7 @@ function togglePause() {
 const KEY_L = { flat: '跃起', flip: '俯冲', mirror: '跃起', climb: '左冲', dive: '左冲' };
 const KEY_R = { flat: '平飞', flip: '平飞', mirror: '平飞', climb: '稳住', dive: '稳住' };
 
-function startFlight(sprites) {
+function startFlight(sprites, picked = []) {
     const overlay = document.getElementById('flyOverlay');
     const canvas = document.getElementById('flyCanvas');
     canvas.width = W; canvas.height = H;
@@ -354,10 +354,18 @@ function startFlight(sprites) {
         glideText: H_('flyGlideText'), glideKbd: H_('flyGlideKbd'),
     };
 
-    // 道具在开局扣除
+    /**
+     * 扣道具。**只扣玩家勾了的那几样** —— 不再是"有就自动用掉"。
+     *
+     * 原来三样一律扣一个,玩家连"这局要不要带"都没得选;而新的三样是
+     * 长效小加成,攒着等一局硬仗是正当打法。**能攒的东西才谈得上取舍。**
+     */
+    const kit = {};
     mutate(s => {
-        for (const k of ['shield', 'magnet', 'double']) {
-            if (s.items[k] > 0) s.items[k]--;
+        for (const k of picked) {
+            if ((s.items[k] ?? 0) <= 0) continue;
+            s.items[k]--;
+            Object.assign(kit, ITEM_EFFECT[k]);
         }
         s.dailyTries--;
     });
@@ -430,7 +438,7 @@ function startFlight(sprites) {
             finishFlight(result);
         },
     });
-    flight.start();
+    flight.start(kit);        // 勾了的那几样在这儿变成场上的系数
     // 不死模式跨局有效:每开一局问一次 dev(见 wa.god())
     if (devGodOn?.()) flight.f.god = true;
 }
