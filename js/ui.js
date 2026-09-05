@@ -1562,6 +1562,13 @@ export class UI {
      *
      * 每样只显示「还有几个」和勾没勾,不写效果说明 —— 效果在背包里写着,
      * 而这一屏是出发前最后一下,**要的是快,不是再读一遍三行字**。
+     *
+     * 勾选记号用 ● / ○ 而不是 ✓:**像素字体里没有 ✓**,用了会掉回系统字体,
+     * 一个圆头圆脑的对勾杵在像素界面里。这是打包时的字形覆盖检查抓出来的。
+     *
+     * 顺带一条踩过的:**说明不要写成模板字符串里的 `<!-- -->`** ——
+     * 那是字符串内容不是 JS 注释,esbuild 剥不掉,会原样发给玩家、
+     * 还会插进 DOM。写在这儿(JS 注释)才不会上飞机。
      */
     flyKitView() {
         const s = this.getState();
@@ -1578,7 +1585,7 @@ export class UI {
                     <strong>${it.name}</strong> <span class="px-tag">${s.items[k]}</span>
                     <p class="px-muted">${it.desc}</p>
                 </div>
-                <span style="font-size:18px">${on ? '✓' : '　'}</span>
+                <span style="font-size:18px">${on ? '●' : '○'}</span>
             </button>`;
         }).join('');
         return `

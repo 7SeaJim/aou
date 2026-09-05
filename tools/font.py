@@ -17,9 +17,24 @@ Fusion Pixel 完整包是 31345 个码位、602 KB(woff2)。游戏里出现的�
 第一次推上去就是在这儿挂的。
 **一个检查如果只能在作者的机器上跑,它就不是检查,是习惯。**
 
-注意它连**注释**里的字一起收。分不清哪句话会渲染、哪句只是注释,与其
-写个半吊子的注释剥离器(剥错了就是静默漏字),不如多收几 KB 换一个
-「只会误报、不会漏报」的检查。代价是改注释也可能要求重跑一次。
+**默认扫源码,`--from <目录>` 扫构建产物。**
+
+扫源码会连**注释**里的字一起收 —— 分不清哪句话会渲染、哪句只是注释,
+而写个半吊子的注释剥离器(剥错了就是静默漏字)比多收几 KB 糟得多。
+这个取舍本身没错,但它的代价被低估了:量下来**源码里 37% 的汉字只出现在
+注释里**(1762 → 1117),折合 19.8 KB 字形,占最终 zip 的 13%;
+而且每写一句带新字的注释,构建就挂一次。
+
+`--from dist-minitool` 换了个思路,**既精确又零风险**:
+
+    构建产物里的字 = 会渲染的字的超集,而且注释已经被 esbuild 剥干净了
+
+不是"猜哪些是注释",是**根本不用猜** —— 没进 bundle 的字,运行时无论如何
+也渲染不出来。所以这么裁不可能漏字,而它剥注释剥得比任何正则都干净。
+
+代价是要构建两趟(先出 bundle 才知道扫什么),所以 `npm run pack:mini`
+是 build → font --from → build。日常 `npm run build` 仍走源码那条,
+宽一点,省得开发时来回折腾。
 """
 
 import os, sys, glob, json
@@ -50,11 +65,19 @@ EXTRA = (
 )
 
 
-def used_chars():
+def used_chars(from_dir=None):
+    """要哪些字。`from_dir` 给了就扫那个目录里的产物,否则扫源码。"""
     chars = set(EXTRA)
     files = []
-    for pat in SOURCES:
-        files += glob.glob(os.path.join(ROOT, pat), recursive=True)
+    if from_dir:
+        # 产物:只有真会送到浏览器的那几类。字体自己不用扫
+        for ext in ('*.html', '*.js', '*.css', '*.json'):
+            files += glob.glob(os.path.join(ROOT, from_dir, '**', ext), recursive=True)
+        if not files:
+            sys.exit(f'--from {from_dir} 里没找到产物 —— 先构建一次')
+    else:
+        for pat in SOURCES:
+            files += glob.glob(os.path.join(ROOT, pat), recursive=True)
     for f in sorted(set(files)):
         with open(f, encoding='utf-8') as fh:
             chars |= set(fh.read())
@@ -94,7 +117,14 @@ def check(chars):
 
 
 def main():
-    chars = used_chars()
+    # --from <目录>:按构建产物裁,而不是按源码(见文件头)
+    frm = None
+    if '--from' in sys.argv:
+        i = sys.argv.index('--from')
+        if i + 1 >= len(sys.argv):
+            sys.exit('--from 后面要跟一个目录,比如 --from dist-minitool')
+        frm = sys.argv[i + 1]
+    chars = used_chars(frm)
 
     if '--check' in sys.argv:
         check(chars)

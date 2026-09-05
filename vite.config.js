@@ -65,7 +65,23 @@ function minitoolHtml() {
                 //
                 // 补 defer 就干净了:仍然是经典脚本(规范只禁 module 和内联),
                 // 但保证解析完再执行、且保持顺序。Chrome 61 早就支持。
-                .replace(/<script type="module"/g, '<script defer');
+                .replace(/<script type="module"/g, '<script defer')
+                // **内联 <style> 里的注释不发给玩家。**
+                //
+                // index.html 有 28K,其中内联样式 18.9K、**光注释就 9.2K(占整个
+                // 文件的 33%)** —— 那些是写给改代码的人看的(为什么用 svh 不用 dvh、
+                // 按键为什么必须是 16 的整数倍……),对玩家一个字节的价值都没有。
+                //
+                // 源码里一个字不删:注释是这个项目最值钱的东西之一,删了下次改这块
+                // 的人就得重新踩一遍坑。**只是别让它上飞机。**
+                //
+                // 只剥内联 style 里的 /* */,不碰 CSS 文件(那些走 vite 的
+                // 压缩器,已经剥过了),也不碰 HTML 注释里的 <!-- -->
+                // (那几条本来就少,而且剥它要小心条件注释)。
+                // 剥之前扫过一遍:样式里没有字符串或 url() 含 `/*` 的写法
+                .replace(/<style>([\s\S]*?)<\/style>/g, (_, css) =>
+                    '<style>' + css.replace(/\/\*[\s\S]*?\*\//g, '')
+                                   .replace(/\n\s*\n+/g, '\n') + '</style>');
         },
         // public/ 里的东西是照搬过来的,里面有普通网页要的 site.webmanifest ——
         // 而 .webmanifest 不在允许的文件类型里,外壳行为也归容器管

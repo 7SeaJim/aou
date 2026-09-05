@@ -50,6 +50,53 @@ def collect(root: Path):
     return files, bad
 
 
+def slim_font(root: Path) -> str:
+    """把产物里那份 woff2 按**这个 bundle 真正用到的字**重裁一遍。
+
+    为什么值得单做一步:量下来字体占最终 zip 的 **35%,而且它不可压** ——
+    woff2 本身已经是压缩格式,deflate 再压一遍等于原样搬进去。
+    zip 里其他东西压缩比都在 4~6 倍,只有它是 1:1。**要动就得动它本身。**
+
+    省的是哪一部分:`tools/font.py` 平时扫的是**源码**,而源码里
+    **37% 的汉字只出现在注释里**(量出来 1762 → 1117)。注释不进 bundle,
+    那些字形却进了字体 —— 玩家下载了六百多个永远不会渲染的字。
+
+    为什么这么裁是安全的,而不是"猜哪些是注释":
+
+        bundle 里的字 = 会渲染的字的超集(注释已被 esbuild 剥干净)
+        没进 bundle 的字,运行时无论如何也渲染不出来
+
+    **不是剥得准,是根本不用剥。** 校验过:产物的字集是源码字集的严格子集,
+    一个多出来的都没有。
+
+    只动 `dist-minitool/` 里那一份,`css/fonts/` 下的源文件保持宽的 ——
+    那份要给网页版用,而网页版的 `--check` 是照源码检的,窄了会满屏假阳性。
+    """
+    import subprocess
+    fonts = list(root.rglob('*.woff2'))
+    if not fonts:
+        return '没有 woff2,跳过'
+    before = sum(f.stat().st_size for f in fonts)
+    try:
+        from fontTools import subset          # noqa: F401
+    except ImportError:
+        return f'{before / 1024:.1f}K(没装 fontTools,未重裁)'
+
+    sys.path.insert(0, str(Path(__file__).parent))
+    import font as fontmod
+    chars = fontmod.used_chars(root.name)
+    for f in fonts:
+        subprocess.run([sys.executable, '-m', 'fontTools.subset', str(f),
+                        '--output-file=' + str(f), '--flavor=woff2',
+                        '--text=' + ''.join(sorted(chars)),
+                        '--layout-features=*', '--no-hinting',
+                        '--desubroutinize'], check=True,
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    after = sum(f.stat().st_size for f in fonts)
+    return (f'{before / 1024:.1f}K -> {after / 1024:.1f}K '
+            f'(省 {(before - after) / 1024:.1f}K,{len(chars)} 字)')
+
+
 def main() -> int:
     root = Path(sys.argv[1] if len(sys.argv) > 1 else 'dist-minitool').resolve()
     out = Path(sys.argv[2] if len(sys.argv) > 2 else 'dist/waou-minitool.zip').resolve()
@@ -57,6 +104,7 @@ def main() -> int:
         print(f'ERROR: 源目录不存在: {root}')
         return 2
 
+    print('字体重裁: ' + slim_font(root))
     files, bad = collect(root)
     if not (root / 'index.html').is_file():
         bad.append('index.html 不在源目录根上 —— 容器只认根目录的 index.html')
