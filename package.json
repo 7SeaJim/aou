@@ -11,7 +11,9 @@
     "icons": "python3 tools/emit.py",
     "font": "python3 tools/font.py",
     "font:check": "python3 tools/font.py --check",
-    "build": "python3 tools/font.py --check && vite build"
+    "build": "python3 tools/font.py --check && vite build",
+    "build:mini": "python3 tools/font.py --check && vite build --mode minitool",
+    "pack:mini": "npm run build:mini && python3 tools/packmini.py"
   },
   "devDependencies": {
     "vite": "^8.2.2"

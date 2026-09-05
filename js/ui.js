@@ -319,6 +319,18 @@ export class UI {
             case 'savecard': {
                 const img = document.querySelector('[data-card]');
                 if (!img?.src) return this.toast('图还没画好,等一下', 'star');
+                if (__MINITOOL__) {
+                    // **小工具里 `<a download>` 是被禁的**,存图走容器的 JSBridge。
+                    // 这不是将就 —— `saveImageToPhotosAlbum` 直接进系统相册,
+                    // 比浏览器那条「下载到某个看不见的目录」还准。
+                    // filePath 收完整的 data:uri,而 renderCard 出来的正好是
+                    const save = window.xhs?.miniTool?.saveImageToPhotosAlbum;
+                    if (!save) return this.toast('这个版本存不了图,长按图片保存', 'postcard');
+                    Promise.resolve(save({ filePath: img.src }))
+                        .then(() => this.toast('存进相册了', 'postcard'))
+                        .catch(() => this.toast('没存成,长按图片保存', 'postcard'));
+                    break;
+                }
                 const a = document.createElement('a');
                 a.href = img.src;
                 a.download = `哇鸥今日签-${now().toDateString()}.png`;
@@ -390,6 +402,9 @@ export class UI {
             }
 
             case 'fullscreen': {
+                // **小工具里全屏由容器统一管**,页面自己请求是被禁的;
+                // 而它本来就已经是沉浸式布局,这个按钮在容器里没有意义
+                if (__MINITOOL__) break;
                 // 全屏只能在用户手势里请求 —— 这个 case 就是从点击进来的
                 const el = document.documentElement;
                 if (document.fullscreenElement) { document.exitFullscreen?.(); break; }
@@ -592,6 +607,14 @@ export class UI {
         const box = $('#codeBox');
         box.value = code;
         box.select();
+        // **小工具里剪贴板 API 是被禁的。** 规范给的替代就是「展示可选中文本,
+        // 引导用户长按/选中手动复制」—— 而上面那两行本来就在做这件事,
+        // 所以这儿只是把自动复制那一下摇掉,提示语换成手动那条。
+        // 浏览器里照旧自动复制(失败也回落到同一条提示)。
+        if (__MINITOOL__) {
+            this.toast('存档码在下面,长按选中复制', 'postcard');
+            return;
+        }
         try {
             await navigator.clipboard.writeText(code);
             this.toast('存档码已复制,贴到备忘录就不会丢了', 'postcard');

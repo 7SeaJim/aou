@@ -199,6 +199,9 @@ async function boot() {
  * 拿不到就当没这回事,玩家最多是多看一条地址栏。
  */
 export function goFullscreen() {
+    // **小工具里全屏和锁方向都归容器管**,页面自己请求是被禁的。
+    // 编译期常量,整段会被摇掉 —— 规范要的是「无调用/残留」,不是「调了不报错」
+    if (__MINITOOL__) return;
     try {
         const el = document.documentElement;
         const req = el.requestFullscreen ?? el.webkitRequestFullscreen;

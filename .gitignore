@@ -1,4 +1,5 @@
 dist
+dist-minitool
 node_modules
 
 __pycache__/
