@@ -1080,7 +1080,10 @@ HUT_IDLE = [
 
 SCENERY = {
     'shack':      SHACK,
-    'hut_waou':   HUT_WAOU,
+    # 'hut_waou' 不再出到 pixels.js —— 占卜卡改用 hut_idle 之后它就没人用了,
+    # 而它在产物里占 12.2 KB。**定义留在上面当描稿史,别删** ——
+    # 它是第一版描出来的那张正面图,记着「手描的圆是什么样」比省几行有用。
+    # 'hut_waou':   HUT_WAOU,
     'hut_idle':   HUT_IDLE,
     'hut_sleep':  HUT_SLEEP,
     'gull_big':   GULL_BIG,

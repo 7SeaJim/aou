@@ -134,9 +134,26 @@ export function renderCard(o) {
     // 满版版式下背景要画满整张,上下分栏的只画到文字区上沿
     (CARD_SCENES[v.scene] ?? CARD_SCENES.lake).paint(c, P, st.bg ? st.top : CH);
 
-    // 哇鸥。用小屋那张近景 —— 它是唯一一张正面、圆的、看得清脸的图
-    const g = sprite('hut_waou', SCENERY.hut_waou);
-    c.drawImage(g, Math.round((CW - g.width) / 2), st.top - g.height + 6);
+    /**
+     * 哇鸥。**用小屋那只待机的,不再单独留一张卡片专用图。**
+     *
+     * 原来这儿用的是 `hut_waou` —— 最早描稿时留下的另一张正面图。
+     * 他说「占卜系统的哇鸥图像边缘和阴影问题很大」,放大一看两条都实锤:
+     *
+     *   边缘  手描的圆,描边在 2~6 像素之间忽厚忽薄,台阶到处乱跳
+     *   阴影  满脸浅灰噪点(眼周、嘴边、翅膀外圈、头顶),
+     *         那是描 JPEG 时的振铃被归到了肚皮灰上 —— 读起来是脏,不是阴影
+     *
+     * 而待机那只早就做过椭圆化、匀描边、清噪点(见 tools/idlewing.py),
+     * 这张一样都没跟上。**与其把同样的修法再对它做一遍,不如干脆共用一张** ——
+     * 两张正面图本来就是同一只鸟,而且造型还不一致(那张的翅膀是身体内侧的
+     * 三角,游戏里是支出去的弧形)。**分享出去的卡片上画着另一只鸟,比画得糙更糟。**
+     *
+     * 底边落在文字区上沿(不再 +6)。原来压 6 像素是因为老图底下是圆的、
+     * 压进去看不见;待机这只最底下正好是两只脚,压 6 像素会把脚切掉一半。
+     */
+    const g = sprite('hut_idle', SCENERY.hut_idle);
+    c.drawImage(g, Math.round((CW - g.width) / 2), st.top - g.height);
 
     const cv = document.createElement('canvas');
     cv.width = CW * SCALE;
